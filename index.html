@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StormScope — Live Weather Radar & Webcams</title>
+  <meta name="description" content="Real-time US weather radar with live traffic and weather cameras. See the weather through webcams across America.">
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="map"></div>
+
+  <header id="header">
+    <div class="header-left">
+      <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+      </svg>
+      <h1>StormScope</h1>
+    </div>
+    <div class="header-right">
+      <button id="btn-layers" class="header-btn" title="Layers">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+          <polyline points="2 17 12 22 22 17"/>
+          <polyline points="2 12 12 17 22 12"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <div id="layers-panel" class="panel hidden">
+    <h3>Layers</h3>
+    <label class="toggle-row">
+      <input type="checkbox" id="toggle-radar" checked>
+      <span>Weather Radar</span>
+    </label>
+    <label class="toggle-row">
+      <input type="checkbox" id="toggle-cameras" checked>
+      <span>Live Cameras</span>
+    </label>
+    <div class="slider-row">
+      <span>Radar Opacity</span>
+      <input type="range" id="radar-opacity" min="0" max="100" value="65">
+    </div>
+  </div>
+
+  <div id="radar-controls">
+    <button id="radar-prev" class="radar-btn" title="Previous frame">
+      <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="4" x2="5" y2="20" stroke="currentColor" stroke-width="2"/></svg>
+    </button>
+    <button id="radar-play" class="radar-btn" title="Play/Pause">
+      <svg id="icon-play" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      <svg id="icon-pause" viewBox="0 0 24 24" fill="currentColor" class="hidden"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+    </button>
+    <button id="radar-next" class="radar-btn" title="Next frame">
+      <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="4" x2="19" y2="20" stroke="currentColor" stroke-width="2"/></svg>
+    </button>
+    <span id="radar-time">Loading radar...</span>
+  </div>
+
+  <div id="camera-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title-area">
+          <h2 id="modal-cam-name"></h2>
+          <span id="modal-cam-location" class="modal-subtitle"></span>
+        </div>
+        <button id="modal-close" class="modal-close-btn" title="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="modal-feed" class="modal-feed">
+          <div id="feed-loading" class="feed-loading">Loading camera feed...</div>
+        </div>
+        <div id="modal-weather" class="modal-weather">
+          <div id="weather-loading" class="weather-loading">Fetching weather...</div>
+          <div id="weather-data" class="weather-data hidden"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="camera-count" class="camera-count"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

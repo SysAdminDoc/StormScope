@@ -1,0 +1,13 @@
+CLAUDE.md
+CODEX_CHANGELOG.md
+.claude/
+.env
+.env.*
+*.log
+node_modules/
+.DS_Store
+Thumbs.db
+*.bak
+ROADMAP.md
+RESEARCH_*.md
+TODO.md
