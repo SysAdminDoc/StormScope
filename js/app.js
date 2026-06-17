@@ -6,7 +6,7 @@
   const RADAR_ANIMATION_SPEED = 800;
   const IMAGE_REFRESH_INTERVAL = 15000;
 
-  let map, radarLayer, cameraCluster;
+  var map, radarLayer, cameraCluster;
   let radarFrames = [];
   let radarIndex = 0;
   let radarPlaying = false;
@@ -30,7 +30,7 @@
       maxBoundsViscosity: 0.8
     });
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
       subdomains: 'abcd',
       maxZoom: 19
@@ -387,4 +387,6 @@
   bindUI();
   initRadar();
   loadCameras();
+
+  window._stormscope = { getMap: function () { return map; } };
 })();
