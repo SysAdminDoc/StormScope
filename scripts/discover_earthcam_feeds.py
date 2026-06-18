@@ -47,7 +47,7 @@ EARTHCAM_REGION_URL = "https://www.earthcam.com/api/dotcom/network_search.php?r=
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 "
-    "StormScope/0.9.0"
+    "StormScope/0.10.0"
 )
 
 US_STATES = {

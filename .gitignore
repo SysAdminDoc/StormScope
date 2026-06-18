@@ -12,6 +12,8 @@ Thumbs.db
 data/youtube_discovery_report*.json
 data/youtube_geocode_cache.json
 data/earthcam_discovery_report*.json
+data/livebeaches_discovery_report*.json
+data/livebeaches_geocode_cache.json
 data/us_city_livestream_checkpoint.json
 data/us_city_livestream_report*.json
 ROADMAP.md

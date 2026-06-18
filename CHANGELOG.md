@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.10.0 - 2026-06-18
+
+- Added LiveBeaches discovery automation for category-page harvesting, direct Brownrice embed extraction, YouTube iframe verification, and fixed-location geocoding
+- Added 15 LiveBeaches-derived feeds: 11 verified-live YouTube streams and 4 direct Brownrice player embeds
+- Expanded total camera coverage from 24,272 to 24,287 cameras and YouTube coverage from 397 to 408 streams
+
 ## v0.9.0 - 2026-06-18
 
 - Added 112 more verified-live YouTube streams, increasing YouTube coverage from 285 to 397 streams
