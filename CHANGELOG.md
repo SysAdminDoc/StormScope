@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.11.0 - 2026-06-18
+
+- Added 86 more verified-live YouTube streams, increasing YouTube coverage from 408 to 494 streams
+- Expanded LiveBeaches category harvesting, city-list retry search, and source-family discovery with more beach, rail, harbor, volcano, airport, wildlife, skyline, resort, indoor, and international feeds
+- Made city-list checkpointing retry-aware so transient YouTube search errors do not mark cities as fully processed
+- Corrected two older YouTube country/state buckets and fixed bad automated placements for Emerald Beach Resort and Frying Pan Tower
+- Expanded total camera coverage from 24,287 to 24,373 cameras
+
 ## v0.10.0 - 2026-06-18
 
 - Added LiveBeaches discovery automation for category-page harvesting, direct Brownrice embed extraction, YouTube iframe verification, and fixed-location geocoding

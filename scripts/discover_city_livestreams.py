@@ -57,7 +57,7 @@ CENSUS_GAZETTEER_URL = (
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 "
-    "StormScope/0.10.0"
+    "StormScope/0.11.0"
 )
 
 STATE_NAMES = {
@@ -689,16 +689,18 @@ def search_city_batch(args: argparse.Namespace) -> int:
     raw_candidates: dict[str, tuple[Any, CityRecord, str]] = {}
     search_errors: list[dict[str, str]] = []
     content_rejected: list[dict[str, Any]] = []
-    searched_geoids: list[str] = []
+    completed_geoids: list[str] = []
+    retryable_geoids: list[str] = []
 
     for city_index, city in enumerate(batch, 1):
-        searched_geoids.append(city.geoid)
         city_new = 0
+        city_had_error = False
         for query in make_queries(city, templates):
             try:
                 found = ytd.harvest_query(query, args.max_pages, args.max_empty_pages, args.sleep)
             except Exception as exc:
-                search_errors.append({"city": city.label, "query": query, "error": str(exc)})
+                city_had_error = True
+                search_errors.append({"city": city.label, "geoid": city.geoid, "query": query, "error": str(exc)})
                 print(f"[{city_index}/{len(batch)}] ERROR {query}: {exc}")
                 continue
             for candidate in found:
@@ -725,9 +727,14 @@ def search_city_batch(args: argparse.Namespace) -> int:
                 raw_candidates[candidate.video_id] = (candidate, city, query)
                 city_new += 1
             time.sleep(args.sleep)
-        print(f"[{city_index}/{len(batch)}] {city.label}: candidates={city_new}")
+        if city_had_error:
+            retryable_geoids.append(city.geoid)
+        else:
+            completed_geoids.append(city.geoid)
+        status = "retryable_error" if city_had_error else "complete"
+        print(f"[{city_index}/{len(batch)}] {city.label}: candidates={city_new} status={status}")
         if args.resume and (city_index % args.checkpoint_every == 0):
-            processed_geoids.update(searched_geoids)
+            processed_geoids.update(completed_geoids)
             save_json_file(
                 args.checkpoint,
                 {"processed_geoids": sorted(processed_geoids), "accepted_video_ids": sorted(accepted_video_ids)},
@@ -783,7 +790,7 @@ def search_city_batch(args: argparse.Namespace) -> int:
     added = append_streams(args.data, live_streams, args.limit_add) if args.apply else 0
     accepted_video_ids.update(stream.video_id for stream in live_streams)
     if args.resume:
-        processed_geoids.update(searched_geoids)
+        processed_geoids.update(completed_geoids)
         save_json_file(
             args.checkpoint,
             {"processed_geoids": sorted(processed_geoids), "accepted_video_ids": sorted(accepted_video_ids)},
@@ -798,6 +805,8 @@ def search_city_batch(args: argparse.Namespace) -> int:
             "city_records": len(records),
             "batch_cities": len(batch),
             "queries_per_city": len(templates),
+            "completed_cities": len(completed_geoids),
+            "retryable_error_cities": len(set(retryable_geoids)),
             "search_errors": len(search_errors),
             "content_rejected": len(content_rejected),
             "candidate_count": len(raw_candidates),
