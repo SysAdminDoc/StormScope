@@ -8,10 +8,14 @@
   --bg-dark: #0a0a14;
   --bg-panel: rgba(12, 12, 22, 0.88);
   --bg-panel-hover: rgba(20, 20, 35, 0.92);
+  --bg-surface: #000;
   --border: rgba(255, 255, 255, 0.08);
   --border-hover: rgba(255, 255, 255, 0.15);
   --accent: #00b4d8;
   --accent-glow: rgba(0, 180, 216, 0.25);
+  --youtube: rgba(255, 0, 0, 0.85);
+  --youtube-glow: rgba(255, 0, 0, 0.4);
+  --success: #2ecc71;
   --text: #e4e4ec;
   --text-dim: #8888a0;
   --danger: #ff4757;
@@ -32,6 +36,17 @@ html, body {
   position: absolute;
   inset: 0;
   z-index: 1;
+}
+
+/* --- Focus --- */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* --- Header --- */
@@ -90,7 +105,7 @@ html, body {
   border-radius: 8px;
   color: var(--text-dim);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
 }
 
 .header-btn:hover {
@@ -186,7 +201,7 @@ html, body {
   border-radius: 8px;
   color: var(--text-dim);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
 }
 
 .radar-btn:hover {
@@ -281,6 +296,7 @@ html, body {
   font-size: 13px;
   color: var(--text-dim);
   margin-top: 2px;
+  display: block;
 }
 
 .modal-close-btn {
@@ -295,7 +311,7 @@ html, body {
   color: var(--text-dim);
   font-size: 20px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
   flex-shrink: 0;
   margin-left: 12px;
 }
@@ -309,14 +325,25 @@ html, body {
 .modal-body {
   display: flex;
   flex-direction: column;
-  overflow: auto;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+
+.modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
 }
 
 .modal-feed {
   position: relative;
   width: 100%;
   min-height: 300px;
-  background: #000;
+  background: var(--bg-surface);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -341,6 +368,8 @@ html, body {
   font-size: 14px;
   text-align: center;
   padding: 40px 20px;
+  max-width: 400px;
+  line-height: 1.5;
 }
 
 .modal-weather {
@@ -413,14 +442,30 @@ html, body {
 }
 
 .youtube-marker {
-  background: rgba(255, 0, 0, 0.85);
-  box-shadow: 0 0 8px rgba(255, 0, 0, 0.4);
+  background: var(--youtube);
+  box-shadow: 0 0 8px var(--youtube-glow);
 }
 
 .camera-marker svg {
   width: 14px;
   height: 14px;
   fill: #fff;
+}
+
+/* --- Tooltip (dark theme) --- */
+.cam-tooltip {
+  background: var(--bg-panel) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 6px !important;
+  padding: 6px 10px !important;
+  font-size: 12px !important;
+  font-family: inherit !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+}
+
+.cam-tooltip::before {
+  border-top-color: var(--bg-panel) !important;
 }
 
 /* --- Leaflet Overrides --- */
@@ -452,14 +497,14 @@ html, body {
   color: var(--accent) !important;
 }
 
-/* Image refresh indicator */
+/* Live indicator */
 .feed-refresh-indicator {
   position: absolute;
   top: 8px;
   right: 8px;
   width: 10px;
   height: 10px;
-  background: #2ecc71;
+  background: var(--success);
   border-radius: 50%;
   border: 2px solid rgba(0, 0, 0, 0.4);
   animation: pulse-dot 2s infinite;
@@ -468,6 +513,20 @@ html, body {
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feed-refresh-indicator {
+    animation: none;
+  }
+  .camera-marker {
+    transition: none;
+  }
+  .header-btn,
+  .radar-btn,
+  .modal-close-btn {
+    transition: none;
+  }
 }
 
 /* --- Utility --- */

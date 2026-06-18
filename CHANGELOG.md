@@ -1,5 +1,47 @@
 # Changelog
 
+## v0.20.0 - 2026-06-18
+
+### Fixes
+- **Security: XSS in tooltips** — camera names from external APIs were rendered as raw HTML in Leaflet tooltips; now escaped via textContent
+- **Security: XSS in weather panel** — NWS API data was interpolated via innerHTML; now built with DOM construction and textContent
+- **Security: YouTube embed URL** — video IDs now URL-encoded to prevent injection via malformed camera data
+- **Bug: Nowcast label wrong** — radar frames were mislabeled; last 2 frames always showed "Nowcast" regardless of actual past/nowcast boundary. Now uses the real `past.length` boundary and labels nowcast frames as "Forecast"
+- **Bug: Radar animation continues when layer hidden** — toggling radar off now stops the animation timer
+- **Bug: Weather race condition** — rapidly switching cameras could overwrite weather data from a previous camera; now uses AbortController to cancel stale fetches and verifies `activeCamera` before writing
+- **Bug: Missing HTTP status check** — cameras.json and RainViewer fetches didn't check `resp.ok`; now throw on non-200 responses
+- **Bug: Image/MJPEG error handlers fire after modal closed** — error callbacks now check `activeCamera` before mutating DOM
+- **Bug: Hls global reference crash** — `Hls` checked without `typeof`; would throw ReferenceError if HLS.js failed to load
+- **Bug: Weather state not reset** — opening a new camera could flash stale weather text from the previous one; now resets weather DOM on open
+
+### UX
+- **International cameras** — weather section now shows "Weather data is available for US locations only (NWS coverage)" instead of the vague "Weather data unavailable for this location"
+- **Embed feeds** — added error handling and `loading="lazy"` for iframe embeds
+- **Modal focus** — close button receives focus when modal opens
+- **Modal scrollbar** — styled dark thin scrollbar for modal body overflow
+
+### Accessibility
+- Added `role="dialog"`, `aria-modal="true"`, `aria-labelledby` to camera modal
+- Added `role="application"`, `aria-label` to map container
+- Added `role="toolbar"`, `aria-label` to radar controls
+- Added `role="status"`, `aria-live="polite"` to camera count, radar time, and weather status
+- Added `aria-label` to all buttons (layers toggle, radar controls, modal close)
+- Added `aria-expanded`, `aria-controls` to layers toggle button
+- Added `aria-hidden="true"` to all decorative SVG icons
+- Added `role="img"` with `aria-label` to camera marker SVGs
+- Added `title` attribute to YouTube and embed iframes
+- Added `label` element for radar opacity slider
+- Added `aria-label` and `role="status"` to live feed indicator dots
+
+### Visual
+- **Dark-themed tooltips** — added `.cam-tooltip` CSS (was referenced but never defined); tooltips now match the dark glassmorphism UI instead of Leaflet's white default
+- **Focus-visible styles** — added `outline: 2px solid accent` for keyboard navigation on all interactive elements
+- **Reduced-motion support** — `@media (prefers-reduced-motion: reduce)` disables pulse animation and button transitions
+- **Design tokens** — replaced hardcoded `#000`, `#2ecc71`, YouTube red values with CSS variables (`--bg-surface`, `--success`, `--youtube`, `--youtube-glow`)
+- **Button transitions** — changed `transition: all` to explicit properties to avoid animating layout properties
+- **Feed error text** — added `max-width` and `line-height` for readability
+- Added `meta theme-color` for mobile browser chrome
+
 ## v0.19.0 - 2026-06-18
 
 - Added 4 more verified-live YouTube streams from deeper LiveBeaches harvesting, increasing YouTube coverage from 706 to 710 streams
