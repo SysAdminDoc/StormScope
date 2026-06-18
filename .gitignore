@@ -5,9 +5,12 @@ CODEX_CHANGELOG.md
 .env.*
 *.log
 node_modules/
+__pycache__/
 .DS_Store
 Thumbs.db
 *.bak
+data/youtube_discovery_report*.json
+data/youtube_geocode_cache.json
 ROADMAP.md
 RESEARCH_*.md
 TODO.md

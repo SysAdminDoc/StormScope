@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.5.0 — 2026-06-18
+
+- Added 50 more verified-live YouTube outdoor streams, increasing YouTube coverage from 97 to 147 streams
+- Added append-only YouTube discovery automation that exhausts live-filtered search queries, verifies streams through YouTube player metadata, and writes a discovery report
+- Added curated location overrides for safe fixed-location YouTube additions while keeping ambiguous verified streams out of the map dataset
+
 ## v0.4.0 — 2026-06-18
 
 - Added 50 new verified-live YouTube outdoor streams, increasing YouTube coverage from 47 to 97 streams

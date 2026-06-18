@@ -1,7 +1,7 @@
-[![Version](https://img.shields.io/badge/version-0.4.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.5.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
-[![Cameras](https://img.shields.io/badge/cameras-23%2C697-cyan)]()
+[![Cameras](https://img.shields.io/badge/cameras-23%2C747-cyan)]()
 
 # StormScope
 
@@ -10,8 +10,8 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 ## Features
 
 - **Live Weather Radar** — Real-time NEXRAD radar via RainViewer (animated, adjustable opacity)
-- **23,697 Live Cameras** — Traffic, weather, park, and outdoor webcams across 26+ US states plus international locations
-- **97 YouTube Live Streams** — Verified-live 24/7 outdoor streams including beaches, airports, railcams, harbors, city skylines, ski resorts, and landmarks (red markers)
+- **23,747 Live Cameras** — Traffic, weather, park, and outdoor webcams across 26+ US states plus international locations
+- **147 YouTube Live Streams** — Verified-live 24/7 outdoor streams including beaches, airports, railcams, harbors, city skylines, ski resorts, and landmarks (red markers)
 - **Click-to-View** — YouTube embeds, HLS video streams, and auto-refreshing image feeds in a modal viewer
 - **Current Weather** — NWS hourly forecast data shown alongside each camera feed
 - **Dark Theme** — CartoDB dark matter tiles with glassmorphism UI
@@ -20,7 +20,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 
 ## Camera Coverage
 
-23,697 cameras across 26+ US states:
+23,747 cameras across 26+ US states:
 
 | State | Cameras | | State | Cameras |
 |-------|--------:|-|-------|--------:|
@@ -38,7 +38,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 | Delaware | 295 | | NPS Parks | 189 |
 | Arizona | 99 | | Alaska | 100 |
 
-Plus: Montana, South Dakota, 189 National Park webcams, and 97 verified-live YouTube outdoor streams.
+Plus: Montana, South Dakota, 189 National Park webcams, and 147 verified-live YouTube outdoor streams.
 
 ## Quick Start
 
@@ -81,6 +81,14 @@ python scripts/fetch_cameras.py
 ```
 
 This queries 20+ live APIs and merges 23,000+ DOT/NPS cameras into `data/cameras.json`.
+
+Run the YouTube discovery automation to exhaust live-filtered search queries, verify live streams, and append only fixed-location streams with curated coordinates:
+
+```bash
+python scripts/discover_youtube_cameras.py --query-mode exhaustive --max-pages 8 --apply
+```
+
+Discovery reports are written to `data/youtube_discovery_report.json`. Curated fixed-location metadata lives in `data/youtube_location_overrides.json`; YouTube entries store the 11-character video ID only.
 
 ## Adding More Cameras
 
