@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.18.0 - 2026-06-18
+
+- Added 32 more verified-live YouTube streams, increasing YouTube coverage from 674 to 706 streams
+- Expanded Beach Life Cams, livespotting, PixCams, Africam, harbor, beach, ferry, wildlife, safari, and waterhole coverage
+- Corrected bad auto-geocodes for Anguilla, Weymouth, German harbors, Majete, Sabi Sand, Maasai Mara, Namibia, Seychelles, St. John, and Mallorca additions
+- Expanded total camera coverage from 24,553 to 24,585 cameras
+
 ## v0.17.0 - 2026-06-18
 
 - Added 20 more verified-live YouTube streams, increasing YouTube coverage from 654 to 674 streams
