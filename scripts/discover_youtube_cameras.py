@@ -9,6 +9,9 @@ existing camera rows are never removed or rewritten.
 Typical exhaustive run:
     python scripts/discover_youtube_cameras.py --query-mode exhaustive --max-pages 8 --apply
 
+Add direct YouTube IDs or watch URLs:
+    python scripts/discover_youtube_cameras.py --query-mode custom --video https://www.youtube.com/watch?v=VIDEO_ID --apply
+
 Dry-run report with automatic geocode candidates for review:
     python scripts/discover_youtube_cameras.py --query-mode standard --max-pages 3 --geocode
 """
@@ -51,7 +54,7 @@ NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 "
-    "StormScope/0.5.0"
+    "StormScope/0.6.0"
 )
 
 US_STATES = {
@@ -565,6 +568,39 @@ def make_queries(mode: str, extra_queries: list[str], queries_file: Path | None)
     return unique
 
 
+def normalize_video_id(value: str) -> str | None:
+    value = value.strip()
+    if re.fullmatch(r"[A-Za-z0-9_-]{11}", value):
+        return value
+    parsed = urllib.parse.urlparse(value)
+    if parsed.netloc.endswith("youtu.be"):
+        candidate = parsed.path.strip("/").split("/")[0]
+        return candidate if re.fullmatch(r"[A-Za-z0-9_-]{11}", candidate) else None
+    if "youtube.com" in parsed.netloc:
+        query = urllib.parse.parse_qs(parsed.query)
+        candidate = (query.get("v") or [""])[0]
+        return candidate if re.fullmatch(r"[A-Za-z0-9_-]{11}", candidate) else None
+    match = re.search(r"(?:v=|/)([A-Za-z0-9_-]{11})(?:[?&/#]|$)", value)
+    return match.group(1) if match else None
+
+
+def make_direct_video_ids(videos: list[str], videos_file: Path | None) -> list[str]:
+    values = list(videos)
+    if videos_file:
+        for line in videos_file.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                values.append(line)
+    ids: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        video_id = normalize_video_id(value)
+        if video_id and video_id not in seen:
+            seen.add(video_id)
+            ids.append(video_id)
+    return ids
+
+
 def parse_initial_search(query: str) -> tuple[dict[str, Any] | None, str | None, str]:
     params = urllib.parse.urlencode({"search_query": query, "sp": YOUTUBE_LIVE_SP})
     html = curl_text(f"{YOUTUBE_SEARCH_URL}?{params}", timeout=35)
@@ -1065,6 +1101,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--query-mode", choices=["standard", "exhaustive", "custom"], default="standard")
     parser.add_argument("--query", action="append", default=[], help="additional live-search query")
     parser.add_argument("--queries-file", type=Path, help="newline-delimited search queries")
+    parser.add_argument("--video", action="append", default=[], help="direct YouTube video ID or watch URL")
+    parser.add_argument("--videos-file", type=Path, help="newline-delimited YouTube video IDs or watch URLs")
     parser.add_argument("--max-pages", type=int, default=6, help="maximum YouTube search pages per query")
     parser.add_argument("--max-empty-pages", type=int, default=2, help="stop a query after this many pages without new IDs")
     parser.add_argument("--min-score", type=int, default=5, help="minimum content score before live verification")
@@ -1084,9 +1122,11 @@ def main(argv: list[str] | None = None) -> int:
     overrides = load_json_file(args.overrides, {})
     geocode_cache = load_json_file(args.geocode_cache, {})
     queries = make_queries(args.query_mode, args.query, args.queries_file)
+    direct_video_ids = make_direct_video_ids(args.video, args.videos_file)
 
     print(f"Existing YouTube cameras: {len(existing_youtube_ids)}")
     print(f"Search queries: {len(queries)} mode={args.query_mode} max_pages={args.max_pages}")
+    print(f"Direct videos: {len(direct_video_ids)}")
 
     raw_candidates: dict[str, Candidate] = {}
     query_errors: list[dict[str, str]] = []
@@ -1108,9 +1148,22 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[{index}/{len(queries)}] {query}: {len(found)} IDs, {new_count} new")
         time.sleep(args.sleep)
 
+    direct_new = 0
+    for video_id in direct_video_ids:
+        if not args.keep_existing and video_id in existing_youtube_ids:
+            continue
+        if video_id in raw_candidates:
+            continue
+        raw_candidates[video_id] = Candidate(video_id=video_id, title="", channel="", query="direct", page=0)
+        direct_new += 1
+    if direct_video_ids:
+        print(f"Direct video IDs queued: {direct_new} new")
+
     scored = [score_candidate(candidate) for candidate in raw_candidates.values()]
-    to_verify = [candidate for candidate in scored if candidate.score >= args.min_score]
-    rejected_content = [candidate for candidate in scored if candidate.score < args.min_score]
+    to_verify = [candidate for candidate in scored if candidate.score >= args.min_score or candidate.query == "direct"]
+    rejected_content = [
+        candidate for candidate in scored if candidate.score < args.min_score and candidate.query != "direct"
+    ]
 
     print(f"Unique candidates: {len(raw_candidates)}")
     print(f"Content-score candidates to verify: {len(to_verify)}")
@@ -1154,6 +1207,7 @@ def main(argv: list[str] | None = None) -> int:
         "added": added,
         "summary": {
             "queries": len(queries),
+            "direct_videos": len(direct_video_ids),
             "query_errors": len(query_errors),
             "unique_candidates": len(raw_candidates),
             "content_rejected": len(rejected_content),

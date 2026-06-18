@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.6.0 — 2026-06-18
+
+- Added 57 more verified-live YouTube outdoor streams, increasing YouTube coverage from 147 to 204 streams
+- Added direct YouTube URL/ID ingestion to the discovery automation for known live cams
+- Expanded beach, boardwalk, harbor, city, and Ohio live-cam coverage, using city-level coordinates where exact camera mounts are not published
+
 ## v0.5.0 — 2026-06-18
 
 - Added 50 more verified-live YouTube outdoor streams, increasing YouTube coverage from 97 to 147 streams
