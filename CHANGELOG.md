@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.8.0 - 2026-06-18
+
+- Added a Census Gazetteer city-list generator that writes 10,230 U.S. city labels in `City, State` format
+- Added checkpointed city livestream discovery automation for exhaustive YouTube live searches across the generated city list
+- Added 58 more verified-live YouTube streams, increasing YouTube coverage from 227 to 285 streams
+- Expanded total camera coverage from 24,102 to 24,160 cameras, including new city, beach, traffic, rail, airport, weather, and indoor/outdoor cams
+
 ## v0.7.0 - 2026-06-18
 
 - Added EarthCam discovery automation for the public EarthCam network API and EarthCam-branded YouTube live search

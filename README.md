@@ -1,7 +1,7 @@
-[![Version](https://img.shields.io/badge/version-0.7.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.8.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
-[![Cameras](https://img.shields.io/badge/cameras-24%2C102-cyan)]()
+[![Cameras](https://img.shields.io/badge/cameras-24%2C160-cyan)]()
 
 # StormScope
 
@@ -10,8 +10,8 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 ## Features
 
 - **Live Weather Radar** — Real-time NEXRAD radar via RainViewer (animated, adjustable opacity)
-- **24,102 Live Cameras** — Traffic, weather, park, EarthCam, and webcam feeds across 48 US states plus international locations
-- **227 YouTube Live Streams** — Verified-live 24/7 streams including beaches, airports, railcams, harbors, city skylines, landmarks, and EarthCam indoor/outdoor feeds (red markers)
+- **24,160 Live Cameras** — Traffic, weather, park, EarthCam, and webcam feeds across 48 US states plus international locations
+- **285 YouTube Live Streams** — Verified-live 24/7 streams including beaches, airports, railcams, harbors, city skylines, landmarks, indoor/outdoor feeds, and city-list discoveries (red markers)
 - **275 EarthCam Network Feeds** — Online EarthCam and MyEarthCam livestream pages from the public EarthCam network API
 - **Click-to-View** — YouTube embeds, EarthCam pages, HLS video streams, and auto-refreshing image feeds in a modal viewer
 - **Current Weather** — NWS hourly forecast data shown alongside each camera feed
@@ -21,25 +21,25 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 
 ## Camera Coverage
 
-24,102 cameras across 48 US states:
+24,160 cameras across 48 US states:
 
 | State | Cameras | | State | Cameras |
 |-------|--------:|-|-------|--------:|
-| Florida | 4,947 | | Ohio | 1,064 |
-| California | 3,092 | | Colorado | 1,014 |
-| Utah | 2,053 | | New York | 985 |
+| Florida | 4,952 | | Ohio | 1,064 |
+| California | 3,096 | | Colorado | 1,014 |
+| Utah | 2,053 | | New York | 988 |
 | Pennsylvania | 1,514 | | Georgia | 843 |
-| Washington | 1,351 | | Texas | 825 |
+| Washington | 1,354 | | Texas | 833 |
 | Michigan | 779 | | Missouri | 565 |
-| Nevada | 657 | | Idaho | 459 |
-| Alabama | 588 | | Wisconsin | 450 |
+| Nevada | 659 | | Idaho | 459 |
+| Alabama | 600 | | Wisconsin | 450 |
 | Indiana | 572 | | New Hampshire | 408 |
 | Connecticut | 351 | | Louisiana | 338 |
-| Illinois | 328 | | Kentucky | 226 |
+| Illinois | 331 | | Kentucky | 226 |
 | Delaware | 295 | | NPS Parks | 189 |
-| Arizona | 106 | | Alaska | 103 |
+| Arizona | 121 | | Alaska | 106 |
 
-Plus: Montana, South Dakota, the remaining lower-count US states, 39 international country/territory buckets, 189 National Park webcams, 275 EarthCam Network feeds, and 227 verified-live YouTube streams.
+Plus: Montana, South Dakota, the remaining lower-count US states, 39 international country/territory buckets, 189 National Park webcams, 275 EarthCam Network feeds, and 285 verified-live YouTube streams.
 
 ## Quick Start
 
@@ -71,6 +71,7 @@ Open `http://localhost:8000` in your browser.
 
 - **Radar**: RainViewer — global weather radar composites, updated every 10 minutes
 - **Cameras**: 20+ state DOT live APIs (Caltrans, FL511, WSDOT, NYCDOT, IDOT, MDOT, CDOT, etc.), OpenTrafficCamMap, NPS, EarthCam, and verified-live YouTube streams
+- **City discovery list**: U.S. Census Bureau 2025 Gazetteer places file, filtered to legal city records and written as `City, State`
 - **Weather**: National Weather Service (NWS) hourly forecast API
 
 ## Refreshing Camera Data
@@ -104,6 +105,20 @@ python scripts/discover_earthcam_feeds.py --apply
 ```
 
 EarthCam provider entries are stored as `type: "embed"` with full page URLs. EarthCam YouTube entries still store only the 11-character video ID.
+
+Build the full U.S. city search list from the Census Gazetteer:
+
+```bash
+python scripts/discover_city_livestreams.py --build-city-list
+```
+
+This writes `data/us_cities_2025.txt` and `data/us_cities_2025.json` with 10,230 labels in `City, State` format. Continue the exhaustive YouTube live-search pass over that list with:
+
+```bash
+python scripts/discover_city_livestreams.py --apply --resume
+```
+
+Use `--limit-cities 200` for bounded batches. The script searches live-filtered YouTube results, verifies each accepted video is currently live, rejects common non-camera and wrong-state matches, stores only the 11-character video ID, and records progress in `data/us_city_livestream_checkpoint.json`.
 
 ## Adding More Cameras
 
