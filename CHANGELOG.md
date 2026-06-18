@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.19.0 - 2026-06-18
+
+- Added 4 more verified-live YouTube streams from deeper LiveBeaches harvesting, increasing YouTube coverage from 706 to 710 streams
+- Added Belize beach resort, Maine harbor, New Jersey osprey, and Seaside Heights boardwalk feeds
+- Expanded total camera coverage from 24,585 to 24,589 cameras
+
 ## v0.18.0 - 2026-06-18
 
 - Added 32 more verified-live YouTube streams, increasing YouTube coverage from 674 to 706 streams
