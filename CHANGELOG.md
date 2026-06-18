@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.17.0 - 2026-06-18
+
+- Added 20 more verified-live YouTube streams, increasing YouTube coverage from 654 to 674 streams
+- Expanded ferry, harbor, lighthouse, observatory, campus, weather station, port, resort, and public weather-camera coverage
+- Corrected fixed placements for Northport Pier, Southampton, Brunsbuettel, Martha's Vineyard, Alonissos, Neuwerk, Rockport, Pine Mountain Observatory, Weber State, and Springfield
+- Expanded total camera coverage from 24,533 to 24,553 cameras
+
 ## v0.16.0 - 2026-06-18
 
 - Added 46 more verified-live YouTube streams, increasing YouTube coverage from 608 to 654 streams
