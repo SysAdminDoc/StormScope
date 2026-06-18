@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.16.0 - 2026-06-18
+
+- Added 46 more verified-live YouTube streams, increasing YouTube coverage from 608 to 654 streams
+- Expanded mountain, campus, airport, wildlife, aquarium, pier, marina, beach, eagle nest, bear, walrus, and weather-camera coverage
+- Corrected auto-geocode misses for Gatlinburg, Madeira, Catalina Island, Alaska wildlife cams, and other fixed-location additions
+- Expanded total camera coverage from 24,487 to 24,533 cameras
+
 ## v0.15.0 - 2026-06-18
 
 - Added 42 more verified-live YouTube streams, increasing YouTube coverage from 566 to 608 streams
