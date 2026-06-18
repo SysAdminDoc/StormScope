@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.4.0 — 2026-06-18
+
+- Added 50 new verified-live YouTube outdoor streams, increasing YouTube coverage from 47 to 97 streams
+- Expanded fixed-location webcam coverage across beaches, airports, rail lines, harbors, ski resorts, city skylines, and international landmarks
+- Added new YouTube coverage for Ohio, Colorado, Connecticut, New Jersey, Utah, Vermont, Michigan, Maryland, Delaware, Sint Maarten, New Zealand, Australia, Canada, Greece, Spain, Czechia, United Kingdom, Israel, Japan, Netherlands, and Italy
+
 ## v0.3.0 — 2026-06-17
 
 - Added 39 YouTube 24/7 live stream webcams (red markers) across the US

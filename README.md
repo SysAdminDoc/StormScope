@@ -1,7 +1,7 @@
-[![Version](https://img.shields.io/badge/version-0.3.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
-[![Cameras](https://img.shields.io/badge/cameras-23%2C600-cyan)]()
+[![Cameras](https://img.shields.io/badge/cameras-23%2C697-cyan)]()
 
 # StormScope
 
@@ -10,8 +10,8 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 ## Features
 
 - **Live Weather Radar** — Real-time NEXRAD radar via RainViewer (animated, adjustable opacity)
-- **23,600 Live Cameras** — Traffic and weather cameras across 26+ US states
-- **39 YouTube Live Streams** — 24/7 webcams from EarthCam, explore.org, news stations (red markers)
+- **23,697 Live Cameras** — Traffic, weather, park, and outdoor webcams across 26+ US states plus international locations
+- **97 YouTube Live Streams** — Verified-live 24/7 outdoor streams including beaches, airports, railcams, harbors, city skylines, ski resorts, and landmarks (red markers)
 - **Click-to-View** — YouTube embeds, HLS video streams, and auto-refreshing image feeds in a modal viewer
 - **Current Weather** — NWS hourly forecast data shown alongside each camera feed
 - **Dark Theme** — CartoDB dark matter tiles with glassmorphism UI
@@ -20,7 +20,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 
 ## Camera Coverage
 
-23,600 cameras across 26+ US states:
+23,697 cameras across 26+ US states:
 
 | State | Cameras | | State | Cameras |
 |-------|--------:|-|-------|--------:|
@@ -38,7 +38,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 | Delaware | 295 | | NPS Parks | 189 |
 | Arizona | 99 | | Alaska | 100 |
 
-Plus: Montana, South Dakota, and 189 National Park webcams.
+Plus: Montana, South Dakota, 189 National Park webcams, and 97 verified-live YouTube outdoor streams.
 
 ## Quick Start
 
@@ -64,12 +64,12 @@ Open `http://localhost:8000` in your browser.
 - [RainViewer API](https://www.rainviewer.com/api.html) — Free weather radar tiles (no key)
 - [NWS API](https://www.weather.gov/documentation/services-web-api) — Free hourly weather data (no key)
 - [HLS.js](https://github.com/video-dev/hls.js/) — HLS video stream playback
-- Camera data from 20+ state DOT APIs + [OpenTrafficCamMap](https://github.com/AidanWelch/OpenTrafficCamMap) (MIT)
+- Camera data from 20+ state DOT APIs + [OpenTrafficCamMap](https://github.com/AidanWelch/OpenTrafficCamMap) (MIT) + NPS + verified-live YouTube streams
 
 ## Data Sources
 
 - **Radar**: RainViewer — global weather radar composites, updated every 10 minutes
-- **Cameras**: 20+ state DOT live APIs (Caltrans, FL511, WSDOT, NYCDOT, IDOT, MDOT, CDOT, etc.), OpenTrafficCamMap, and NPS
+- **Cameras**: 20+ state DOT live APIs (Caltrans, FL511, WSDOT, NYCDOT, IDOT, MDOT, CDOT, etc.), OpenTrafficCamMap, NPS, and verified-live YouTube outdoor streams
 - **Weather**: National Weather Service (NWS) hourly forecast API
 
 ## Refreshing Camera Data
@@ -80,7 +80,7 @@ Run the data fetcher to pull fresh camera data from all state DOT APIs:
 python scripts/fetch_cameras.py
 ```
 
-This queries 20+ live APIs and merges ~23,000 cameras into `data/cameras.json`.
+This queries 20+ live APIs and merges 23,000+ DOT/NPS cameras into `data/cameras.json`.
 
 ## Adding More Cameras
 
@@ -101,7 +101,7 @@ Camera data lives in `data/cameras.json`. Each entry:
 }
 ```
 
-Supported `type` values: `hls` (M3U8 streams), `image` (JPEG with auto-refresh), `mjpeg` (motion JPEG streams).
+Supported `type` values: `hls` (M3U8 streams), `image` (JPEG with auto-refresh), `mjpeg` (motion JPEG streams), `youtube` (YouTube video ID only, not a full URL).
 
 ## License
 
