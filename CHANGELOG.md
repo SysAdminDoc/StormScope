@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.14.0 - 2026-06-18
+
+- Added 33 more verified-live YouTube streams, increasing YouTube coverage from 533 to 566 streams
+- Expanded operator/provider discovery with Webcams de Mexico, SouthWest RailCams, Ozolio, WebcamTaxi, town-square, resort, zoo, rail, volcano, and beach feeds
+- Corrected bad auto-geocodes for Mexico, Romania, Puerto Rico, and Madeira additions before committing
+- Expanded total camera coverage from 24,412 to 24,445 cameras
+
 ## v0.13.0 - 2026-06-18
 
 - Added 13 more verified-live YouTube streams from deeper LiveBeaches category harvesting, increasing YouTube coverage from 520 to 533 streams
