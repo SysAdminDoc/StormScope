@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.13.0 - 2026-06-18
+
+- Added 13 more verified-live YouTube streams from deeper LiveBeaches category harvesting, increasing YouTube coverage from 520 to 533 streams
+- Added more coral reef, rail, harbor, pier, lighthouse, bridge, skyline, market-square, and beach resort feeds
+- Expanded total camera coverage from 24,399 to 24,412 cameras
+
 ## v0.12.0 - 2026-06-18
 
 - Added 26 more verified-live YouTube streams, increasing YouTube coverage from 494 to 520 streams
