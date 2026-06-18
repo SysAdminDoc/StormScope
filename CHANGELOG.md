@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.12.0 - 2026-06-18
+
+- Added 26 more verified-live YouTube streams, increasing YouTube coverage from 494 to 520 streams
+- Expanded fixed-location coverage with airport/runway cams, surf cams, bird-feeder cams, street cams, patio cams, and additional international feeds
+- Expanded total camera coverage from 24,373 to 24,399 cameras
+
 ## v0.11.0 - 2026-06-18
 
 - Added 86 more verified-live YouTube streams, increasing YouTube coverage from 408 to 494 streams
