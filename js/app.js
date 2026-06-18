@@ -24,10 +24,8 @@
       zoom: MAP_ZOOM,
       zoomControl: true,
       attributionControl: true,
-      minZoom: 4,
-      maxZoom: 18,
-      maxBounds: [[15, -135], [55, -60]],
-      maxBoundsViscosity: 0.8
+      minZoom: 3,
+      maxZoom: 18
     });
 
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
