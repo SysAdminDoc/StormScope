@@ -1,7 +1,7 @@
-[![Version](https://img.shields.io/badge/version-0.8.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.9.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
-[![Cameras](https://img.shields.io/badge/cameras-24%2C160-cyan)]()
+[![Cameras](https://img.shields.io/badge/cameras-24%2C272-cyan)]()
 
 # StormScope
 
@@ -10,8 +10,8 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 ## Features
 
 - **Live Weather Radar** — Real-time NEXRAD radar via RainViewer (animated, adjustable opacity)
-- **24,160 Live Cameras** — Traffic, weather, park, EarthCam, and webcam feeds across 48 US states plus international locations
-- **285 YouTube Live Streams** — Verified-live 24/7 streams including beaches, airports, railcams, harbors, city skylines, landmarks, indoor/outdoor feeds, and city-list discoveries (red markers)
+- **24,272 Live Cameras** — Traffic, weather, park, EarthCam, and webcam feeds across 48 US states plus international locations
+- **397 YouTube Live Streams** — Verified-live 24/7 streams including beaches, airports, railcams, harbors, city skylines, landmarks, indoor/outdoor feeds, wildlife cams, and city-list discoveries (red markers)
 - **275 EarthCam Network Feeds** — Online EarthCam and MyEarthCam livestream pages from the public EarthCam network API
 - **Click-to-View** — YouTube embeds, EarthCam pages, HLS video streams, and auto-refreshing image feeds in a modal viewer
 - **Current Weather** — NWS hourly forecast data shown alongside each camera feed
@@ -21,25 +21,25 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 
 ## Camera Coverage
 
-24,160 cameras across 48 US states:
+24,272 cameras across 48 US states:
 
 | State | Cameras | | State | Cameras |
 |-------|--------:|-|-------|--------:|
-| Florida | 4,952 | | Ohio | 1,064 |
-| California | 3,096 | | Colorado | 1,014 |
-| Utah | 2,053 | | New York | 988 |
-| Pennsylvania | 1,514 | | Georgia | 843 |
-| Washington | 1,354 | | Texas | 833 |
-| Michigan | 779 | | Missouri | 565 |
+| Florida | 4,955 | | Ohio | 1,066 |
+| California | 3,113 | | Colorado | 1,015 |
+| Utah | 2,053 | | New York | 989 |
+| Pennsylvania | 1,517 | | Georgia | 848 |
+| Washington | 1,357 | | Texas | 844 |
+| Michigan | 780 | | Missouri | 570 |
 | Nevada | 659 | | Idaho | 459 |
 | Alabama | 600 | | Wisconsin | 450 |
-| Indiana | 572 | | New Hampshire | 408 |
+| Indiana | 574 | | New Hampshire | 408 |
 | Connecticut | 351 | | Louisiana | 338 |
 | Illinois | 331 | | Kentucky | 226 |
 | Delaware | 295 | | NPS Parks | 189 |
-| Arizona | 121 | | Alaska | 106 |
+| Arizona | 123 | | Alaska | 107 |
 
-Plus: Montana, South Dakota, the remaining lower-count US states, 39 international country/territory buckets, 189 National Park webcams, 275 EarthCam Network feeds, and 285 verified-live YouTube streams.
+Plus: Montana, South Dakota, the remaining lower-count US states, 47 international country/territory buckets, 189 National Park webcams, 275 EarthCam Network feeds, and 397 verified-live YouTube streams.
 
 ## Quick Start
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.9.0 - 2026-06-18
+
+- Added 112 more verified-live YouTube streams, increasing YouTube coverage from 285 to 397 streams
+- Expanded source-family discovery coverage with railcams, airport/runway cams, beach and harbor cams, aquarium feeds, wildlife cams, skyline cams, and manually placed fixed-location livestreams
+- Tightened city-list matching for ambiguous city names and removed a wrong-city Sheridan collision before committing
+- Refreshed EarthCam provider discovery; no additional provider embeds were available beyond the existing 275 feeds
+- Expanded total camera coverage from 24,160 to 24,272 cameras
+
 ## v0.8.0 - 2026-06-18
 
 - Added a Census Gazetteer city-list generator that writes 10,230 U.S. city labels in `City, State` format
