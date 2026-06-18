@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.2.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
 [![Cameras](https://img.shields.io/badge/cameras-23%2C600-cyan)]()
@@ -11,7 +11,8 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 
 - **Live Weather Radar** — Real-time NEXRAD radar via RainViewer (animated, adjustable opacity)
 - **23,600 Live Cameras** — Traffic and weather cameras across 26+ US states
-- **Click-to-View** — HLS video streams and auto-refreshing image feeds in a modal viewer
+- **39 YouTube Live Streams** — 24/7 webcams from EarthCam, explore.org, news stations (red markers)
+- **Click-to-View** — YouTube embeds, HLS video streams, and auto-refreshing image feeds in a modal viewer
 - **Current Weather** — NWS hourly forecast data shown alongside each camera feed
 - **Dark Theme** — CartoDB dark matter tiles with glassmorphism UI
 - **No API Keys** — Runs entirely client-side with free, keyless APIs

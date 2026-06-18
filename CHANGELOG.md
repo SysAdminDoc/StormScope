@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.3.0 — 2026-06-17
+
+- Added 39 YouTube 24/7 live stream webcams (red markers) across the US
+- YouTube embed player in modal with autoplay + mute
+- Distinct red markers for YouTube streams vs cyan for DOT cameras
+- Coverage includes EarthCam, explore.org, ABC13, and independent live cams
+- Locations: beach cams (FL, CA, TX, NC, SC), city skylines (NYC, Chicago, Seattle, Houston, Nashville, Minneapolis), national parks (Yellowstone, Grand Canyon), and landmarks (Times Square, Space Needle, Bourbon Street)
+
 ## v0.2.0 — 2026-06-17
 
 - Expanded camera coverage from 7,029 to 23,600 cameras across 26+ US states

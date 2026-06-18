@@ -104,10 +104,14 @@
 
   // ── Camera Layer ──
 
-  function createCameraIcon() {
+  function createCameraIcon(isYouTube) {
+    var cls = isYouTube ? 'camera-marker youtube-marker' : 'camera-marker';
+    var svg = isYouTube
+      ? '<svg viewBox="0 0 24 24"><path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0C.488 3.45.029 5.804 0 12c.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0C23.512 20.55 23.971 18.196 24 12c-.029-6.185-.484-8.549-4.385-8.816zM9 16V8l8 4-8 4z"/></svg>'
+      : '<svg viewBox="0 0 24 24"><path d="M23 19V7.5l-7 4.5V8a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4l7 4.5z"/></svg>';
     return L.divIcon({
       className: '',
-      html: '<div class="camera-marker"><svg viewBox="0 0 24 24"><path d="M23 19V7.5l-7 4.5V8a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4l7 4.5z"/></svg></div>',
+      html: '<div class="' + cls + '">' + svg + '</div>',
       iconSize: [28, 28],
       iconAnchor: [14, 14]
     });
@@ -135,10 +139,11 @@
         }
       });
 
-      var icon = createCameraIcon();
+      var dotIcon = createCameraIcon(false);
+      var ytIcon = createCameraIcon(true);
       for (var i = 0; i < allCameras.length; i++) {
         var cam = allCameras[i];
-        var marker = L.marker([cam.lat, cam.lon], { icon: icon });
+        var marker = L.marker([cam.lat, cam.lon], { icon: cam.type === 'youtube' ? ytIcon : dotIcon });
         marker._camData = cam;
         marker.on('click', onCameraClick);
         marker.bindTooltip(cam.name, {
@@ -199,6 +204,10 @@
       }
       video.src = '';
     }
+    var iframe = feedEl.querySelector('iframe');
+    if (iframe) {
+      iframe.src = '';
+    }
 
     document.getElementById('camera-modal').classList.add('hidden');
     feedEl.innerHTML = '';
@@ -207,10 +216,14 @@
   function loadCameraFeed(cam, container) {
     clearInterval(imageRefreshTimer);
 
-    if (cam.type === 'hls') {
+    if (cam.type === 'youtube') {
+      loadYouTubeFeed(cam, container);
+    } else if (cam.type === 'hls') {
       loadHLSFeed(cam, container);
     } else if (cam.type === 'mjpeg') {
       loadMJPEGFeed(cam, container);
+    } else if (cam.type === 'embed') {
+      loadEmbedFeed(cam, container);
     } else {
       loadImageFeed(cam, container);
     }
@@ -270,6 +283,39 @@
     indicator.className = 'feed-refresh-indicator';
     indicator.title = 'Live MJPEG stream';
     container.appendChild(indicator);
+  }
+
+  function loadYouTubeFeed(cam, container) {
+    var iframe = document.createElement('iframe');
+    iframe.src = 'https://www.youtube.com/embed/' + cam.url + '?autoplay=1&mute=1&playsinline=1';
+    iframe.width = '100%';
+    iframe.height = '100%';
+    iframe.style.minHeight = '400px';
+    iframe.style.border = 'none';
+    iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
+    iframe.allowFullscreen = true;
+
+    container.innerHTML = '';
+    container.appendChild(iframe);
+
+    var indicator = document.createElement('div');
+    indicator.className = 'feed-refresh-indicator';
+    indicator.title = 'YouTube Live Stream';
+    container.appendChild(indicator);
+  }
+
+  function loadEmbedFeed(cam, container) {
+    var iframe = document.createElement('iframe');
+    iframe.src = cam.url;
+    iframe.width = '100%';
+    iframe.height = '100%';
+    iframe.style.minHeight = '400px';
+    iframe.style.border = 'none';
+    iframe.allow = 'autoplay; encrypted-media';
+    iframe.allowFullscreen = true;
+
+    container.innerHTML = '';
+    container.appendChild(iframe);
   }
 
   function loadImageFeed(cam, container) {

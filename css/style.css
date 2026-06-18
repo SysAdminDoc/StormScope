@@ -412,6 +412,11 @@ html, body {
   transform: scale(1.2);
 }
 
+.youtube-marker {
+  background: rgba(255, 0, 0, 0.85);
+  box-shadow: 0 0 8px rgba(255, 0, 0, 0.4);
+}
+
 .camera-marker svg {
   width: 14px;
   height: 14px;
