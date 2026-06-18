@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.15.0 - 2026-06-18
+
+- Added 42 more verified-live YouTube streams, increasing YouTube coverage from 566 to 608 streams
+- Expanded Europe, Mediterranean, Madeira, Mallorca, Japan, Canada, wildlife, city, beach, harbor, ferry, rail, and weather-camera coverage
+- Corrected auto-geocode misses for Mallorca, Madeira, Cannes, Corfu, Germany, Tokyo, and other fixed-location additions
+- Expanded total camera coverage from 24,445 to 24,487 cameras
+
 ## v0.14.0 - 2026-06-18
 
 - Added 33 more verified-live YouTube streams, increasing YouTube coverage from 533 to 566 streams
