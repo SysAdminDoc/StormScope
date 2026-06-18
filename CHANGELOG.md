@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.7.0 - 2026-06-18
+
+- Added EarthCam discovery automation for the public EarthCam network API and EarthCam-branded YouTube live search
+- Added 275 online EarthCam provider feeds as embed cameras, including indoor and outdoor fixed-location livestream pages
+- Added 23 more verified-live EarthCam YouTube streams, increasing YouTube coverage from 204 to 227 streams
+- Expanded total camera coverage from 23,804 to 24,102 cameras and documented `embed` camera records
+
 ## v0.6.0 — 2026-06-18
 
 - Added 57 more verified-live YouTube outdoor streams, increasing YouTube coverage from 147 to 204 streams

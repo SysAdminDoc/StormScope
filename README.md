@@ -1,7 +1,7 @@
-[![Version](https://img.shields.io/badge/version-0.6.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.7.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
-[![Cameras](https://img.shields.io/badge/cameras-23%2C804-cyan)]()
+[![Cameras](https://img.shields.io/badge/cameras-24%2C102-cyan)]()
 
 # StormScope
 
@@ -10,9 +10,10 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 ## Features
 
 - **Live Weather Radar** — Real-time NEXRAD radar via RainViewer (animated, adjustable opacity)
-- **23,804 Live Cameras** — Traffic, weather, park, and outdoor webcams across 26+ US states plus international locations
-- **204 YouTube Live Streams** — Verified-live 24/7 outdoor streams including beaches, airports, railcams, harbors, city skylines, ski resorts, and landmarks (red markers)
-- **Click-to-View** — YouTube embeds, HLS video streams, and auto-refreshing image feeds in a modal viewer
+- **24,102 Live Cameras** — Traffic, weather, park, EarthCam, and webcam feeds across 48 US states plus international locations
+- **227 YouTube Live Streams** — Verified-live 24/7 streams including beaches, airports, railcams, harbors, city skylines, landmarks, and EarthCam indoor/outdoor feeds (red markers)
+- **275 EarthCam Network Feeds** — Online EarthCam and MyEarthCam livestream pages from the public EarthCam network API
+- **Click-to-View** — YouTube embeds, EarthCam pages, HLS video streams, and auto-refreshing image feeds in a modal viewer
 - **Current Weather** — NWS hourly forecast data shown alongside each camera feed
 - **Dark Theme** — CartoDB dark matter tiles with glassmorphism UI
 - **No API Keys** — Runs entirely client-side with free, keyless APIs
@@ -20,25 +21,25 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 
 ## Camera Coverage
 
-23,804 cameras across 26+ US states:
+24,102 cameras across 48 US states:
 
 | State | Cameras | | State | Cameras |
 |-------|--------:|-|-------|--------:|
-| Florida | 4,884 | | Ohio | 1,053 |
-| California | 3,057 | | New York | 941 |
-| Utah | 2,051 | | Georgia | 839 |
-| Pennsylvania | 1,502 | | Texas | 806 |
-| Washington | 1,349 | | Michigan | 767 |
-| Colorado | 1,008 | | Nevada | 645 |
-| Alabama | 584 | | Indiana | 568 |
-| Missouri | 557 | | Idaho | 459 |
-| Wisconsin | 447 | | New Hampshire | 404 |
-| Connecticut | 347 | | Louisiana | 329 |
-| Illinois | 314 | | Kentucky | 220 |
+| Florida | 4,947 | | Ohio | 1,064 |
+| California | 3,092 | | Colorado | 1,014 |
+| Utah | 2,053 | | New York | 985 |
+| Pennsylvania | 1,514 | | Georgia | 843 |
+| Washington | 1,351 | | Texas | 825 |
+| Michigan | 779 | | Missouri | 565 |
+| Nevada | 657 | | Idaho | 459 |
+| Alabama | 588 | | Wisconsin | 450 |
+| Indiana | 572 | | New Hampshire | 408 |
+| Connecticut | 351 | | Louisiana | 338 |
+| Illinois | 328 | | Kentucky | 226 |
 | Delaware | 295 | | NPS Parks | 189 |
-| Arizona | 99 | | Alaska | 100 |
+| Arizona | 106 | | Alaska | 103 |
 
-Plus: Montana, South Dakota, 189 National Park webcams, and 204 verified-live YouTube outdoor streams.
+Plus: Montana, South Dakota, the remaining lower-count US states, 39 international country/territory buckets, 189 National Park webcams, 275 EarthCam Network feeds, and 227 verified-live YouTube streams.
 
 ## Quick Start
 
@@ -64,12 +65,12 @@ Open `http://localhost:8000` in your browser.
 - [RainViewer API](https://www.rainviewer.com/api.html) — Free weather radar tiles (no key)
 - [NWS API](https://www.weather.gov/documentation/services-web-api) — Free hourly weather data (no key)
 - [HLS.js](https://github.com/video-dev/hls.js/) — HLS video stream playback
-- Camera data from 20+ state DOT APIs + [OpenTrafficCamMap](https://github.com/AidanWelch/OpenTrafficCamMap) (MIT) + NPS + verified-live YouTube streams
+- Camera data from 20+ state DOT APIs + [OpenTrafficCamMap](https://github.com/AidanWelch/OpenTrafficCamMap) (MIT) + NPS + EarthCam + verified-live YouTube streams
 
 ## Data Sources
 
 - **Radar**: RainViewer — global weather radar composites, updated every 10 minutes
-- **Cameras**: 20+ state DOT live APIs (Caltrans, FL511, WSDOT, NYCDOT, IDOT, MDOT, CDOT, etc.), OpenTrafficCamMap, NPS, and verified-live YouTube outdoor streams
+- **Cameras**: 20+ state DOT live APIs (Caltrans, FL511, WSDOT, NYCDOT, IDOT, MDOT, CDOT, etc.), OpenTrafficCamMap, NPS, EarthCam, and verified-live YouTube streams
 - **Weather**: National Weather Service (NWS) hourly forecast API
 
 ## Refreshing Camera Data
@@ -96,6 +97,14 @@ Known direct YouTube watch URLs can be verified and appended with:
 python scripts/discover_youtube_cameras.py --query-mode custom --video https://www.youtube.com/watch?v=VIDEO_ID --apply
 ```
 
+Run the EarthCam discovery automation to harvest the public EarthCam network API, verify online `cam_state` feeds, search EarthCam-branded YouTube live results, and append only deduplicated fixed-location records:
+
+```bash
+python scripts/discover_earthcam_feeds.py --apply
+```
+
+EarthCam provider entries are stored as `type: "embed"` with full page URLs. EarthCam YouTube entries still store only the 11-character video ID.
+
 ## Adding More Cameras
 
 Camera data lives in `data/cameras.json`. Each entry:
@@ -115,7 +124,7 @@ Camera data lives in `data/cameras.json`. Each entry:
 }
 ```
 
-Supported `type` values: `hls` (M3U8 streams), `image` (JPEG with auto-refresh), `mjpeg` (motion JPEG streams), `youtube` (YouTube video ID only, not a full URL).
+Supported `type` values: `hls` (M3U8 streams), `image` (JPEG with auto-refresh), `mjpeg` (motion JPEG streams), `embed` (iframe page URL), `youtube` (YouTube video ID only, not a full URL).
 
 ## License
 
