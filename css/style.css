@@ -444,6 +444,13 @@ button:focus-visible {
 .youtube-marker {
   background: var(--youtube);
   box-shadow: 0 0 8px var(--youtube-glow);
+  border-style: solid;
+}
+
+.embed-marker {
+  background: rgba(156, 100, 216, 0.85);
+  box-shadow: 0 0 8px rgba(156, 100, 216, 0.4);
+  border-style: dashed;
 }
 
 .camera-marker svg {

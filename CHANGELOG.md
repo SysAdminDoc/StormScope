@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.21.0 - 2026-06-18
+
+### Features
+- **International weather** — cameras outside the US now get weather data via Open-Meteo API (free, global). Includes WMO weather code translation and wind direction from degrees. NWS still used for US cameras.
+
+### Fixes
+- **Focus trap on modal** — Tab/Shift+Tab now cycles within the modal when open; focus returns to the triggering element on close (WCAG 2.4.3)
+- **Embed URL allowlist** — `loadEmbedFeed` now validates URLs against a list of known camera domains (earthcam.com, nps.gov, etc.) and adds `sandbox` attribute to iframes for defense-in-depth
+- **Open-Meteo field names** — corrected `wind_speed_10` to `wind_speed_10m` and `wind_direction_10` to `wind_direction_10m`
+
+### Performance
+- **Lazy tooltips** — tooltips are now bound on first hover instead of at load time; eliminates 24K+ DOM element creation during startup
+- **Batch marker insertion** — switched from individual `addLayer()` to `addLayers()` for the full marker array, reducing cluster computation passes
+- **Radar frame preloading** — next frame is preloaded during animation to reduce flicker on step
+
+### Visual
+- **Embed marker differentiation** — EarthCam/embed cameras now have a distinct purple marker with dashed border, separate from YouTube (red/solid) and DOT (cyan/solid) markers; provides shape-based differentiation beyond color alone
+
 ## v0.20.0 - 2026-06-18
 
 ### Fixes
