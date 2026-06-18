@@ -115,7 +115,8 @@
 
   async function loadCameras() {
     try {
-      const resp = await fetch('data/cameras.json');
+      document.getElementById('camera-count').textContent = 'Loading cameras...';
+      var resp = await fetch('data/cameras.json');
       allCameras = await resp.json();
 
       cameraCluster = L.markerClusterGroup({

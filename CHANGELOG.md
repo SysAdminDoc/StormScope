@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.2.0 — 2026-06-17
+
+- Expanded camera coverage from 7,029 to 23,600 cameras across 26+ US states
+- Added live API fetchers for: Florida (4,884), NYC DOT, WSDOT, Illinois DOT, Michigan DOT, Colorado DOT, Austin TX, Louisiana, Pennsylvania, Wisconsin, Utah, Nevada, New Hampshire, Connecticut, Idaho, South Carolina, Montana, South Dakota, Missouri, Georgia DOT, Florida ArcGIS
+- Added 189 National Park Service webcams (Old Faithful, Grand Canyon, etc.)
+- Added comprehensive Python data fetcher script (`scripts/fetch_cameras.py`)
+- Vendored all JS/CSS dependencies locally (Leaflet, MarkerCluster, HLS.js)
+- Fixed retina tile URL causing "Zoom Level Not Supported" at high zoom
+- Deployed to GitHub Pages at sysadmindoc.github.io/StormScope/
+- Added favicon
+
 ## v0.1.0 — 2026-06-17
 
 - Initial release
