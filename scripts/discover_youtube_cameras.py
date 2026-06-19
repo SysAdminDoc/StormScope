@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Discover, verify, geocode, and optionally append YouTube live outdoor cameras.
+Discover, verify, geocode, and optionally append fixed-location YouTube live cameras.
 
 The script intentionally uses curl for network access so the exact YouTube
 search and watch/player probes can be reproduced from a shell. It is append-only:
@@ -54,7 +54,7 @@ NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 "
-    "StormScope/0.19.0"
+    "StormScope/0.22.0"
 )
 
 US_STATES = {
@@ -492,6 +492,32 @@ def curl_json_post(url: str, body: dict[str, Any], *, timeout: int = 30) -> dict
     return json.loads(raw.decode("utf-8", "replace"))
 
 
+def run_ytdlp_metadata(video_id: str, *, timeout: int = 75) -> dict[str, Any]:
+    cmd = [
+        "yt-dlp",
+        "--dump-json",
+        "--skip-download",
+        "--no-playlist",
+        "--no-warnings",
+        f"https://www.youtube.com/watch?v={video_id}",
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
+    if proc.returncode != 0:
+        err = (proc.stderr or proc.stdout).strip()
+        raise RuntimeError(err or f"yt-dlp failed: {proc.returncode}")
+    for line in reversed(proc.stdout.splitlines()):
+        line = line.strip()
+        if line.startswith("{") and line.endswith("}"):
+            return json.loads(line)
+    raise RuntimeError("yt-dlp did not return video metadata")
+
+
+def ytdlp_confirms_live_playback(metadata: dict[str, Any]) -> bool:
+    if metadata.get("is_live") is not True and metadata.get("live_status") != "is_live":
+        return False
+    return bool(metadata.get("url") or metadata.get("formats") or metadata.get("requested_formats"))
+
+
 def extract_json_after(text: str, marker: str) -> dict[str, Any] | None:
     idx = text.find(marker)
     if idx < 0:
@@ -712,14 +738,27 @@ def verify_live(candidate: Candidate, sleep_seconds: float) -> Candidate | None:
         "racyCheckOk": True,
     }
     time.sleep(sleep_seconds)
-    data = curl_json_post(YOUTUBEI_PLAYER_URL, body, timeout=30)
+    data: dict[str, Any] = {}
+    try:
+        data = curl_json_post(YOUTUBEI_PLAYER_URL, body, timeout=30)
+    except Exception as exc:
+        candidate.reasons.append(f"youtubei_error:{exc}")
     details = data.get("videoDetails") or {}
     status = (data.get("playabilityStatus") or {}).get("status", "")
-    if not details.get("isLiveContent"):
-        return None
-    candidate.verified_title = details.get("title") or candidate.title
-    candidate.verified_channel = details.get("author") or candidate.channel
     candidate.playability_status = status
+    try:
+        playback = run_ytdlp_metadata(candidate.video_id)
+    except Exception as exc:
+        candidate.reasons.append(f"playback_error:{exc}")
+        return None
+    if not ytdlp_confirms_live_playback(playback):
+        candidate.reasons.append(f"not_playable_live:{playback.get('live_status') or playback.get('is_live')}")
+        return None
+    candidate.verified_title = details.get("title") or candidate.title or str(playback.get("title") or "")
+    candidate.verified_channel = details.get("author") or candidate.channel or str(
+        playback.get("channel") or playback.get("uploader") or ""
+    )
+    candidate.playability_status = f"{status or 'UNKNOWN'};yt-dlp:{playback.get('live_status') or 'live'}"
     return candidate
 
 

@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.22.0 - 2026-06-19
+
+### Data
+- Audited all 710 existing YouTube rows with extractor playback checks and removed 474 confirmed broken, unavailable, ended, or non-playable streams.
+- Added 102 newly discovered live streams from city, skyline, airport, rail, traffic, harbor, weather, wildlife, indoor, and city-list searches, then retained 338 YouTube streams in the cleaned dataset.
+- Updated total camera coverage to 24,217 cameras with no duplicate or malformed YouTube IDs.
+
+### Automation
+- Added `scripts/audit_youtube_streams.py` for full-dataset YouTube audits, report generation, and confirmed-failure removal.
+- Added `scripts/livestream_automation_loop.py` for unattended recurring audits plus broad YouTube, city-list, EarthCam, and LiveBeaches discovery passes.
+- Tightened YouTube discovery verification so new streams must pass `yt-dlp` live playback extraction, not only stale `isLiveBroadcast` metadata.
+- Classified YouTube anti-bot/rate-limit extractor blocks as unknown/transient so the audit does not falsely remove streams that were previously verified in the same run.
+
 ## v0.21.0 - 2026-06-18
 
 ### Features
