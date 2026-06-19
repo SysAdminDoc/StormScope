@@ -123,7 +123,11 @@ COMMON_AMBIGUOUS_CITY_NAMES = {
     "jackson",
     "jacksonville",
     "madison",
+    "marina",
     "mobile",
+    "mountain view",
+    "long beach",
+    "ontario",
     "orange",
     "roanoke",
     "sheridan",
@@ -134,6 +138,26 @@ COMMON_AMBIGUOUS_CITY_NAMES = {
 }
 
 STATE_NAME_VALUES = {state.lower() for state in STATE_NAMES.values()}
+
+FOREIGN_LOCATION_HINTS = {
+    "alberta",
+    "australia",
+    "banff",
+    "british columbia",
+    "canada",
+    "england",
+    "ireland",
+    "japan",
+    "mexico",
+    "new zealand",
+    "ontario canada",
+    "scotland",
+    "south africa",
+    "spain",
+    "tofino",
+    "united kingdom",
+    "wales",
+}
 
 SAFE_STATE_ABBR_MATCHES = {
     abbr for abbr in STATE_NAMES if abbr not in {"HI", "ID", "IN", "ME", "OK", "OR"}
@@ -473,6 +497,13 @@ def find_other_state(title: str, city: CityRecord) -> str:
     return ""
 
 
+def find_foreign_location_hint(title: str) -> str:
+    for hint in sorted(FOREIGN_LOCATION_HINTS, key=len, reverse=True):
+        if contains_phrase(title, hint):
+            return hint
+    return ""
+
+
 def candidate_title_text(candidate: Any) -> str:
     return " ".join(
         value
@@ -546,6 +577,9 @@ def score_city_candidate(candidate: Any, city: CityRecord, min_score: int) -> tu
     other_state = find_other_state(title, city)
     if other_state:
         return False, 0, [f"title_state_mismatch:{other_state}"]
+    foreign_hint = find_foreign_location_hint(title)
+    if foreign_hint:
+        return False, 0, [f"title_foreign_location:{foreign_hint}"]
 
     ambiguous_city = len(city.name) <= 4 or city.name.lower() in COMMON_AMBIGUOUS_CITY_NAMES
     state_match = contains_state(blob, city)

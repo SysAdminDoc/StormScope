@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.23.0 - 2026-06-19
+
+### Data
+- Re-audited the current YouTube dataset and removed 3 streams that had ended or were no longer live.
+- Continued the resumable U.S. city-list search across 150 more city labels, adding 20 playback-verified live streams and bringing the dataset to 24,234 cameras with 355 YouTube streams.
+- Corrected four ambiguous city-list placements for Algonquin Park, Long Beach Lodge Tofino, a Southern Alberta bird feeder, and Robbie's Marina Islamorada.
+
+### Automation
+- Hardened city-list matching to reject foreign-location title hints and require explicit state evidence for ambiguous city names such as Long Beach, Marina, Mountain View, and Ontario.
+
 ## v0.22.0 - 2026-06-19
 
 ### Data
