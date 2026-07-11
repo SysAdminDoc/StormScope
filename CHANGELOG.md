@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.26.0 - 2026-07-11
+
+### Weather intelligence
+- Added health-aware radar providers with automatic RainViewer-to-NOAA/NWS MRMS failover, explicit source/resolution/frame-age/degradation metadata, coverage overlay and center sampling, and distinct clear/no-coverage/stale/provider/tile-failure states.
+- Added official NWS watches, warnings, and advisories with viewport/point queries, CAP normalization, dedupe/expiry/backoff, severity polygons and filters, keyboard-accessible list/detail views, and weather.gov safety guidance.
+- Corrected weather routing with country/territory awareness, NWS-to-Open-Meteo fallback, persisted metric/US units, and separate forecast issue/valid and observation times.
+
+### Reliability, provenance, and accessibility
+- Upgraded camera data to schema v2 with truthful health, last-verification, failure-class, source-URL, and refresh-cadence fields; provider and YouTube automation now preserves transient/degraded results without inventing verification.
+- Added visible online/offline and camera-freshness badges, explicit service-worker update activation, cached radar-manifest fallback, and shell-preserving cache diagnostics/recovery.
+- Radar refreshes on provider cadence/resume; hidden tabs pause and safely restore radar and camera media; preload completion and cleanup are measurable.
+- Made camera markers health-aware and camera-specific for assistive technology; modal backgrounds become inert; controls meet mobile target sizes; safe-area, reduced-motion, and forced-color modes are handled.
+
 ## v0.25.0 - 2026-07-11
 
 ### Reliability and security

@@ -12,10 +12,11 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 import discover_city_livestreams as city  # noqa: E402
 import discover_youtube_cameras as youtube  # noqa: E402
+import camera_data  # noqa: E402
 
 
 def seed_camera():
-    return {
+    value = {
         "id": 1,
         "name": "Seed",
         "lat": 40.0,
@@ -27,6 +28,8 @@ def seed_camera():
         "direction": "",
         "source": "dot",
     }
+    value.update(camera_data.unknown_metadata("https://example.com/seed.jpg"))
+    return value
 
 
 def city_record(geoid: str, name: str):
@@ -101,7 +104,12 @@ class CityCheckpointTests(unittest.TestCase):
             state = json.loads(checkpoint.read_text(encoding="utf-8"))
             self.assertEqual(["AAAAAAAAAAA"], state["accepted_video_ids"])
             self.assertEqual(["1"], state["processed_geoids"])
-            self.assertEqual(2, len(json.loads(data.read_text(encoding="utf-8"))))
+            dataset = json.loads(data.read_text(encoding="utf-8"))
+            self.assertEqual(2, len(dataset))
+            self.assertEqual("healthy", dataset[1]["health"])
+            self.assertIsNotNone(dataset[1]["last_verified"])
+            self.assertEqual("https://www.youtube.com/watch?v=AAAAAAAAAAA", dataset[1]["source_url"])
+            self.assertIsNone(dataset[1]["refresh_cadence_seconds"])
 
     def test_verification_exception_keeps_city_retryable(self):
         with tempfile.TemporaryDirectory() as temporary:

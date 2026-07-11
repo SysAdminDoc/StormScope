@@ -29,9 +29,23 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from camera_data import atomic_write_json, load_json, update_camera_data
+    from camera_data import (
+        atomic_write_json,
+        canonical_source_url,
+        healthy_metadata,
+        load_json,
+        update_camera_data,
+        utc_now_iso,
+    )
 except ModuleNotFoundError:  # pragma: no cover - package import during tests
-    from scripts.camera_data import atomic_write_json, load_json, update_camera_data
+    from scripts.camera_data import (
+        atomic_write_json,
+        canonical_source_url,
+        healthy_metadata,
+        load_json,
+        update_camera_data,
+        utc_now_iso,
+    )
 
 
 try:
@@ -52,7 +66,7 @@ EARTHCAM_REGION_URL = "https://www.earthcam.com/api/dotcom/network_search.php?r=
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 "
-    "StormScope/0.25.0"
+    "StormScope/0.26.0"
 )
 
 US_STATES = {
@@ -611,6 +625,7 @@ def discover_youtube_feeds(
 
 def append_feeds(data_file: Path, provider_feeds: list[ProviderFeed], youtube_feeds: list[YouTubeFeed]) -> tuple[int, int]:
     def append(cameras: list[dict[str, Any]]) -> tuple[int, int]:
+        verified_at = utc_now_iso()
         existing_embed_urls = {
             compact_key(str(cam.get("url") or ""))
             for cam in cameras
@@ -630,8 +645,7 @@ def append_feeds(data_file: Path, provider_feeds: list[ProviderFeed], youtube_fe
             if key in existing_embed_urls:
                 continue
             max_id += 1
-            cameras.append(
-                {
+            record = {
                     "id": max_id,
                     "name": feed.name,
                     "lat": feed.lat,
@@ -643,7 +657,11 @@ def append_feeds(data_file: Path, provider_feeds: list[ProviderFeed], youtube_fe
                     "direction": "",
                     "source": "earthcam",
                 }
+            provider_source_url = canonical_source_url("embed", feed.source_url) or canonical_source_url(
+                "embed", feed.url
             )
+            record.update(healthy_metadata(provider_source_url, verified_at=verified_at))
+            cameras.append(record)
             existing_embed_urls.add(key)
             added_provider += 1
 
@@ -651,8 +669,7 @@ def append_feeds(data_file: Path, provider_feeds: list[ProviderFeed], youtube_fe
             if feed.video_id in existing_youtube_ids:
                 continue
             max_id += 1
-            cameras.append(
-                {
+            record = {
                     "id": max_id,
                     "name": feed.name,
                     "lat": round(feed.lat, 6),
@@ -664,7 +681,10 @@ def append_feeds(data_file: Path, provider_feeds: list[ProviderFeed], youtube_fe
                     "direction": "",
                     "source": "youtube",
                 }
+            record.update(
+                healthy_metadata(canonical_source_url("youtube", feed.video_id), verified_at=verified_at)
             )
+            cameras.append(record)
             existing_youtube_ids.add(feed.video_id)
             added_youtube += 1
         return added_provider, added_youtube

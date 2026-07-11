@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://api.rainviewer.com https://tilecache.rainviewer.com https://api.weather.gov https://api.open-meteo.com https://cdn3.wowza.com https://s2.ozarkstrafficoneview.com https://sfs01-traveler.modot.mo.gov https://sfs02-traveler.modot.mo.gov https://sfs03-traveler.modot.mo.gov https://sfs04-traveler.modot.mo.gov https://sfs07-traveler.modot.mo.gov https://wzmedia.dot.ca.gov; media-src 'self' blob: https://cdn3.wowza.com https://s2.ozarkstrafficoneview.com https://sfs01-traveler.modot.mo.gov https://sfs02-traveler.modot.mo.gov https://sfs03-traveler.modot.mo.gov https://sfs04-traveler.modot.mo.gov https://sfs07-traveler.modot.mo.gov https://wzmedia.dot.ca.gov; frame-src https://www.youtube-nocookie.com https://earthcam.com https://*.earthcam.com https://myearthcam.com https://*.myearthcam.com https://nps.gov https://*.nps.gov https://brownrice.com https://*.brownrice.com https://abbeyroad.com https://*.abbeyroad.com https://esbnyc.com https://*.esbnyc.com; object-src 'none'; base-uri 'none'; form-action 'none'; manifest-src 'self'; worker-src 'self' blob:">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://api.rainviewer.com https://tilecache.rainviewer.com https://mapservices.weather.noaa.gov https://api.weather.gov https://api.open-meteo.com https://cdn3.wowza.com https://s2.ozarkstrafficoneview.com https://sfs01-traveler.modot.mo.gov https://sfs02-traveler.modot.mo.gov https://sfs03-traveler.modot.mo.gov https://sfs04-traveler.modot.mo.gov https://sfs07-traveler.modot.mo.gov https://wzmedia.dot.ca.gov; media-src 'self' blob: https://cdn3.wowza.com https://s2.ozarkstrafficoneview.com https://sfs01-traveler.modot.mo.gov https://sfs02-traveler.modot.mo.gov https://sfs03-traveler.modot.mo.gov https://sfs04-traveler.modot.mo.gov https://sfs07-traveler.modot.mo.gov https://wzmedia.dot.ca.gov; frame-src https://www.youtube-nocookie.com https://earthcam.com https://*.earthcam.com https://myearthcam.com https://*.myearthcam.com https://nps.gov https://*.nps.gov https://brownrice.com https://*.brownrice.com https://abbeyroad.com https://*.abbeyroad.com https://esbnyc.com https://*.esbnyc.com; object-src 'none'; base-uri 'none'; form-action 'none'; manifest-src 'self'; worker-src 'self' blob:">
   <title>StormScope — Live Weather Radar & Webcams</title>
   <meta name="description" content="Real-time weather radar with live traffic and weather cameras. See the weather through webcams across America and the world.">
   <meta name="theme-color" content="#0a0a14">
@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
-  <div id="map" role="application" aria-label="Weather radar and camera map"></div>
+  <div id="map" role="region" aria-label="Weather radar and camera map"></div>
 
   <header id="header">
     <div class="header-left">
@@ -31,6 +31,8 @@
       <h1>StormScope</h1>
     </div>
     <div class="header-right">
+      <span id="data-freshness" class="status-chip hidden" role="status" aria-live="polite"></span>
+      <span id="connection-state" class="status-chip" role="status" aria-live="polite">Online</span>
       <button id="btn-layers" class="header-btn" title="Layers" aria-label="Toggle layers panel" aria-expanded="false" aria-controls="layers-panel">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <polygon points="12 2 2 7 12 12 22 7 12 2"/>
@@ -40,6 +42,11 @@
       </button>
     </div>
   </header>
+
+  <div id="update-notice" class="update-notice hidden" role="status" aria-live="polite">
+    <span>A StormScope update is ready.</span>
+    <button id="apply-update" type="button">Apply update</button>
+  </div>
 
   <div id="layers-panel" class="panel hidden" role="region" aria-label="Map layers">
     <h3>Layers</h3>
@@ -51,15 +58,54 @@
       <input type="checkbox" id="toggle-cameras" checked>
       <span>Live Cameras</span>
     </label>
+    <label class="toggle-row">
+      <input type="checkbox" id="toggle-coverage">
+      <span>Radar Coverage</span>
+    </label>
+    <label class="toggle-row">
+      <input type="checkbox" id="toggle-alerts" checked>
+      <span>NWS Alerts</span>
+    </label>
     <div class="slider-row">
       <label for="radar-opacity">Radar Opacity</label>
       <input type="range" id="radar-opacity" min="0" max="100" value="65" aria-label="Radar opacity">
+    </div>
+    <div class="select-row">
+      <label for="weather-units">Weather units</label>
+      <select id="weather-units">
+        <option value="us">US (°F, mph)</option>
+        <option value="metric">Metric (°C, km/h)</option>
+      </select>
+    </div>
+    <div class="select-row">
+      <label for="alert-severity">Minimum alert severity</label>
+      <select id="alert-severity">
+        <option value="all">All alerts</option>
+        <option value="minor">Minor+</option>
+        <option value="moderate">Moderate+</option>
+        <option value="severe">Severe+</option>
+        <option value="extreme">Extreme only</option>
+      </select>
+    </div>
+    <div id="radar-meta" class="radar-meta" role="status" aria-live="polite">Radar provider pending…</div>
+    <div class="radar-legend" aria-label="Radar precipitation intensity from light to heavy">
+      <span>Light</span><i aria-hidden="true"></i><span>Heavy</span>
     </div>
     <div class="cache-panel">
       <div id="cache-status" class="cache-status" role="status" aria-live="polite">Checking offline cache…</div>
       <button id="clear-cache" class="cache-clear" type="button" disabled>Clear cached data</button>
     </div>
   </div>
+
+  <aside id="alerts-panel" class="alerts-panel hidden" aria-labelledby="alerts-heading">
+    <div class="alerts-header">
+      <h2 id="alerts-heading">Active NWS alerts</h2>
+      <span id="alerts-status" role="status" aria-live="polite">Loading…</span>
+    </div>
+    <ul id="alerts-list" class="alerts-list"></ul>
+    <article id="alert-detail" class="alert-detail hidden" tabindex="-1"></article>
+    <p class="alerts-disclaimer">Informational only. Follow instructions from <a href="https://www.weather.gov/" target="_blank" rel="noopener noreferrer">weather.gov</a> and local authorities.</p>
+  </aside>
 
   <div id="radar-controls" role="toolbar" aria-label="Past radar animation controls">
     <button id="radar-prev" class="radar-btn" title="Previous frame" aria-label="Previous radar frame">
@@ -74,7 +120,7 @@
     </button>
     <span id="radar-time" role="status" aria-live="polite">Loading radar…</span>
     <button id="radar-retry" class="radar-retry hidden" type="button">Retry</button>
-    <a class="radar-source" href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer">RainViewer</a>
+    <a id="radar-source" class="radar-source" href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer">RainViewer</a>
   </div>
 
   <div id="camera-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-cam-name">
@@ -84,6 +130,10 @@
         <div class="modal-title-area">
           <h2 id="modal-cam-name"></h2>
           <span id="modal-cam-location" class="modal-subtitle"></span>
+          <div class="modal-meta">
+            <span id="modal-cam-health" class="health-badge"></span>
+            <a id="modal-cam-source" target="_blank" rel="noopener noreferrer">Source</a>
+          </div>
         </div>
         <button id="modal-close" class="modal-close-btn" title="Close" aria-label="Close camera viewer">&times;</button>
       </div>
@@ -104,6 +154,9 @@
   <script src="vendor/leaflet/leaflet.js"></script>
   <script src="vendor/markercluster/leaflet.markercluster.js"></script>
   <script src="vendor/hls/hls.min.js"></script>
+  <script src="js/weather.js"></script>
+  <script src="js/nws-alerts.js"></script>
+  <script src="js/radar-providers.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

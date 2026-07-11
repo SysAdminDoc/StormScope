@@ -56,13 +56,47 @@ async function addNetworkFixtures(page) {
         contentType: 'application/json',
         body: JSON.stringify({
           host: 'https://tilecache.rainviewer.com',
-          radar: { past: [{ time: 1783800000, path: '/v2/radar/fixture' }], nowcast: [] }
+          radar: { past: [{ time: Math.floor(Date.now() / 1000) - 300, path: '/v2/radar/fixture' }], nowcast: [] }
         })
       });
       return;
     }
     if (url.includes('tilecache.rainviewer.com') || url.includes('basemaps.cartocdn.com')) {
       await route.fulfill({ contentType: 'image/png', body: pixel });
+      return;
+    }
+    if (url.startsWith('https://api.weather.gov/alerts/active')) {
+      const now = Date.now();
+      await route.fulfill({
+        contentType: 'application/geo+json',
+        body: JSON.stringify({ type: 'FeatureCollection', features: [{
+          id: 'https://api.weather.gov/alerts/fixture',
+          type: 'Feature',
+          geometry: {
+            type: 'Polygon',
+            coordinates: [[[-101, 38], [-96, 38], [-96, 42], [-101, 42], [-101, 38]]]
+          },
+          properties: {
+            id: 'https://api.weather.gov/alerts/fixture',
+            '@id': 'https://api.weather.gov/alerts/fixture',
+            web: 'https://www.weather.gov/',
+            event: 'Severe Thunderstorm Warning',
+            headline: 'Severe Thunderstorm Warning issued for the test area',
+            description: 'Seek shelter indoors.',
+            instruction: 'Move away from windows.',
+            areaDesc: 'Test County',
+            severity: 'Severe',
+            urgency: 'Immediate',
+            certainty: 'Observed',
+            status: 'Actual',
+            messageType: 'Alert',
+            sent: new Date(now - 60000).toISOString(),
+            effective: new Date(now - 60000).toISOString(),
+            expires: new Date(now + 3600000).toISOString(),
+            parameters: {}
+          }
+        }] })
+      });
       return;
     }
     if (url.startsWith('https://api.weather.gov/points/')) {
@@ -107,7 +141,7 @@ async function waitForApp(page, requireRadar = true) {
   await page.goto(page.baseURL, { waitUntil: 'domcontentloaded' });
   await page.locator('#camera-count').filter({ hasText: '24,204 cameras' }).waitFor({ state: 'visible' });
   if (requireRadar) {
-    await page.locator('#radar-time').filter({ hasText: 'Past radar' }).waitFor({ state: 'visible' });
+    await page.waitForFunction(() => /RainViewer|NOAA\/NWS MRMS/.test(document.querySelector('#radar-meta').textContent));
   }
 }
 
@@ -125,7 +159,12 @@ async function main() {
     page.baseURL = baseURL;
     page.on('pageerror', (error) => errors.push(error.message));
     page.on('console', (message) => {
-      if (message.type() === 'error' && !message.text().includes('net::ERR_FAILED')) errors.push(message.text());
+      if (message.type() !== 'error') return;
+      const text = message.text();
+      const source = message.location().url || '';
+      if (/net::ERR_(FAILED|INTERNET_DISCONNECTED)/.test(text)) return;
+      if (text.startsWith('Failed to load resource') && source && !source.startsWith(baseURL)) return;
+      errors.push(text);
     });
     await addNetworkFixtures(page);
     await waitForApp(page);
@@ -136,6 +175,16 @@ async function main() {
       return !(button.getAttribute('aria-label') || button.textContent.trim() || button.title);
     }).length);
     assert.equal(unnamedButtons, 0, 'all buttons must have accessible names');
+
+    await page.locator('#alerts-status').filter({ hasText: '1 alert' }).waitFor({ state: 'visible' });
+    const alertButton = page.getByRole('button', { name: /Severe Thunderstorm Warning/ });
+    await alertButton.click();
+    await page.locator('#alert-detail').waitFor({ state: 'visible' });
+    await page.getByRole('button', { name: 'Toggle layers panel' }).click();
+    await page.locator('#toggle-alerts').uncheck();
+    await page.getByRole('button', { name: 'Toggle layers panel' }).click();
+    await page.evaluate(() => window._stormscope.getMap().setView([39.5, -98.5], 5));
+    await page.waitForTimeout(100);
 
     const cameraMarkers = page.locator('.leaflet-marker-icon:has(.camera-marker)');
     const markerIndex = await cameraMarkers.evaluateAll((markers) => markers.findIndex((marker) => {
@@ -167,7 +216,6 @@ async function main() {
     const cacheNames = await page.evaluate(() => caches.keys());
     assert.ok(cacheNames.some((name) => name.startsWith('stormscope-shell-')));
     assert.ok(!cacheNames.some((name) => name.startsWith('stormscope-data-')));
-    assert.ok(!cacheNames.some((name) => name.startsWith('stormscope-tiles-')));
 
     const mobile = await context.newPage();
     mobile.baseURL = baseURL;

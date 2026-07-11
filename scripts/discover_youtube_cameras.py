@@ -31,9 +31,23 @@ from pathlib import Path
 from typing import Any, Iterable
 
 try:
-    from camera_data import atomic_write_json, load_json, update_camera_data
+    from camera_data import (
+        atomic_write_json,
+        canonical_source_url,
+        healthy_metadata,
+        load_json,
+        update_camera_data,
+        utc_now_iso,
+    )
 except ModuleNotFoundError:  # pragma: no cover - package import during tests
-    from scripts.camera_data import atomic_write_json, load_json, update_camera_data
+    from scripts.camera_data import (
+        atomic_write_json,
+        canonical_source_url,
+        healthy_metadata,
+        load_json,
+        update_camera_data,
+        utc_now_iso,
+    )
 
 
 try:
@@ -58,7 +72,7 @@ NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 "
-    "StormScope/0.25.0"
+    "StormScope/0.26.0"
 )
 
 US_STATES = {
@@ -1045,6 +1059,7 @@ def locate_candidate(
 
 def append_cameras(data_file: Path, located: list[LocatedCamera], limit_add: int) -> int:
     def append(cameras: list[dict[str, Any]]) -> int:
+        verified_at = utc_now_iso()
         existing_ids = {str(cam.get("url")) for cam in cameras if cam.get("type") == "youtube"}
         max_id = max(int(cam.get("id") or 0) for cam in cameras) if cameras else 0
         added = 0
@@ -1054,8 +1069,7 @@ def append_cameras(data_file: Path, located: list[LocatedCamera], limit_add: int
             if camera.video_id in existing_ids:
                 continue
             max_id += 1
-            cameras.append(
-                {
+            record = {
                     "id": max_id,
                     "name": camera.name,
                     "lat": camera.lat,
@@ -1067,7 +1081,10 @@ def append_cameras(data_file: Path, located: list[LocatedCamera], limit_add: int
                     "direction": "",
                     "source": "youtube",
                 }
+            record.update(
+                healthy_metadata(canonical_source_url("youtube", camera.video_id), verified_at=verified_at)
             )
+            cameras.append(record)
             existing_ids.add(camera.video_id)
             added += 1
         return added

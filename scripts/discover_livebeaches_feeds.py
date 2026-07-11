@@ -29,9 +29,23 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from camera_data import atomic_write_json, load_json as load_json_shared, update_camera_data
+    from camera_data import (
+        atomic_write_json,
+        canonical_source_url,
+        healthy_metadata,
+        load_json as load_json_shared,
+        update_camera_data,
+        utc_now_iso,
+    )
 except ModuleNotFoundError:  # pragma: no cover - package import during tests
-    from scripts.camera_data import atomic_write_json, load_json as load_json_shared, update_camera_data
+    from scripts.camera_data import (
+        atomic_write_json,
+        canonical_source_url,
+        healthy_metadata,
+        load_json as load_json_shared,
+        update_camera_data,
+        utc_now_iso,
+    )
 
 
 try:
@@ -51,7 +65,7 @@ NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 "
-    "StormScope/0.25.0"
+    "StormScope/0.26.0"
 )
 
 DEFAULT_CATEGORIES = [
@@ -441,6 +455,7 @@ def locate_candidate(candidate: PageCandidate, cache: dict[str, Any], sleep: flo
 
 def append_feeds(data_file: Path, feeds: list[LocatedFeed], limit_add: int) -> int:
     def append(cameras: list[dict[str, Any]]) -> int:
+        verified_at = utc_now_iso()
         existing_urls = {str(cam.get("url") or "") for cam in cameras}
         max_id = max(int(cam.get("id") or 0) for cam in cameras) if cameras else 0
         added = 0
@@ -450,8 +465,7 @@ def append_feeds(data_file: Path, feeds: list[LocatedFeed], limit_add: int) -> i
             if feed.url in existing_urls:
                 continue
             max_id += 1
-            cameras.append(
-                {
+            record = {
                     "id": max_id,
                     "name": feed.name,
                     "lat": feed.lat,
@@ -463,7 +477,11 @@ def append_feeds(data_file: Path, feeds: list[LocatedFeed], limit_add: int) -> i
                     "direction": "",
                     "source": "livebeaches" if feed.feed_type == "embed" else "youtube",
                 }
-            )
+            source_url = canonical_source_url("embed", feed.source_page)
+            if source_url is None:
+                source_url = canonical_source_url(feed.feed_type, feed.url)
+            record.update(healthy_metadata(source_url, verified_at=verified_at))
+            cameras.append(record)
             existing_urls.add(feed.url)
             added += 1
         return added

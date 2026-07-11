@@ -34,9 +34,25 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from camera_data import atomic_write_json, load_json, update_camera_data, update_json
+    from camera_data import (
+        atomic_write_json,
+        canonical_source_url,
+        healthy_metadata,
+        load_json,
+        update_camera_data,
+        update_json,
+        utc_now_iso,
+    )
 except ModuleNotFoundError:  # pragma: no cover - package import during tests
-    from scripts.camera_data import atomic_write_json, load_json, update_camera_data, update_json
+    from scripts.camera_data import (
+        atomic_write_json,
+        canonical_source_url,
+        healthy_metadata,
+        load_json,
+        update_camera_data,
+        update_json,
+        utc_now_iso,
+    )
 
 
 try:
@@ -61,7 +77,7 @@ CENSUS_GAZETTEER_URL = (
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 "
-    "StormScope/0.25.0"
+    "StormScope/0.26.0"
 )
 
 STATE_NAMES = {
@@ -655,6 +671,7 @@ def select_city_batch(
 
 def append_streams(data_file: Path, streams: list[CityLocatedStream], limit_add: int) -> tuple[int, set[str]]:
     def append(cameras: list[dict[str, Any]]) -> tuple[int, set[str]]:
+        verified_at = utc_now_iso()
         existing_youtube = {str(cam.get("url") or "") for cam in cameras if cam.get("type") == "youtube"}
         max_id = max(int(cam.get("id") or 0) for cam in cameras) if cameras else 0
         committed: set[str] = set()
@@ -664,8 +681,7 @@ def append_streams(data_file: Path, streams: list[CityLocatedStream], limit_add:
             if stream.video_id in existing_youtube:
                 continue
             max_id += 1
-            cameras.append(
-                {
+            record = {
                     "id": max_id,
                     "name": stream.name,
                     "lat": stream.lat,
@@ -677,7 +693,10 @@ def append_streams(data_file: Path, streams: list[CityLocatedStream], limit_add:
                     "direction": "",
                     "source": "youtube",
                 }
+            record.update(
+                healthy_metadata(canonical_source_url("youtube", stream.video_id), verified_at=verified_at)
             )
+            cameras.append(record)
             existing_youtube.add(stream.video_id)
             committed.add(stream.video_id)
         return len(committed), committed

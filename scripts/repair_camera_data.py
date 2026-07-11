@@ -7,9 +7,9 @@ import argparse
 from pathlib import Path
 
 try:
-    from camera_data import feed_identity, load_json, save_camera_data
+    from camera_data import canonical_source_url, feed_identity, load_json, save_camera_data, unknown_metadata
 except ModuleNotFoundError:  # pragma: no cover - package import during tests
-    from scripts.camera_data import feed_identity, load_json, save_camera_data
+    from scripts.camera_data import canonical_source_url, feed_identity, load_json, save_camera_data, unknown_metadata
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -60,6 +60,9 @@ def repair(cameras: list[dict]) -> tuple[list[dict], dict[str, int]]:
             counts["https"] += 1
         elif stripped.startswith("http://"):
             counts["unverified_http"] += 1
+        metadata = unknown_metadata(canonical_source_url(str(camera.get("type") or ""), str(camera.get("url") or "")))
+        for field, value in metadata.items():
+            camera.setdefault(field, value)
         identity = feed_identity(camera)
         if identity in seen:
             counts["duplicate"] += 1

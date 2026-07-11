@@ -18,9 +18,25 @@ from dataclasses import dataclass
 from typing import Callable
 
 try:
-    from camera_data import feed_identity, restore_camera_data, update_camera_data, validate_camera_data
+    from camera_data import (
+        canonical_source_url,
+        feed_identity,
+        healthy_metadata,
+        restore_camera_data,
+        unknown_metadata,
+        update_camera_data,
+        validate_camera_data,
+    )
 except ModuleNotFoundError:  # pragma: no cover - package import during tests
-    from scripts.camera_data import feed_identity, restore_camera_data, update_camera_data, validate_camera_data
+    from scripts.camera_data import (
+        canonical_source_url,
+        feed_identity,
+        healthy_metadata,
+        restore_camera_data,
+        unknown_metadata,
+        update_camera_data,
+        validate_camera_data,
+    )
 
 sys.stdout.reconfigure(encoding='utf-8')
 ctx = ssl.create_default_context()
@@ -85,6 +101,11 @@ def add_camera(name, lat, lon, url, cam_type='image', state='', county='',
     }
     if active_provider:
         camera['provider'] = active_provider
+    source_url = canonical_source_url(cam_type, str(url))
+    if active_provider == 'OpenTrafficCamMap baseline':
+        camera.update(unknown_metadata(source_url))
+    else:
+        camera.update(healthy_metadata(source_url))
     cameras.append(camera)
 
 
@@ -419,7 +440,7 @@ def fetch_txdot():
 def fetch_nps():
     try:
         url = 'https://developer.nps.gov/api/v1/webcams?api_key=DEMO_KEY&limit=500'
-        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.25.0'})
+        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.26.0'})
         count = 0
         for cam in data.get('data', []):
             if str(cam.get('status') or '').lower() == 'inactive':
@@ -1017,7 +1038,15 @@ def merge_provider_results(
             continue
         accepted_results.append(result)
     successful = {result.name for result in accepted_results}
+    degraded_providers = {
+        result.name for result in results
+        if result.name not in successful
+    }
     retained = [camera for camera in existing if camera.get('provider') not in successful]
+    for camera in retained:
+        if camera.get('provider') in degraded_providers and camera.get('health') != 'offline':
+            camera['health'] = 'degraded'
+            camera['failure_class'] = 'provider_error'
     fresh = [camera for result in accepted_results for camera in result.cameras]
     merged = []
     seen = set()

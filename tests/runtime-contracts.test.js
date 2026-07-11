@@ -12,9 +12,10 @@ const cameraData = JSON.parse(fs.readFileSync(path.join(root, 'data', 'cameras.j
 test('RainViewer uses the 2026 past-radar contract', () => {
   assert.match(app, /RAINVIEWER_COLOR_SCHEME = 2/);
   assert.match(app, /RAINVIEWER_MAX_NATIVE_ZOOM = 7/);
-  assert.match(app, /getTrustedRainViewerHost\(data\.host\)/);
-  assert.match(app, /data\.radar\.past/);
-  assert.doesNotMatch(app, /data\.radar\.nowcast/);
+  assert.match(app, /parseRainViewerDiscovery/);
+  assert.match(app, /discoverNoaa/);
+  assert.match(app, /selectProvider/);
+  assert.match(app, /sampleRadarCenter/);
   assert.match(app, /maxNativeZoom: RAINVIEWER_MAX_NATIVE_ZOOM/);
   assert.match(app, /crossOrigin: 'anonymous'/);
   assert.match(app, /Past radar/);
@@ -96,4 +97,51 @@ test('cache diagnostics and recovery are reachable from the layers panel', () =>
   assert.match(app, /quota-exceeded/);
   assert.match(app, /new MessageChannel\(\)/);
   assert.match(css, /\.cache-status\.error/);
+});
+
+test('PWA update and page lifecycle work are explicit and recoverable', () => {
+  assert.match(html, /id="connection-state"[^>]*role="status"/);
+  assert.match(html, /id="data-freshness"[^>]*role="status"/);
+  assert.match(html, /id="update-notice"/);
+  assert.match(app, /registration\.waiting/);
+  assert.match(app, /updatefound/);
+  assert.match(app, /controllerchange/);
+  assert.match(app, /STORMSCOPE_SKIP_WAITING/);
+  assert.match(app, /visibilitychange/);
+  assert.match(app, /beforeunload/);
+  assert.match(app, /window\.addEventListener\('online'/);
+  assert.match(app, /window\.addEventListener\('offline'/);
+  assert.match(app, /RADAR_REFRESH_INTERVAL/);
+  assert.match(app, /Feed paused while this tab is hidden/);
+});
+
+test('radar failover, coverage semantics, and NWS alerts are wired into the UI', () => {
+  assert.match(html, /js\/radar-providers\.js/);
+  assert.match(html, /js\/nws-alerts\.js/);
+  assert.match(html, /id="toggle-coverage"/);
+  assert.match(html, /id="toggle-alerts"/);
+  assert.match(html, /id="alerts-panel"/);
+  assert.match(html, /Informational only/);
+  assert.match(app, /StormScopeRadarProviders\.selectProvider/);
+  assert.match(app, /StormScopeRadarProviders\.parseNoaaDiscovery/);
+  assert.match(app, /StormScopeRadarProviders\.classifyRadarState/);
+  assert.match(app, /StormScopeNwsAlerts\.buildViewportQuery/);
+  assert.match(app, /StormScopeNwsAlerts\.buildPointQuery/);
+  assert.match(app, /StormScopeNwsAlerts\.nextRetryMetadata/);
+  assert.match(css, /\.radar-legend/);
+  assert.match(css, /\.alert-list-button\[data-severity="Extreme"\]/);
+});
+
+test('weather routing, units, freshness, and accessibility contracts are integrated', () => {
+  assert.match(html, /js\/weather\.js/);
+  assert.match(html, /id="weather-units"/);
+  assert.match(html, /id="map" role="region"/);
+  assert.match(app, /StormScopeWeather\.shouldUseNws/);
+  assert.match(app, /Open-Meteo fallback/);
+  assert.match(app, /Forecast issued/);
+  assert.match(app, /Forecast valid/);
+  assert.match(app, /localStorage\.setItem\('stormscope-weather-units'/);
+  assert.match(app, /setModalBackgroundInert/);
+  assert.match(css, /@media \(forced-colors: active\)/);
+  assert.match(css, /safe-area-inset-bottom/);
 });

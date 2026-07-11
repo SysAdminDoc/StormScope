@@ -28,10 +28,39 @@ def camera(camera_id: int = 1, **overrides):
         "source": "dot",
     }
     value.update(overrides)
+    value.update(
+        camera_data.unknown_metadata(
+            camera_data.canonical_source_url(str(value.get("type") or ""), str(value.get("url") or ""))
+        )
+    )
+    value.update({key: field for key, field in overrides.items() if key in camera_data.REQUIRED_FIELDS})
     return value
 
 
 class CameraDataTests(unittest.TestCase):
+    def test_published_schema_version_matches_runtime_contract(self):
+        schema = json.loads((ROOT / "data" / "cameras.schema.json").read_text(encoding="utf-8"))
+        self.assertEqual(camera_data.CAMERA_SCHEMA_VERSION, schema["x-camera-schema-version"])
+
+    def test_repair_migrates_legacy_health_fields_without_claiming_verification(self):
+        legacy = camera(7)
+        for field in (
+            "last_verified",
+            "health",
+            "failure_class",
+            "source_url",
+            "refresh_cadence_seconds",
+        ):
+            legacy.pop(field)
+        repaired, _ = repair_camera_data.repair([legacy])
+        self.assertEqual(1, len(repaired))
+        self.assertEqual(1, repaired[0]["id"])
+        self.assertIsNone(repaired[0]["last_verified"])
+        self.assertEqual("unknown", repaired[0]["health"])
+        self.assertIsNone(repaired[0]["failure_class"])
+        self.assertEqual("https://example.com/7.jpg", repaired[0]["source_url"])
+        self.assertIsNone(repaired[0]["refresh_cadence_seconds"])
+
     def test_repair_is_idempotent_and_does_not_treat_ids_as_broken(self):
         healthy = camera(4942)
         repaired, counts = repair_camera_data.repair([healthy])

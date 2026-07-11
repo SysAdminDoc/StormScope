@@ -1,11 +1,15 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/SysAdminDoc/StormScope/master/data/cameras.schema.json",
-  "title": "StormScope camera dataset v1",
+  "x-camera-schema-version": 2,
+  "title": "StormScope camera dataset v2",
   "type": "array",
   "items": {
     "type": "object",
-    "required": ["id", "name", "lat", "lon", "url", "type", "source"],
+    "required": [
+      "id", "name", "lat", "lon", "url", "type", "source",
+      "last_verified", "health", "failure_class", "source_url", "refresh_cadence_seconds"
+    ],
     "properties": {
       "id": {"type": "integer", "minimum": 1},
       "name": {"type": "string", "minLength": 1},
@@ -18,8 +22,53 @@
       "county": {"type": "string"},
       "direction": {"type": "string"},
       "provider": {"type": "string", "minLength": 1},
-      "status": {"enum": ["Active", "Offline", "Unknown"]}
+      "status": {"enum": ["Active", "Offline", "Unknown"]},
+      "last_verified": {
+        "oneOf": [
+          {"type": "null"},
+          {"type": "string", "format": "date-time"}
+        ]
+      },
+      "health": {"enum": ["unknown", "healthy", "degraded", "offline"]},
+      "failure_class": {
+        "oneOf": [
+          {"type": "null"},
+          {"enum": ["transient", "provider_error", "confirmed_offline", "unsupported", "inactive"]}
+        ]
+      },
+      "source_url": {
+        "oneOf": [
+          {"type": "null"},
+          {"type": "string", "format": "uri", "pattern": "^https://"}
+        ]
+      },
+      "refresh_cadence_seconds": {
+        "oneOf": [
+          {"type": "null"},
+          {"type": "integer", "minimum": 1}
+        ]
+      }
     },
-    "additionalProperties": true
+    "additionalProperties": true,
+    "allOf": [
+      {
+        "if": {"properties": {"health": {"const": "healthy"}}},
+        "then": {
+          "properties": {
+            "failure_class": {"type": "null"},
+            "last_verified": {"type": "string", "format": "date-time"},
+            "source_url": {"type": "string", "format": "uri", "pattern": "^https://"}
+          }
+        }
+      },
+      {
+        "if": {"properties": {"health": {"const": "offline"}}},
+        "then": {
+          "properties": {
+            "failure_class": {"enum": ["confirmed_offline", "unsupported", "inactive"]}
+          }
+        }
+      }
+    ]
   }
 }

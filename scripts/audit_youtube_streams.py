@@ -5,8 +5,8 @@ Audit YouTube camera rows and optionally remove confirmed broken streams.
 This is intentionally stricter than checking for the watch-page
 ``isLiveBroadcast`` marker. A stream is kept only when yt-dlp can extract
 currently playable live metadata. Confirmed failed/non-live videos can be
-removed with ``--apply``; transient extractor/network failures are kept unless
-``--remove-unknown`` is explicitly supplied.
+removed with ``--apply``; transient extractor/network failures are always kept
+and recorded as degraded without erasing the last successful verification.
 """
 
 from __future__ import annotations
@@ -22,9 +22,23 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from camera_data import atomic_write_json, load_json as load_json_shared, update_camera_data
+    from camera_data import (
+        atomic_write_json,
+        canonical_source_url,
+        healthy_metadata,
+        load_json as load_json_shared,
+        update_camera_data,
+        utc_now_iso,
+    )
 except ModuleNotFoundError:  # pragma: no cover - package import during tests
-    from scripts.camera_data import atomic_write_json, load_json as load_json_shared, update_camera_data
+    from scripts.camera_data import (
+        atomic_write_json,
+        canonical_source_url,
+        healthy_metadata,
+        load_json as load_json_shared,
+        update_camera_data,
+        utc_now_iso,
+    )
 
 
 try:
@@ -200,22 +214,37 @@ def apply_removals(
     remove_unknown: bool,
     data_file: Path,
 ) -> int:
-    remove_statuses = {"failed"}
-    if remove_unknown:
-        remove_statuses.add("unknown")
-    remove_ids = {result.video_id for result in results if result.status in remove_statuses}
-    if not remove_ids:
-        return 0
-    def remove(current: list[dict[str, Any]]) -> int:
+    del cameras, remove_unknown  # retained for CLI/API compatibility; transient rows are never removed
+    result_by_id = {result.video_id: result for result in results}
+    verified_at = utc_now_iso()
+
+    def apply(current: list[dict[str, Any]]) -> int:
         before = len(current)
-        current[:] = [
-            cam
-            for cam in current
-            if not (cam.get("type") == "youtube" and str(cam.get("url") or "") in remove_ids)
-        ]
+        kept = []
+        for camera in current:
+            if camera.get("type") != "youtube":
+                kept.append(camera)
+                continue
+            video_id = str(camera.get("url") or "")
+            result = result_by_id.get(video_id)
+            if result is None:
+                kept.append(camera)
+                continue
+            if result.status == "failed":
+                continue
+            if result.status == "ok":
+                camera.update(
+                    healthy_metadata(canonical_source_url("youtube", video_id), verified_at=verified_at)
+                )
+            elif result.status == "unknown" and camera.get("health") != "offline":
+                camera["health"] = "degraded"
+                camera["failure_class"] = "transient"
+                camera["source_url"] = canonical_source_url("youtube", video_id)
+            kept.append(camera)
+        current[:] = kept
         return before - len(current)
 
-    removed, _ = update_camera_data(data_file, remove)
+    removed, _ = update_camera_data(data_file, apply)
     return removed
 
 
@@ -239,7 +268,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--data", type=Path, default=DATA_FILE)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
     parser.add_argument("--apply", action="store_true", help="remove confirmed failed YouTube rows from data")
-    parser.add_argument("--remove-unknown", action="store_true", help="also remove transient/unknown failures")
+    parser.add_argument(
+        "--remove-unknown",
+        action="store_true",
+        help="deprecated compatibility flag; transient/unknown failures are always retained",
+    )
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--timeout", type=int, default=75)
     parser.add_argument("--retries", type=int, default=1)
@@ -258,7 +291,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"YouTube rows to audit: {before['youtube_total'] if not args.limit else min(args.limit, before['youtube_total'])}")
     results = audit_all(cameras, args)
     removed = apply_removals(cameras, results, remove_unknown=args.remove_unknown, data_file=args.data) if args.apply else 0
-    after_cameras = load_json(args.data) if removed else cameras
+    after_cameras = load_json(args.data) if args.apply else cameras
     after = dataset_summary(after_cameras)
     status_counts = Counter(result.status for result in results)
     reason_counts = Counter(result.reason for result in results if result.status != "ok")

@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.25.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.26.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
 [![Cameras](https://img.shields.io/badge/cameras-24%2C204-cyan)]()
@@ -9,15 +9,16 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 
 ## Features
 
-- **Live Weather Radar** — Real-time NEXRAD radar via RainViewer (animated, adjustable opacity)
+- **Live Weather Radar** — Animated RainViewer radar with official NOAA/NWS MRMS failover, source/age/coverage status, and adjustable opacity
+- **Official Weather Alerts** — Viewport-scoped NWS watches, warnings, and advisories with severity polygons and accessible details
 - **24,204 Live Cameras** — Traffic, weather, park, EarthCam, LiveBeaches, and webcam feeds across 48 US states plus international locations
 - **355 YouTube Live Streams** — Playback-verified 24/7 streams including beaches, airports, railcams, harbors, city skylines, landmarks, indoor/outdoor feeds, wildlife cams, volcano cams, and city-list discoveries (red markers)
 - **451 Provider Embed Feeds** — 275 EarthCam Network pages, 172 active NPS embed pages, and 4 direct LiveBeaches/Brownrice player embeds
 - **Click-to-View** — YouTube embeds, EarthCam pages, HLS video streams, and auto-refreshing image feeds in a modal viewer
-- **Current Weather** — NWS hourly forecast data shown alongside each camera feed
+- **Current Weather** — Country-aware NWS forecasts with Open-Meteo fallback, metric/US units, and explicit issue/observation times
 - **Dark Theme** — CartoDB dark matter tiles with glassmorphism UI
 - **No API Keys** — Runs entirely client-side with free, keyless APIs
-- **Installable PWA** — Add to home screen; a service worker caches the app shell, radar frames, basemap tiles, and camera dataset for fast repeat loads and offline launch
+- **Installable PWA** — Offline camera/radar fallback, visible cache/freshness state, safe cache recovery, and deterministic update activation
 - **Mobile Responsive** — Works on desktop and mobile browsers
 
 ## Camera Coverage
@@ -79,13 +80,14 @@ It validates the camera corpus and runs Python units, lint, JavaScript syntax/co
 - [Leaflet](https://leafletjs.com/) — Interactive map with CartoDB dark tiles
 - [Leaflet.markercluster](https://github.com/Leaflet/Leaflet.markercluster) — Camera marker clustering
 - [RainViewer API](https://www.rainviewer.com/api.html) — Free weather radar tiles (no key)
+- [NOAA/NWS MRMS](https://mapservices.weather.noaa.gov/) — Official fallback radar imagery and history (no key)
 - [NWS API](https://www.weather.gov/documentation/services-web-api) — Free hourly weather data (no key)
 - [HLS.js](https://github.com/video-dev/hls.js/) — HLS video stream playback
 - Camera data from 20+ state DOT APIs + [OpenTrafficCamMap](https://github.com/AidanWelch/OpenTrafficCamMap) (MIT) + NPS + EarthCam + LiveBeaches + verified-live YouTube streams
 
 ## Data Sources
 
-- **Radar**: RainViewer — global weather radar composites, updated every 10 minutes
+- **Radar**: RainViewer primary with official NOAA/NWS MRMS fallback; the UI identifies the active source, age, resolution, coverage, and degradation reason
 - **Cameras**: 20+ state DOT live APIs (Caltrans, FL511, WSDOT, NYCDOT, IDOT, MDOT, CDOT, etc.), OpenTrafficCamMap, NPS, EarthCam, LiveBeaches, and verified-live YouTube streams
 - **City discovery list**: U.S. Census Bureau 2025 Gazetteer places file, filtered to legal city records and written as `City, State`
 - **Weather**: National Weather Service (NWS) hourly forecast API
@@ -179,11 +181,18 @@ Camera data lives in `data/cameras.json`. Each entry:
   "state": "Alabama",
   "county": "Mobile",
   "direction": "E",
-  "source": "dot"
+  "source": "dot",
+  "last_verified": null,
+  "health": "unknown",
+  "failure_class": null,
+  "source_url": "https://example.com/stream/playlist.m3u8",
+  "refresh_cadence_seconds": null
 }
 ```
 
 Supported `type` values: `hls` (M3U8 streams), `image` (JPEG with auto-refresh), `mjpeg` (motion JPEG streams), `embed` (iframe page URL), `youtube` (YouTube video ID only, not a full URL).
+
+Health/provenance fields are schema-v2 metadata. `unknown` and `null` mean the feed has not been verified by the current pipeline; they never imply success. Transient provider failures degrade existing rows instead of deleting them.
 
 ## License
 

@@ -30,6 +30,7 @@ def camera(camera_id: int, url: str, *, source: str = "dot", provider: str | Non
     }
     if provider:
         value["provider"] = provider
+    value.update(camera_data.unknown_metadata(camera_data.canonical_source_url("image", url)))
     return value
 
 
@@ -45,7 +46,10 @@ class FetchMergeTests(unittest.TestCase):
             camera(2, "https://curated.test/live.jpg", source="earthcam"),
         ]
         merged = merge_provider_results(existing, [ProviderResult("Provider A", [], "timeout")])
-        self.assertEqual(existing, merged)
+        self.assertEqual("degraded", merged[0]["health"])
+        self.assertEqual("provider_error", merged[0]["failure_class"])
+        self.assertEqual("unknown", merged[1]["health"])
+        self.assertEqual(2, len(merged))
 
     def test_success_replaces_tagged_provider_without_erasing_legacy(self):
         existing = [
@@ -125,6 +129,11 @@ class FetchMergeTests(unittest.TestCase):
                 ["https://dot.test/fresh.jpg", "https://curated.test/concurrent.jpg"],
                 urls,
             )
+            dataset = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual("healthy", dataset[0]["health"])
+            self.assertIsNotNone(dataset[0]["last_verified"])
+            self.assertEqual("https://dot.test/fresh.jpg", dataset[0]["source_url"])
+            self.assertEqual("unknown", dataset[1]["health"])
 
 
 if __name__ == "__main__":

@@ -14,15 +14,20 @@ import time
 from collections import Counter
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterator, TypeVar
 from urllib.parse import urlsplit, urlunsplit
 
 
-CAMERA_SCHEMA_VERSION = 1
+CAMERA_SCHEMA_VERSION = 2
 ALLOWED_TYPES = frozenset({"embed", "hls", "image", "mjpeg", "youtube"})
 ALLOWED_SOURCES = frozenset({"dot", "earthcam", "livebeaches", "nps", "youtube"})
 ALLOWED_STATUSES = frozenset({"Active", "Offline", "Unknown"})
+ALLOWED_HEALTH = frozenset({"unknown", "healthy", "degraded", "offline"})
+ALLOWED_FAILURE_CLASSES = frozenset(
+    {"transient", "provider_error", "confirmed_offline", "unsupported", "inactive"}
+)
 EMBED_HOST_SUFFIXES = frozenset(
     {
         "abbeyroad.com",
@@ -34,7 +39,22 @@ EMBED_HOST_SUFFIXES = frozenset(
     }
 )
 VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
-REQUIRED_FIELDS = frozenset({"id", "name", "lat", "lon", "url", "type", "source"})
+REQUIRED_FIELDS = frozenset(
+    {
+        "id",
+        "name",
+        "lat",
+        "lon",
+        "url",
+        "type",
+        "source",
+        "last_verified",
+        "health",
+        "failure_class",
+        "source_url",
+        "refresh_cadence_seconds",
+    }
+)
 
 T = TypeVar("T")
 
@@ -63,6 +83,38 @@ class CameraDataSummary:
     total: int
     source_counts: dict[str, int]
     type_counts: dict[str, int]
+
+
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def canonical_source_url(camera_type: str, value: str) -> str | None:
+    if camera_type == "youtube" and VIDEO_ID_RE.fullmatch(value):
+        return f"https://www.youtube.com/watch?v={value}"
+    if value.startswith("https://"):
+        return value
+    return None
+
+
+def healthy_metadata(source_url: str | None, *, verified_at: str | None = None) -> dict[str, Any]:
+    return {
+        "last_verified": verified_at or utc_now_iso(),
+        "health": "healthy",
+        "failure_class": None,
+        "source_url": source_url,
+        "refresh_cadence_seconds": None,
+    }
+
+
+def unknown_metadata(source_url: str | None) -> dict[str, Any]:
+    return {
+        "last_verified": None,
+        "health": "unknown",
+        "failure_class": None,
+        "source_url": source_url,
+        "refresh_cadence_seconds": None,
+    }
 
 
 def load_json(path: Path, default: T | None = None) -> Any | T:
@@ -167,6 +219,57 @@ def validate_camera_data(
         if status not in (None, ""):
             if not isinstance(status, str) or status not in ALLOWED_STATUSES:
                 errors.append(f"{label}: unsupported status {status!r}")
+
+        last_verified = camera.get("last_verified")
+        if last_verified is not None:
+            if not isinstance(last_verified, str):
+                errors.append(f"{label}: last_verified must be an ISO timestamp or null")
+            else:
+                try:
+                    parsed_verified = datetime.fromisoformat(last_verified.replace("Z", "+00:00"))
+                    if parsed_verified.tzinfo is None:
+                        raise ValueError("timezone is required")
+                except ValueError:
+                    errors.append(f"{label}: last_verified must be a timezone-aware ISO timestamp")
+
+        health = camera.get("health")
+        if health not in ALLOWED_HEALTH:
+            errors.append(f"{label}: unsupported health {health!r}")
+        failure_class = camera.get("failure_class")
+        if failure_class is not None and failure_class not in ALLOWED_FAILURE_CLASSES:
+            errors.append(f"{label}: unsupported failure_class {failure_class!r}")
+        if health == "healthy" and failure_class is not None:
+            errors.append(f"{label}: healthy rows cannot have a failure_class")
+        if health == "healthy" and last_verified is None:
+            errors.append(f"{label}: healthy rows require last_verified")
+        if health == "offline" and failure_class not in {"confirmed_offline", "unsupported", "inactive"}:
+            errors.append(f"{label}: offline rows require a permanent failure_class")
+        if failure_class in {"confirmed_offline", "unsupported", "inactive"} and health != "offline":
+            errors.append(f"{label}: permanent failures require offline health")
+        if failure_class in {"transient", "provider_error"} and health not in {"unknown", "degraded"}:
+            errors.append(f"{label}: transient failures cannot mark a row offline or healthy")
+
+        cadence = camera.get("refresh_cadence_seconds")
+        if cadence is not None and (
+            isinstance(cadence, bool) or not isinstance(cadence, int) or cadence <= 0
+        ):
+            errors.append(f"{label}: refresh_cadence_seconds must be a positive integer or null")
+
+        source_url = camera.get("source_url")
+        if source_url is not None:
+            if not isinstance(source_url, str):
+                errors.append(f"{label}: source_url must be an https URL or null")
+            else:
+                try:
+                    parsed_source = urlsplit(source_url)
+                    _ = parsed_source.port
+                except ValueError as exc:
+                    errors.append(f"{label}: invalid source_url ({exc})")
+                else:
+                    if parsed_source.scheme != "https" or not parsed_source.hostname:
+                        errors.append(f"{label}: source_url must use https")
+        if health == "healthy" and source_url is None:
+            errors.append(f"{label}: healthy rows require source_url")
 
         url = camera.get("url")
         if not isinstance(url, str) or not url:

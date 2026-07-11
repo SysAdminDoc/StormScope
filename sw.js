@@ -7,12 +7,13 @@
  *     bounded LRU cache so repeat visits reuse already-fetched frames offline.
  *   - Camera dataset (data/cameras.json): stale-while-revalidate — instant load
  *     from cache, refreshed in the background.
- *   - Live weather/radar-index APIs (NWS, Open-Meteo, RainViewer maps.json):
- *     never cached; always fetched fresh (time-sensitive).
+ *   - RainViewer's small frame manifest: network-first with last-known-good
+ *     fallback so already-cached radar tiles can initialize offline.
+ *   - Live weather APIs (NWS, Open-Meteo): always fetched fresh.
  */
 'use strict';
 
-var VERSION = 'v2';
+var VERSION = 'v3';
 var RUNTIME_CACHE_VERSION = 'v1';
 var SHELL_CACHE = 'stormscope-shell-' + VERSION;
 var TILE_CACHE = 'stormscope-tiles-' + RUNTIME_CACHE_VERSION;
@@ -28,6 +29,9 @@ var SHELL_ASSETS = [
   './manifest.json',
   './favicon.ico',
   './css/style.css',
+  './js/weather.js',
+  './js/nws-alerts.js',
+  './js/radar-providers.js',
   './js/app.js',
   './vendor/leaflet/leaflet.css',
   './vendor/leaflet/leaflet.js',
@@ -51,8 +55,6 @@ self.addEventListener('install', function (event) {
       // The shell is an all-or-nothing offline contract. A missing required
       // asset must fail this install instead of activating a broken worker.
       return cache.addAll(SHELL_ASSETS);
-    }).then(function () {
-      return self.skipWaiting();
     })
   );
 });
@@ -86,9 +88,12 @@ function isTileRequest(url) {
     hostMatchesSuffix(hostname, 'basemaps.cartocdn.com');
 }
 
+function isRadarManifest(url) {
+  return url.hostname === 'api.rainviewer.com' && url.pathname === '/public/weather-maps.json';
+}
+
 function isLiveApiRequest(url) {
-  return url.hostname === 'api.rainviewer.com' ||
-    url.hostname === 'api.weather.gov' ||
+  return url.hostname === 'api.weather.gov' ||
     url.hostname === 'api.open-meteo.com';
 }
 
@@ -205,6 +210,20 @@ function staleWhileRevalidate(request, cacheName, event) {
   return response;
 }
 
+function networkFirstWithCache(request, cacheName) {
+  return caches.open(cacheName).then(function (cache) {
+    return fetch(request).then(function (response) {
+      if (!response || !response.ok || response.type === 'opaque') return response;
+      return putInCache(cache, cacheName, request, response.clone()).then(function () { return response; });
+    }).catch(function (error) {
+      return cache.match(request).then(function (cached) {
+        if (cached) return cached;
+        throw error;
+      });
+    });
+  });
+}
+
 function stormScopeCacheNames() {
   return caches.keys().then(function (names) {
     return names.filter(function (name) { return name.indexOf(CACHE_PREFIX) === 0; });
@@ -287,6 +306,10 @@ function replyToMessage(event, message) {
 
 self.addEventListener('message', function (event) {
   var type = event.data && event.data.type;
+  if (type === 'STORMSCOPE_SKIP_WAITING') {
+    event.waitUntil(self.skipWaiting());
+    return;
+  }
   var operation;
   if (type === 'STORMSCOPE_GET_CACHE_USAGE') operation = inspectStormScopeCaches();
   if (type === 'STORMSCOPE_CLEAR_CACHES') operation = clearStormScopeCaches();
@@ -326,7 +349,14 @@ self.addEventListener('fetch', function (event) {
     return;
   }
 
-  // Live, time-sensitive APIs: always network (no cache).
+  // The radar frame manifest can fall back to its last-known-good copy so a
+  // cold offline launch can reuse bounded radar tiles already in TILE_CACHE.
+  if (isRadarManifest(url)) {
+    event.respondWith(networkFirstWithCache(request, DATA_CACHE));
+    return;
+  }
+
+  // Live, time-sensitive weather APIs: always network (no cache).
   if (isLiveApiRequest(url)) {
     return;
   }

@@ -8,9 +8,9 @@ import sys
 from pathlib import Path
 
 try:
-    from camera_data import load_camera_data, validate_camera_data
+    from camera_data import CAMERA_SCHEMA_VERSION, load_camera_data, validate_camera_data
 except ModuleNotFoundError:  # pragma: no cover - package import
-    from scripts.camera_data import load_camera_data, validate_camera_data
+    from scripts.camera_data import CAMERA_SCHEMA_VERSION, load_camera_data, validate_camera_data
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -33,7 +33,7 @@ def main() -> int:
 
     cameras = load_camera_data(ROOT / "data" / "cameras.json")
     validate_camera_data(cameras)
-    print(f"\nValidated {len(cameras):,} cameras against schema v1.")
+    print(f"\nValidated {len(cameras):,} cameras against schema v{CAMERA_SCHEMA_VERSION}.")
     print("All local regression gates passed.")
     return 0
 

@@ -149,6 +149,27 @@ test('install fails when a required shell asset cannot be cached', async () => {
   assert.equal(skipped, false);
 });
 
+test('successful update install waits for explicit activation', async () => {
+  let skipped = false;
+  const worker = loadWorker({
+    skipWaiting() {
+      skipped = true;
+      return Promise.resolve();
+    }
+  });
+  let lifetime;
+  worker.handlers.install({ waitUntil(promise) { lifetime = promise; } });
+  await lifetime;
+  assert.equal(skipped, false);
+
+  worker.handlers.message({
+    data: { type: 'STORMSCOPE_SKIP_WAITING' },
+    waitUntil(promise) { lifetime = promise; }
+  });
+  await lifetime;
+  assert.equal(skipped, true);
+});
+
 test('cache-first waits for its write and bounded trim', async () => {
   const write = deferred();
   let deleteCount = 0;
@@ -231,6 +252,21 @@ test('cached camera response keeps revalidation alive until cache put completes'
   assert.equal(settled, false);
   write.resolve();
   assert.equal(await background, fresh);
+});
+
+test('radar manifest uses last-known-good cache when offline', async () => {
+  const cached = response({ size: 2 });
+  const cache = {
+    match: () => Promise.resolve(cached),
+    put: () => Promise.resolve()
+  };
+  const worker = loadWorker({
+    cachesByName: { [dataCache]: cache },
+    fetch: () => Promise.reject(new Error('offline'))
+  });
+  const manifestRequest = request('https://api.rainviewer.com/public/weather-maps.json');
+  assert.equal(await worker.context.networkFirstWithCache(manifestRequest, dataCache), cached);
+  assert.equal(worker.context.isRadarManifest(new URL(manifestRequest.url)), true);
 });
 
 test('opaque tile fallback is returned but never cached', async () => {
