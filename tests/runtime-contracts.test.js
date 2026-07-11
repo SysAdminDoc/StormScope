@@ -7,6 +7,7 @@ const root = path.resolve(__dirname, '..');
 const app = fs.readFileSync(path.join(root, 'js', 'app.js'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'css', 'style.css'), 'utf8');
+const contextLayers = fs.readFileSync(path.join(root, 'js', 'context-layers.js'), 'utf8');
 const cameraData = JSON.parse(fs.readFileSync(path.join(root, 'data', 'cameras.json'), 'utf8'));
 const i18n = require('../js/i18n.js');
 
@@ -154,6 +155,25 @@ test('weather routing, units, freshness, and accessibility contracts are integra
   assert.match(app, /setModalBackgroundInert/);
   assert.match(css, /@media \(forced-colors: active\)/);
   assert.match(css, /safe-area-inset-bottom/);
+});
+
+test('official context layers are optional, attributed, and cannot obscure warnings or cameras', () => {
+  assert.match(html, /js\/context-layers\.js/);
+  assert.match(html, /<input[^>]*type="checkbox"[^>]*id="toggle-lightning"[^>]*>/);
+  assert.match(html, /<input[^>]*type="checkbox"[^>]*id="toggle-wildfires"[^>]*>/);
+  assert.match(html, /id="lightning-status"[^>]*role="status"/);
+  assert.match(html, /id="wildfire-status"[^>]*role="status"/);
+  assert.match(html, /https:\/\/nowcoast\.noaa\.gov/);
+  assert.match(html, /https:\/\/services3\.arcgis\.com/);
+  assert.match(contextLayers, /NOAA nowCOAST/);
+  assert.match(contextLayers, /NIFC WFIGS/);
+  assert.match(app, /contextRasterPane/);
+  assert.match(app, /contextVectorPane/);
+  assert.match(app, /style\.zIndex = '325'/);
+  assert.match(app, /style\.zIndex = '390'/);
+  assert.match(app, /refreshLightning/);
+  assert.match(app, /refreshWildfires/);
+  assert.match(app, /StormScopeContextLayers\.buildWildfireQueries/);
 });
 
 test('live feed checks maintain a local non-destructive health overlay', () => {

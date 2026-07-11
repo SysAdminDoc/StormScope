@@ -7,10 +7,7 @@ const path = require('node:path');
 const { chromium } = require('@playwright/test');
 
 const root = path.resolve(__dirname, '..');
-const pixel = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-  'base64'
-);
+const pixel = fs.readFileSync(path.join(root, 'assets', 'icon-192.png'));
 const mimeTypes = {
   '.css': 'text/css; charset=utf-8',
   '.html': 'text/html; charset=utf-8',
@@ -65,8 +62,42 @@ async function addNetworkFixtures(page) {
       });
       return;
     }
+    if (url.startsWith('https://nowcoast.noaa.gov/geoserver/observations/lightning_detection/ows') &&
+        url.includes('GetCapabilities')) {
+      const latest = new Date(Date.now() - 5 * 60000).toISOString();
+      await route.fulfill({
+        contentType: 'text/xml',
+        body: `<WMS_Capabilities><Layer><Name>ldn_lightning_strike_density</Name><Dimension name="time">${latest}</Dimension></Layer></WMS_Capabilities>`
+      });
+      return;
+    }
+    if (url.startsWith('https://nowcoast.noaa.gov/geoserver/observations/lightning_detection/ows')) {
+      await route.fulfill({ contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: pixel });
+      return;
+    }
+    if (url.startsWith('https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query')) {
+      await route.fulfill({
+        contentType: 'application/geo+json',
+        body: JSON.stringify({ type: 'FeatureCollection', features: [{
+          type: 'Feature',
+          geometry: { type: 'Polygon', coordinates: [[[-100, 39], [-99, 39], [-99, 40], [-100, 40], [-100, 39]]] },
+          properties: {
+            OBJECTID: 1, poly_IncidentName: 'Fixture Fire', poly_GISAcres: 1250,
+            poly_DateCurrent: Date.now() - 600000, attr_PercentContained: 35, attr_IncidentTypeCategory: 'WF'
+          }
+        }] })
+      });
+      return;
+    }
+    if (url.startsWith('https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0')) {
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ name: 'Perimeters', maxRecordCount: 2000, editingInfo: { dataLastEditDate: Date.now() - 300000 } })
+      });
+      return;
+    }
     if (url.includes('tilecache.rainviewer.com') || url.includes('basemaps.cartocdn.com')) {
-      await route.fulfill({ contentType: 'image/png', body: pixel });
+      await route.fulfill({ contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: pixel });
       return;
     }
     if (url.startsWith('https://api.weather.gov/alerts/active')) {
@@ -190,7 +221,21 @@ async function main() {
     assert.match(await page.locator('#radar-time').textContent(), /old|ago|just now/i);
     const scrubber = page.locator('#radar-scrubber');
     assert.ok(Number(await scrubber.getAttribute('max')) > 0, 'radar timeline should expose multiple frames');
+    assert.deepEqual(await page.evaluate(() => window._stormscope.getContextState()), {
+      lightning: false, wildfires: false, lightningStatus: 'off', wildfireStatus: 'off',
+      rasterZ: '325', vectorZ: '390', warningZ: '400', cameraZ: '600'
+    });
     await page.getByRole('button', { name: 'Toggle layers panel' }).click();
+    await page.locator('#toggle-lightning').check();
+    await page.locator('#toggle-wildfires').check();
+    await page.locator('#lightning-status').filter({ hasText: '15 min density' }).waitFor({ state: 'visible' });
+    await page.locator('#wildfire-status').filter({ hasText: '1 wildfire perimeters' }).waitFor({ state: 'visible' });
+    assert.deepEqual(await page.evaluate(() => window._stormscope.getContextState()), {
+      lightning: true, wildfires: true, lightningStatus: 'ready', wildfireStatus: 'ready',
+      rasterZ: '325', vectorZ: '390', warningZ: '400', cameraZ: '600'
+    });
+    await page.locator('#toggle-lightning').uncheck();
+    await page.locator('#toggle-wildfires').uncheck();
     await page.locator('#radar-speed').selectOption('0');
     await page.locator('#radar-palette').selectOption('colorblind');
     assert.equal(await page.locator('#radar-play').isDisabled(), true);
@@ -198,9 +243,10 @@ async function main() {
     await page.getByRole('button', { name: 'Toggle layers panel' }).click();
     await scrubber.fill('0');
     assert.match(await page.locator('#radar-frame-position').textContent(), /^Frame 1 of /);
-    const manualFrame = await scrubber.inputValue();
     await page.waitForTimeout(900);
-    assert.equal(await scrubber.inputValue(), manualFrame, 'manual-only mode must not animate');
+    assert.equal(await page.locator('#radar-speed').inputValue(), '0');
+    assert.equal(await page.locator('#radar-play').getAttribute('aria-pressed'), 'false',
+      'manual-only mode must stop playback even if a provider refresh replaces the timeline');
     await page.waitForFunction(() => !document.querySelector('#radar-time').textContent.startsWith('Loading'));
     const nextRadar = page.getByRole('button', { name: 'Next radar frame' });
     assert.equal(await nextRadar.isDisabled(), false, 'manual next control should remain enabled: ' +
@@ -208,6 +254,21 @@ async function main() {
     const frameBeforeNext = await scrubber.inputValue();
     await nextRadar.click();
     assert.notEqual(await scrubber.inputValue(), frameBeforeNext, 'manual frame controls must remain usable without animation');
+    const failLightning = (route) => route.fulfill({ status: 503, body: 'fixture unavailable' });
+    await page.route('https://nowcoast.noaa.gov/**', failLightning);
+    await page.getByRole('button', { name: 'Toggle layers panel' }).click();
+    await page.locator('#toggle-lightning').check();
+    await page.locator('#toggle-wildfires').check();
+    await page.locator('#lightning-status').filter({ hasText: 'Official data unavailable' }).waitFor({ state: 'visible' });
+    await page.locator('#wildfire-status').filter({ hasText: '1 wildfire perimeters' }).waitFor({ state: 'visible' });
+    assert.deepEqual(await page.evaluate(() => window._stormscope.getContextState()), {
+      lightning: false, wildfires: true, lightningStatus: 'error', wildfireStatus: 'ready',
+      rasterZ: '325', vectorZ: '390', warningZ: '400', cameraZ: '600'
+    });
+    await page.locator('#toggle-lightning').uncheck();
+    await page.locator('#toggle-wildfires').uncheck();
+    await page.unroute('https://nowcoast.noaa.gov/**', failLightning);
+    await page.getByRole('button', { name: 'Toggle layers panel' }).click();
     await page.getByRole('button', { name: 'Toggle layers panel' }).click();
     await page.locator('#app-locale').selectOption('es');
     assert.equal(await page.locator('html').getAttribute('lang'), 'es');

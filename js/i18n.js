@@ -17,6 +17,7 @@
       'update.ready': 'A StormScope update is ready.', 'update.apply': 'Apply update', 'update.updating': 'Updating…',
       'layers.heading': 'Layers', 'layers.radar': 'Weather Radar', 'layers.cameras': 'Live Cameras',
       'layers.coverage': 'Radar Coverage', 'layers.alerts': 'NWS Alerts', 'layers.opacity': 'Radar Opacity',
+      'layers.lightning': 'Lightning Density', 'layers.wildfires': 'Current Wildfire Perimeters',
       'layers.mapLabel': 'Map layers', 'layers.opacityAria': 'Radar opacity',
       'units.label': 'Weather units', 'units.us': 'US (°F, mph)', 'units.metric': 'Metric (°C, km/h)',
       'radar.playback': 'Radar playback', 'radar.manual': 'Manual only', 'radar.half': '0.5× speed',
@@ -127,7 +128,15 @@
       'radar.pastFrame': '{time} • Past radar • {age}', 'radar.state.clear': 'Clear at map center • {age}',
       'radar.state.noCoverage': 'No radar coverage at this location • {age}',
       'radar.state.stale': 'Radar data is stale • {age}', 'radar.ageUnknown': 'age unknown',
-      'radar.ageNow': 'just now', 'radar.ageOne': '1 minute old', 'radar.ageMany': '{count} minutes old'
+      'radar.ageNow': 'just now', 'radar.ageOne': '1 minute old', 'radar.ageMany': '{count} minutes old',
+      'context.lightningOff': 'Lightning off', 'context.wildfiresOff': 'Wildfires off',
+      'context.loading': 'Loading official data…', 'context.unavailable': 'Official data unavailable; retry scheduled',
+      'context.refreshFailed': 'Refresh failed • showing previous official data',
+      'context.fresh': 'fresh', 'context.stale': 'stale',
+      'context.lightningStatus': '15 min density • {freshness} • {time}',
+      'context.wildfireStatus': '{count} wildfire perimeters • {freshness} • {time}',
+      'context.wildfireName': 'Unnamed wildfire', 'context.acres': '{count} acres',
+      'context.contained': '{count}% contained', 'context.nifcSource': 'Open official NIFC record'
     },
     es: {
       'app.title': 'StormScope — Radar meteorológico y cámaras web en vivo',
@@ -137,6 +146,7 @@
       'update.ready': 'Hay una actualización de StormScope disponible.', 'update.apply': 'Aplicar actualización', 'update.updating': 'Actualizando…',
       'layers.heading': 'Capas', 'layers.radar': 'Radar meteorológico', 'layers.cameras': 'Cámaras en vivo',
       'layers.coverage': 'Cobertura de radar', 'layers.alerts': 'Alertas del NWS', 'layers.opacity': 'Opacidad del radar',
+      'layers.lightning': 'Densidad de rayos', 'layers.wildfires': 'Perímetros actuales de incendios',
       'layers.mapLabel': 'Capas del mapa', 'layers.opacityAria': 'Opacidad del radar',
       'units.label': 'Unidades meteorológicas', 'units.us': 'EE. UU. (°F, mph)', 'units.metric': 'Métricas (°C, km/h)',
       'radar.playback': 'Reproducción del radar', 'radar.manual': 'Solo manual', 'radar.half': 'Velocidad 0,5×',
@@ -247,7 +257,15 @@
       'radar.pastFrame': '{time} • Radar pasado • {age}', 'radar.state.clear': 'Despejado en el centro del mapa • {age}',
       'radar.state.noCoverage': 'Sin cobertura de radar en esta ubicación • {age}',
       'radar.state.stale': 'Los datos de radar están desactualizados • {age}', 'radar.ageUnknown': 'edad desconocida',
-      'radar.ageNow': 'ahora mismo', 'radar.ageOne': 'hace 1 minuto', 'radar.ageMany': 'hace {count} minutos'
+      'radar.ageNow': 'ahora mismo', 'radar.ageOne': 'hace 1 minuto', 'radar.ageMany': 'hace {count} minutos',
+      'context.lightningOff': 'Rayos desactivados', 'context.wildfiresOff': 'Incendios desactivados',
+      'context.loading': 'Cargando datos oficiales…', 'context.unavailable': 'Datos oficiales no disponibles; reintento programado',
+      'context.refreshFailed': 'Falló la actualización • mostrando datos oficiales anteriores',
+      'context.fresh': 'actualizados', 'context.stale': 'desactualizados',
+      'context.lightningStatus': 'Densidad de 15 min • {freshness} • {time}',
+      'context.wildfireStatus': '{count} perímetros de incendios • {freshness} • {time}',
+      'context.wildfireName': 'Incendio sin nombre', 'context.acres': '{count} acres',
+      'context.contained': '{count}% contenido', 'context.nifcSource': 'Abrir registro oficial del NIFC'
     }
   };
 

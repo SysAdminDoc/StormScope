@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.32.0 - 2026-07-11
+
+### Optional official hazard context
+- Added default-off NOAA nowCOAST lightning-density and NIFC WFIGS current-wildfire-perimeter layers with explicit freshness, coverage, source attribution, and no account or backend dependency.
+- Kept both providers independently abortable and retryable, retained last-known wildfire geometry after refresh failures, and bounded wildfire requests to the visible viewport with dateline-safe queries.
+- Rendered context below NWS warning polygons and camera markers, added safe localized wildfire details, and persisted layer choices in local saved views.
+- Added provider parsing, query, freshness, CSP, stacking, lifecycle, localization, desktop/mobile, and headless browser regression coverage.
+
 ## v0.31.0 - 2026-07-11
 
 ### Vendored dependency provenance

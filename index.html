@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://api.rainviewer.com https://tilecache.rainviewer.com https://mapservices.weather.noaa.gov https://api.weather.gov https://api.open-meteo.com https://cdn3.wowza.com https://s2.ozarkstrafficoneview.com https://sfs01-traveler.modot.mo.gov https://sfs02-traveler.modot.mo.gov https://sfs03-traveler.modot.mo.gov https://sfs04-traveler.modot.mo.gov https://sfs07-traveler.modot.mo.gov https://wzmedia.dot.ca.gov; media-src 'self' blob: https://cdn3.wowza.com https://s2.ozarkstrafficoneview.com https://sfs01-traveler.modot.mo.gov https://sfs02-traveler.modot.mo.gov https://sfs03-traveler.modot.mo.gov https://sfs04-traveler.modot.mo.gov https://sfs07-traveler.modot.mo.gov https://wzmedia.dot.ca.gov; frame-src https://www.youtube-nocookie.com https://earthcam.com https://*.earthcam.com https://myearthcam.com https://*.myearthcam.com https://nps.gov https://*.nps.gov https://brownrice.com https://*.brownrice.com https://abbeyroad.com https://*.abbeyroad.com https://esbnyc.com https://*.esbnyc.com; object-src 'none'; base-uri 'none'; form-action 'none'; manifest-src 'self'; worker-src 'self' blob:">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://api.rainviewer.com https://tilecache.rainviewer.com https://mapservices.weather.noaa.gov https://nowcoast.noaa.gov https://services3.arcgis.com https://api.weather.gov https://api.open-meteo.com https://cdn3.wowza.com https://s2.ozarkstrafficoneview.com https://sfs01-traveler.modot.mo.gov https://sfs02-traveler.modot.mo.gov https://sfs03-traveler.modot.mo.gov https://sfs04-traveler.modot.mo.gov https://sfs07-traveler.modot.mo.gov https://wzmedia.dot.ca.gov; media-src 'self' blob: https://cdn3.wowza.com https://s2.ozarkstrafficoneview.com https://sfs01-traveler.modot.mo.gov https://sfs02-traveler.modot.mo.gov https://sfs03-traveler.modot.mo.gov https://sfs04-traveler.modot.mo.gov https://sfs07-traveler.modot.mo.gov https://wzmedia.dot.ca.gov; frame-src https://www.youtube-nocookie.com https://earthcam.com https://*.earthcam.com https://myearthcam.com https://*.myearthcam.com https://nps.gov https://*.nps.gov https://brownrice.com https://*.brownrice.com https://abbeyroad.com https://*.abbeyroad.com https://esbnyc.com https://*.esbnyc.com; object-src 'none'; base-uri 'none'; form-action 'none'; manifest-src 'self'; worker-src 'self' blob:">
   <title>StormScope — Live Weather Radar & Webcams</title>
   <meta name="description" content="Real-time weather radar with live traffic and weather cameras. See the weather through webcams across America and the world.">
   <meta name="theme-color" content="#0a0a14">
@@ -69,6 +69,14 @@
       <input type="checkbox" id="toggle-alerts" checked>
       <span>NWS Alerts</span>
     </label>
+    <label class="toggle-row">
+      <input type="checkbox" id="toggle-lightning">
+      <span>Lightning Density</span>
+    </label>
+    <label class="toggle-row">
+      <input type="checkbox" id="toggle-wildfires">
+      <span>Current Wildfire Perimeters</span>
+    </label>
     <div class="slider-row">
       <label for="radar-opacity">Radar Opacity</label>
       <input type="range" id="radar-opacity" min="0" max="100" value="65" aria-label="Radar opacity">
@@ -118,6 +126,10 @@
     <div id="radar-legend" class="radar-legend palette-standard" aria-label="Radar precipitation intensity scale: light, moderate, heavy">
       <i aria-hidden="true"></i>
       <div><span>Light</span><span>Moderate</span><span>Heavy</span></div>
+    </div>
+    <div class="context-statuses">
+      <div><i class="lightning-swatch" aria-hidden="true"></i><span id="lightning-status" role="status" aria-live="polite">Lightning off</span><a href="https://nowcoast.noaa.gov/" target="_blank" rel="noopener noreferrer">NOAA</a></div>
+      <div><i class="wildfire-swatch" aria-hidden="true"></i><span id="wildfire-status" role="status" aria-live="polite">Wildfires off</span><a href="https://www.arcgis.com/home/item.html?id=d1c32af3212341869b3c810f1a215824" target="_blank" rel="noopener noreferrer">NIFC</a></div>
     </div>
     <div class="cache-panel">
       <div id="cache-status" class="cache-status" role="status" aria-live="polite">Checking offline cache…</div>
@@ -258,6 +270,7 @@
   <script src="js/camera-store.js"></script>
   <script src="js/saved-state.js"></script>
   <script src="js/multi-camera.js"></script>
+  <script src="js/context-layers.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

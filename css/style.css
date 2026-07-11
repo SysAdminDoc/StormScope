@@ -365,6 +365,18 @@ button:focus-visible {
   background: linear-gradient(90deg, #00e5ff, #004cff 35%, #fff200 65%, #ff003c);
 }
 
+.context-statuses { display: grid; gap: 6px; margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 11px; }
+.context-statuses > div { display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: 6px; }
+.context-statuses a { color: var(--accent); text-decoration: none; }
+.context-statuses .error { color: var(--danger); }
+.context-statuses .stale { color: #ffd166; }
+.lightning-swatch, .wildfire-swatch { width: 9px; height: 9px; border-radius: 2px; }
+.lightning-swatch { background: linear-gradient(135deg, #00e5ff, #ff2d55); }
+.wildfire-swatch { border: 1px solid #ff6b35; background: rgba(255, 107, 53, 0.2); }
+.context-popup { color: #1d1d25; font: 12px/1.45 system-ui, sans-serif; }
+.context-popup strong, .context-popup span, .context-popup a { display: block; }
+.context-popup a { margin-top: 5px; }
+
 .radar-palette-colorblind {
   filter: hue-rotate(35deg) saturate(0.8) brightness(1.1);
 }
