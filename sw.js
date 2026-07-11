@@ -13,7 +13,7 @@
  */
 'use strict';
 
-var VERSION = 'v5';
+var VERSION = 'v6';
 var RUNTIME_CACHE_VERSION = 'v1';
 var SHELL_CACHE = 'stormscope-shell-' + VERSION;
 var TILE_CACHE = 'stormscope-tiles-' + RUNTIME_CACHE_VERSION;
@@ -35,6 +35,7 @@ var SHELL_ASSETS = [
   './js/weather.js',
   './js/nws-alerts.js',
   './js/radar-providers.js',
+  './js/i18n.js',
   './js/camera-store.js',
   './js/saved-state.js',
   './js/app.js',

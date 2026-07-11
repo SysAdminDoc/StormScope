@@ -201,6 +201,17 @@ async function main() {
     const frameBeforeNext = await scrubber.inputValue();
     await nextRadar.click();
     assert.notEqual(await scrubber.inputValue(), frameBeforeNext, 'manual frame controls must remain usable without animation');
+    await page.getByRole('button', { name: 'Toggle layers panel' }).click();
+    await page.locator('#app-locale').selectOption('es');
+    assert.equal(await page.locator('html').getAttribute('lang'), 'es');
+    assert.equal(await page.locator('label[for="app-locale"]').textContent(), 'Idioma');
+    assert.equal(await page.locator('#search-heading').textContent(), 'Buscar cámaras');
+    assert.match(await page.locator('#camera-count').textContent(), /^24\.204 cámaras$/);
+    assert.match(await page.locator('#radar-frame-position').textContent(), /^Fotograma /);
+    assert.match(await page.locator('#radar-time').textContent(), /hace|ahora mismo/);
+    await page.locator('#app-locale').selectOption('en');
+    assert.equal(await page.locator('html').getAttribute('lang'), 'en');
+    await page.getByRole('button', { name: 'Toggle layers panel' }).click();
     const unnamedButtons = await page.locator('button').evaluateAll((buttons) => buttons.filter((button) => {
       return !(button.getAttribute('aria-label') || button.textContent.trim() || button.title);
     }).length);

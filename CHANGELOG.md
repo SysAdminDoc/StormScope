@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.29.0 - 2026-07-11
+
+### Internationalization
+- Added a standalone English/Spanish locale catalog with persisted live switching, deterministic English fallback, interpolation, and locale-aware number/date/radar-age formatting.
+- Extracted user-facing application control copy into catalog keys, including camera loading/search/health/feed recovery, saved views, radar states/settings, weather/WMO conditions, alerts, cache/update states, and accessibility labels.
+- Localized static document text and attributes without reload, updated generated UI state when the locale changes, and kept provider/camera/official-alert names as source data.
+- Added catalog parity, fallback, missing-key, formatting, and embedded-copy regression tests plus live Spanish browser assertions.
+
 ## v0.28.0 - 2026-07-11
 
 ### Radar timeline and accessibility

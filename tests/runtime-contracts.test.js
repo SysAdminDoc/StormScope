@@ -8,6 +8,7 @@ const app = fs.readFileSync(path.join(root, 'js', 'app.js'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'css', 'style.css'), 'utf8');
 const cameraData = JSON.parse(fs.readFileSync(path.join(root, 'data', 'cameras.json'), 'utf8'));
+const i18n = require('../js/i18n.js');
 
 test('RainViewer uses the 2026 past-radar contract', () => {
   assert.match(app, /RAINVIEWER_COLOR_SCHEME = 2/);
@@ -18,7 +19,8 @@ test('RainViewer uses the 2026 past-radar contract', () => {
   assert.match(app, /sampleRadarCenter/);
   assert.match(app, /maxNativeZoom: RAINVIEWER_MAX_NATIVE_ZOOM/);
   assert.match(app, /crossOrigin: 'anonymous'/);
-  assert.match(app, /Past radar/);
+  assert.match(app, /radar\.pastFrame/);
+  assert.match(i18n.catalogs.en['radar.pastFrame'], /Past radar/);
   assert.match(app, /function clearRadarDisplay\(\)/);
   assert.match(app, /layer\.on\('tileerror'/);
   assert.match(html, /href="https:\/\/www\.rainviewer\.com\/"/);
@@ -59,10 +61,12 @@ test('feed failures tear down resources before replacing the DOM and are retryab
   assert.ok(renderSource.indexOf('destroyActiveFeed(container)') < renderSource.indexOf('container.replaceChildren(error)'));
   assert.match(app, /if \(destroyed\) return;/);
   assert.match(app, /hls\.destroy\(\)/);
-  assert.match(app, /Retry feed/);
+  assert.match(app, /camera\.feedRetry/);
+  assert.equal(i18n.catalogs.en['camera.feedRetry'], 'Retry feed');
   assert.match(css, /\.feed-retry-btn/);
   assert.match(app, /appendFrameFallback/);
-  assert.match(app, /Open source/);
+  assert.match(app, /camera\.openSource/);
+  assert.equal(i18n.catalogs.en['camera.openSource'], 'Open source');
 });
 
 test('static CSP removes inline script execution and mirrors trusted frame hosts', () => {
@@ -112,7 +116,8 @@ test('PWA update and page lifecycle work are explicit and recoverable', () => {
   assert.match(app, /window\.addEventListener\('online'/);
   assert.match(app, /window\.addEventListener\('offline'/);
   assert.match(app, /RADAR_REFRESH_INTERVAL/);
-  assert.match(app, /Feed paused while this tab is hidden/);
+  assert.match(app, /camera\.paused/);
+  assert.match(i18n.catalogs.en['camera.paused'], /Feed paused/);
 });
 
 test('radar failover, coverage semantics, and NWS alerts are wired into the UI', () => {
@@ -141,9 +146,10 @@ test('weather routing, units, freshness, and accessibility contracts are integra
   assert.match(html, /id="weather-units"/);
   assert.match(html, /id="map" role="region"/);
   assert.match(app, /StormScopeWeather\.shouldUseNws/);
-  assert.match(app, /Open-Meteo fallback/);
-  assert.match(app, /Forecast issued/);
-  assert.match(app, /Forecast valid/);
+  assert.match(app, /weather\.openMeteoFallback/);
+  assert.equal(i18n.catalogs.en['weather.openMeteoFallback'], 'Open-Meteo fallback');
+  assert.equal(i18n.catalogs.en['weather.forecastIssued'], 'Forecast issued');
+  assert.equal(i18n.catalogs.en['weather.forecastValid'], 'Forecast valid');
   assert.match(app, /localStorage\.setItem\('stormscope-weather-units'/);
   assert.match(app, /setModalBackgroundInert/);
   assert.match(css, /@media \(forced-colors: active\)/);
