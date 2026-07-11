@@ -2,10 +2,13 @@
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
 [![Cameras](https://img.shields.io/badge/cameras-24%2C217-cyan)]()
+[![Live Site](https://img.shields.io/badge/live_site-open_StormScope-7c3aed)](https://sysadmindoc.github.io/StormScope/)
 
 # StormScope
 
 Live US weather radar with webcam overlays. See real-time radar and click traffic cameras to view current weather conditions through live feeds.
+
+**[Open the live StormScope map →](https://sysadmindoc.github.io/StormScope/)**
 
 ## Features
 
