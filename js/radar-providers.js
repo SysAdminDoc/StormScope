@@ -515,7 +515,7 @@
       canRetry = true;
     } else if (observation.hasPrecipitation === false) {
       state = RADAR_STATE.CLEAR;
-      label = 'No precipitation detected';
+      label = 'Clear at map center';
     } else if (observation.hasPrecipitation === true) {
       state = RADAR_STATE.PRECIPITATION;
       label = 'Precipitation detected';

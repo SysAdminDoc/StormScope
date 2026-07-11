@@ -63,8 +63,17 @@
     }).format(date);
   }
 
+  function formatOpenMeteoTime(localTime, utcOffsetSeconds, locale) {
+    if (!localTime) return 'Unknown';
+    var wallClock = Date.parse(String(localTime) + (/[zZ]|[+-]\d\d:\d\d$/.test(String(localTime)) ? '' : 'Z'));
+    var offset = Number(utcOffsetSeconds);
+    if (!Number.isFinite(wallClock) || !Number.isFinite(offset)) return 'Unknown';
+    return formatTime(new Date(wallClock - offset * 1000).toISOString(), locale);
+  }
+
   return {
     formatTime: formatTime,
+    formatOpenMeteoTime: formatOpenMeteoTime,
     inNwsCoverageBounds: inNwsCoverageBounds,
     normalizeUnits: normalizeUnits,
     shouldUseNws: shouldUseNws,

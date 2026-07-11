@@ -125,9 +125,13 @@ test('radar failover, coverage semantics, and NWS alerts are wired into the UI',
   assert.match(app, /StormScopeRadarProviders\.selectProvider/);
   assert.match(app, /StormScopeRadarProviders\.parseNoaaDiscovery/);
   assert.match(app, /StormScopeRadarProviders\.classifyRadarState/);
+  assert.match(app, /if \(params\.time\) wmsOptions\.time = params\.time/);
+  assert.match(app, /forceNoaa/);
   assert.match(app, /StormScopeNwsAlerts\.buildViewportQuery/);
   assert.match(app, /StormScopeNwsAlerts\.buildPointQuery/);
   assert.match(app, /StormScopeNwsAlerts\.nextRetryMetadata/);
+  assert.match(app, /StormScopeWeather\.inNwsCoverageBounds/);
+  assert.match(app, /alertNationalFetchedAt/);
   assert.match(css, /\.radar-legend/);
   assert.match(css, /\.alert-list-button\[data-severity="Extreme"\]/);
 });
@@ -144,4 +148,14 @@ test('weather routing, units, freshness, and accessibility contracts are integra
   assert.match(app, /setModalBackgroundInert/);
   assert.match(css, /@media \(forced-colors: active\)/);
   assert.match(css, /safe-area-inset-bottom/);
+});
+
+test('live feed checks maintain a local non-destructive health overlay', () => {
+  assert.match(app, /stormscope-camera-health-v1/);
+  assert.match(app, /function recordCameraHealth/);
+  assert.match(app, /Hls\.Events\.MANIFEST_PARSED/);
+  assert.match(app, /loadeddata/);
+  assert.match(app, /manual_retry/);
+  assert.match(app, /recordCameraHealth\(cam, 'degraded', 'transient'\)/);
+  assert.doesNotMatch(app, /cameraHealthOverrides\[String\(cam\.id\)\]/);
 });

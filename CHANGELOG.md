@@ -12,6 +12,8 @@
 - Added visible online/offline and camera-freshness badges, explicit service-worker update activation, cached radar-manifest fallback, and shell-preserving cache diagnostics/recovery.
 - Radar refreshes on provider cadence/resume; hidden tabs pause and safely restore radar and camera media; preload completion and cleanup are measurable.
 - Made camera markers health-aware and camera-specific for assistive technology; modal backgrounds become inert; controls meet mobile target sizes; safe-area, reduced-motion, and forced-color modes are handled.
+- Hardened fallbacks after live review: NOAA latest mosaics omit undefined WMS time parameters, RainViewer tile failures trigger NOAA selection, cached radar remains explicitly stale offline, and NWS land/point queries fail independently while the national feed is reused between pans.
+- Successful HLS/image/MJPEG playback and retry failures now update a local non-destructive health overlay, preserving transient results without rewriting the shipped corpus.
 
 ## v0.25.0 - 2026-07-11
 

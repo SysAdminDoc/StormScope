@@ -152,7 +152,7 @@ test('classifies clear, no-coverage, stale, and failure as distinct accessible s
   const failure = radar.classifyRadarState({ providerId: 'rainviewer', error: new Error('down'), now: NOW });
 
   assert.deepEqual([clear.state, noCoverage.state, stale.state, failure.state], ['clear', 'no-coverage', 'stale', 'failure']);
-  assert.equal(clear.label, 'No precipitation detected');
+  assert.equal(clear.label, 'Clear at map center');
   assert.equal(noCoverage.controlsEnabled, false);
   assert.match(stale.label, /25 minutes old/);
   assert.equal(failure.canRetry, true);

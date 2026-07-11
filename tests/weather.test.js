@@ -24,4 +24,6 @@ test('weather timestamps distinguish invalid and locale-formatted values', () =>
   assert.equal(weather.formatTime(null, 'en-US'), 'Unknown');
   assert.equal(weather.formatTime('invalid', 'en-US'), 'Unknown');
   assert.match(weather.formatTime('2026-07-11T18:00:00Z', 'en-US'), /Jul 11/);
+  assert.match(weather.formatOpenMeteoTime('2026-07-11T14:00', -14400, 'en-US'), /Jul 11/);
+  assert.equal(weather.formatOpenMeteoTime('invalid', -14400, 'en-US'), 'Unknown');
 });
