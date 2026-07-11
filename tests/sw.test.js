@@ -254,6 +254,32 @@ test('cached camera response keeps revalidation alive until cache put completes'
   assert.equal(await background, fresh);
 });
 
+test('clearing runtime caches waits for camera revalidation writes', async () => {
+  const cached = response({ size: 1 });
+  const fresh = response({ size: 2 });
+  const write = deferred();
+  const worker = loadWorker({
+    cacheNames: [shellCache, dataCache],
+    cachesByName: {
+      [dataCache]: { match: () => Promise.resolve(cached), put: () => write.promise }
+    },
+    fetch: () => Promise.resolve(fresh)
+  });
+  const result = await worker.context.staleWhileRevalidate(
+    request('https://example.test/data/camera-shards/0001.json'),
+    dataCache,
+    { waitUntil() {} }
+  );
+  assert.equal(result, cached);
+  const clearing = worker.context.clearStormScopeCaches();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(worker.deleted, []);
+  write.resolve();
+  await clearing;
+  assert.deepEqual(worker.deleted, [dataCache]);
+  assert.equal(worker.context.runtimeCachingPaused, true);
+});
+
 test('radar manifest uses last-known-good cache when offline', async () => {
   const cached = response({ size: 2 });
   const cache = {

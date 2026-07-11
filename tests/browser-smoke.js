@@ -169,6 +169,11 @@ async function main() {
     await addNetworkFixtures(page);
     await waitForApp(page);
 
+    const cameraMetrics = await page.evaluate(() => window._stormscope.getCameraLoadMetrics());
+    assert.equal(cameraMetrics.source, 'shards');
+    assert.ok(cameraMetrics.firstBatchMs > 0 && cameraMetrics.firstBatchMs < 2500,
+      `first camera shard should render within 2.5 s, observed ${cameraMetrics.firstBatchMs} ms`);
+
     assert.equal(await page.locator('html').evaluate((element) => element.scrollWidth > element.clientWidth), false);
     assert.equal(await page.locator('#radar-retry').isHidden(), true);
     const unnamedButtons = await page.locator('button').evaluateAll((buttons) => buttons.filter((button) => {
@@ -186,22 +191,38 @@ async function main() {
     await page.evaluate(() => window._stormscope.getMap().setView([39.5, -98.5], 5));
     await page.waitForTimeout(100);
 
-    const cameraMarkers = page.locator('.leaflet-marker-icon:has(.camera-marker)');
-    const markerIndex = await cameraMarkers.evaluateAll((markers) => markers.findIndex((marker) => {
-      const box = marker.getBoundingClientRect();
-      return box.x >= 0 && box.y >= 80 && box.right <= innerWidth && box.bottom <= innerHeight - 60;
-    }));
-    assert.notEqual(markerIndex, -1, 'a visible camera marker should be available');
-    await cameraMarkers.nth(markerIndex).click();
+    await page.getByRole('button', { name: 'Find cameras' }).click();
+    await page.locator('#camera-query').fill('Alabama');
+    await page.locator('#camera-results-status').filter({ hasText: /results? shown on map/ }).waitFor({ state: 'visible' });
+    const visibleResults = page.locator('.camera-result');
+    assert.ok(await visibleResults.count() > 0, 'search should expose keyboard-accessible camera results');
+    assert.ok(await visibleResults.count() < 30, 'search results should be virtualized');
+    await visibleResults.first().locator('.camera-result-open').click();
     await page.locator('#camera-modal').waitFor({ state: 'visible' });
     assert.equal(await page.locator('#camera-modal').getAttribute('role'), 'dialog');
     await page.getByRole('button', { name: 'Close camera viewer' }).click();
     await page.locator('#camera-modal').waitFor({ state: 'hidden' });
     assert.equal(await page.locator('#modal-feed video, #modal-feed iframe, #modal-feed img').count(), 0);
 
+    const firstFavorite = visibleResults.first().locator('.favorite-result');
+    await firstFavorite.click();
+    await page.locator('#camera-favorites').check();
+    await page.locator('#camera-results-status').filter({ hasText: '1 result shown on map' }).waitFor({ state: 'visible' });
+    await page.locator('#camera-favorites').uncheck();
+    await page.locator('#camera-query').fill('');
+    await page.getByRole('button', { name: 'Find cameras' }).click();
+
+    await page.getByRole('button', { name: 'Toggle layers panel' }).click();
+    await page.locator('#view-name').fill('Smoke view');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await page.locator('#saved-state-status').filter({ hasText: 'View saved locally.' }).waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#saved-views option', { hasText: 'Smoke view' }).count(), 1);
+    await page.getByRole('button', { name: 'Toggle layers panel' }).click();
+
     await page.evaluate(() => navigator.serviceWorker.ready);
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.locator('#camera-count').filter({ hasText: '24,204 cameras' }).waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#saved-views option', { hasText: 'Smoke view' }).count(), 1);
     await context.setOffline(true);
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.getByRole('heading', { name: 'StormScope' }).waitFor({ state: 'visible' });
@@ -215,7 +236,7 @@ async function main() {
     await page.locator('#cache-status').filter({ hasText: 'Offline cache:' }).waitFor({ state: 'visible' });
     const cacheNames = await page.evaluate(() => caches.keys());
     assert.ok(cacheNames.some((name) => name.startsWith('stormscope-shell-')));
-    assert.ok(!cacheNames.some((name) => name.startsWith('stormscope-data-')));
+    assert.ok(!cacheNames.some((name) => name.startsWith('stormscope-data-')), 'runtime data cache should be cleared: ' + cacheNames.join(', '));
 
     const mobile = await context.newPage();
     mobile.baseURL = baseURL;

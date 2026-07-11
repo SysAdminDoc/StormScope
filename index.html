@@ -33,6 +33,9 @@
     <div class="header-right">
       <span id="data-freshness" class="status-chip hidden" role="status" aria-live="polite"></span>
       <span id="connection-state" class="status-chip" role="status" aria-live="polite">Online</span>
+      <button id="btn-search" class="header-btn" title="Find cameras" aria-label="Find cameras" aria-expanded="false" aria-controls="search-panel">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+      </button>
       <button id="btn-layers" class="header-btn" title="Layers" aria-label="Toggle layers panel" aria-expanded="false" aria-controls="layers-panel">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <polygon points="12 2 2 7 12 12 22 7 12 2"/>
@@ -95,7 +98,50 @@
       <div id="cache-status" class="cache-status" role="status" aria-live="polite">Checking offline cache…</div>
       <button id="clear-cache" class="cache-clear" type="button" disabled>Clear cached data</button>
     </div>
+    <div class="saved-views-panel">
+      <label for="view-name">Saved view name</label>
+      <div class="saved-view-row">
+        <input id="view-name" type="text" maxlength="80" placeholder="e.g. Gulf storms">
+        <button id="save-view" type="button">Save</button>
+      </div>
+      <label for="saved-views">Saved views</label>
+      <select id="saved-views"><option value="">Choose a view</option></select>
+      <div class="saved-view-actions">
+        <button id="load-view" type="button" disabled>Load</button>
+        <button id="delete-view" type="button" disabled>Delete</button>
+      </div>
+      <div class="saved-view-actions">
+        <button id="export-state" type="button">Export</button>
+        <button id="import-state" type="button">Import</button>
+        <input id="import-state-file" class="hidden" type="file" accept="application/json,.json">
+      </div>
+      <div id="saved-state-status" class="saved-state-status" role="status" aria-live="polite"></div>
+    </div>
   </div>
+
+  <section id="search-panel" class="search-panel hidden" aria-labelledby="search-heading">
+    <div class="search-heading-row">
+      <h2 id="search-heading">Find cameras</h2>
+      <span id="search-progress" role="status" aria-live="polite">Loading camera index…</span>
+    </div>
+    <label class="search-field" for="camera-query">Name, road, state, or county</label>
+    <input id="camera-query" class="search-input" type="search" autocomplete="off" placeholder="Search 24,204 cameras">
+    <div class="search-filter-grid">
+      <label>State or country<input id="camera-state" type="text" list="camera-states" placeholder="All"></label>
+      <datalist id="camera-states"></datalist>
+      <label>Source<select id="camera-source"><option value="">All</option><option value="dot">DOT</option><option value="nps">NPS</option><option value="earthcam">EarthCam</option><option value="youtube">YouTube</option><option value="livebeaches">LiveBeaches</option></select></label>
+      <label>Feed type<select id="camera-type"><option value="">All</option><option value="image">Image</option><option value="hls">HLS video</option><option value="mjpeg">MJPEG</option><option value="embed">Embed</option><option value="youtube">YouTube</option></select></label>
+      <label>Sort<select id="camera-sort"><option value="name">Name</option><option value="distance">Distance from map center</option></select></label>
+    </div>
+    <div class="search-checks">
+      <label><input id="camera-healthy" type="checkbox"> Healthy only</label>
+      <label><input id="camera-favorites" type="checkbox"> Favorites only</label>
+    </div>
+    <div id="camera-results-status" class="camera-results-status" role="status" aria-live="polite"></div>
+    <div id="camera-results-scroll" class="camera-results-scroll" tabindex="0" aria-label="Camera search results">
+      <ul id="camera-results" class="camera-results"></ul>
+    </div>
+  </section>
 
   <aside id="alerts-panel" class="alerts-panel hidden" aria-labelledby="alerts-heading">
     <div class="alerts-header">
@@ -133,6 +179,7 @@
           <div class="modal-meta">
             <span id="modal-cam-health" class="health-badge"></span>
             <a id="modal-cam-source" target="_blank" rel="noopener noreferrer">Source</a>
+            <button id="favorite-camera" class="favorite-camera" type="button" aria-pressed="false">☆ Favorite</button>
           </div>
         </div>
         <button id="modal-close" class="modal-close-btn" title="Close" aria-label="Close camera viewer">&times;</button>
@@ -157,6 +204,8 @@
   <script src="js/weather.js"></script>
   <script src="js/nws-alerts.js"></script>
   <script src="js/radar-providers.js"></script>
+  <script src="js/camera-store.js"></script>
+  <script src="js/saved-state.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

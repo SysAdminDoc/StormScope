@@ -44,6 +44,13 @@
   var allCameras = [];
   var cameraIconCache = Object.create(null);
   var cameraHealthOverrides = Object.create(null);
+  var cameraStore = null;
+  var cameraLoadMetrics = { startedAt: 0, firstBatchMs: null, completeMs: null, source: null };
+  var cameraLoadProcessed = 0;
+  var currentCameraResults = [];
+  var searchRenderTimer = null;
+  var savedStore = null;
+  var saveLastViewTimer = null;
   var cameraDataTimestamp = null;
   var radarWasPlaying = false;
   var feedPausedForVisibility = false;
@@ -563,19 +570,17 @@
 
   async function loadCameras() {
     try {
-      document.getElementById('camera-count').textContent = 'Loading cameras…';
-      var resp = await fetch('data/cameras.json');
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      var modified = resp.headers.get('last-modified');
-      cameraDataTimestamp = modified ? new Date(modified) : new Date();
-      allCameras = await resp.json();
+      document.getElementById('camera-count').textContent = 'Loading camera index…';
+      cameraDataTimestamp = new Date();
       cameraHealthOverrides = loadCameraHealthOverrides();
-
       cameraCluster = L.markerClusterGroup({
         maxClusterRadius: 50,
         spiderfyOnMaxZoom: true,
         showCoverageOnHover: false,
         disableClusteringAtZoom: 13,
+        chunkedLoading: true,
+        chunkInterval: 50,
+        chunkDelay: 25,
         iconCreateFunction: function (cluster) {
           var count = cluster.getChildCount();
           var size = count < 50 ? 'small' : count < 200 ? 'medium' : 'large';
@@ -586,40 +591,323 @@
           });
         }
       });
-
-      var markers = [];
-      for (var i = 0; i < allCameras.length; i++) {
-        var cam = allCameras[i];
-        var override = cameraHealthOverrides[cameraHealthKey(cam)];
-        if (override) {
-          cam.health = override.health || cam.health;
-          cam.failure_class = override.failure_class || null;
-          cam.last_verified = override.last_verified || cam.last_verified;
+      if (document.getElementById('toggle-cameras').checked) map.addLayer(cameraCluster);
+      allCameras = [];
+      cameraLoadProcessed = 0;
+      cameraLoadMetrics = { startedAt: performance.now(), firstBatchMs: null, completeMs: null, source: null };
+      cameraStore = new StormScopeCameraStore.CameraStore({
+        indexUrl: 'data/cameras.index.json',
+        monolithUrl: 'data/cameras.json'
+      });
+      var result = await cameraStore.load({
+        onProgress: function (progress) {
+          var loaded = cameraStore.getCameras();
+          var batch = loaded.slice(cameraLoadProcessed);
+          cameraLoadProcessed = loaded.length;
+          if (batch.length) addCameraBatch(batch);
+          if (cameraLoadMetrics.firstBatchMs == null && loaded.length) {
+            cameraLoadMetrics.firstBatchMs = performance.now() - cameraLoadMetrics.startedAt;
+          }
+          cameraLoadMetrics.source = progress.source;
+          document.getElementById('camera-count').textContent = progress.loaded.toLocaleString() +
+            ' of ' + progress.total.toLocaleString() + ' cameras';
+          document.getElementById('search-progress').textContent = progress.complete
+            ? progress.total.toLocaleString() + ' loaded'
+            : progress.shardsLoaded + '/' + progress.shardsTotal + ' shards';
+          updateSearchStateOptions();
+          scheduleSearchRender();
         }
-        var marker = L.marker([cam.lat, cam.lon], {
-          icon: cameraIconFor(cam),
-          title: cam.name + ' — ' + (cam.health || 'unknown') + ' feed'
-        });
-        marker._camData = cam;
-        cam._marker = marker;
-        marker.on('click', onCameraClick);
-        marker.on('mouseover', onMarkerHover);
-        marker.on('add', function (event) {
-          var element = event.target.getElement();
-          var camera = event.target._camData;
-          if (element && camera) element.setAttribute('aria-label', camera.name + ' — ' + (camera.health || 'unknown') + ' feed');
-        });
-        markers.push(marker);
-      }
-
-      cameraCluster.addLayers(markers);
-      map.addLayer(cameraCluster);
+      });
+      cameraLoadMetrics.completeMs = performance.now() - cameraLoadMetrics.startedAt;
+      cameraLoadMetrics.source = result.source;
       document.getElementById('camera-count').textContent = allCameras.length.toLocaleString() + ' cameras';
+      document.getElementById('search-progress').textContent = allCameras.length.toLocaleString() +
+        ' loaded • first batch ' + Math.round(cameraLoadMetrics.firstBatchMs || 0) + ' ms';
       updateDataFreshness();
+      scheduleSearchRender();
     } catch (e) {
+      if (e.name === 'AbortError') return;
       document.getElementById('camera-count').textContent = 'Failed to load cameras';
+      document.getElementById('search-progress').textContent = 'Camera loading failed';
       updateDataFreshness(true);
     }
+  }
+
+  function addCameraBatch(batch) {
+    var markers = [];
+    for (var i = 0; i < batch.length; i++) {
+      var cam = batch[i];
+      var override = cameraHealthOverrides[cameraHealthKey(cam)];
+      if (override) {
+        cam.health = override.health || cam.health;
+        cam.failure_class = override.failure_class || null;
+        cam.last_verified = override.last_verified || cam.last_verified;
+      }
+      var marker = L.marker([cam.lat, cam.lon], {
+        icon: cameraIconFor(cam),
+        title: cam.name + ' — ' + (cam.health || 'unknown') + ' feed'
+      });
+      marker._camData = cam;
+      cam._marker = marker;
+      marker.on('click', onCameraClick);
+      marker.on('mouseover', onMarkerHover);
+      marker.on('add', function (event) {
+        var element = event.target.getElement();
+        var camera = event.target._camData;
+        if (element && camera) element.setAttribute('aria-label', camera.name + ' — ' + (camera.health || 'unknown') + ' feed');
+      });
+      markers.push(marker);
+      allCameras.push(cam);
+    }
+    cameraCluster.addLayers(markers);
+  }
+
+  function updateSearchStateOptions() {
+    var datalist = document.getElementById('camera-states');
+    var values = Array.from(new Set(allCameras.map(function (camera) {
+      return String(camera.state || '').trim();
+    }).filter(Boolean))).sort(function (left, right) {
+      return left.localeCompare(right, undefined, { sensitivity: 'base', numeric: true });
+    });
+    var signature = values.join('\n');
+    if (datalist.dataset.signature === signature) return;
+    datalist.dataset.signature = signature;
+    datalist.replaceChildren();
+    values.forEach(function (value) {
+      var option = document.createElement('option');
+      option.value = value;
+      datalist.appendChild(option);
+    });
+  }
+
+  function cameraSearchFilters() {
+    return {
+      query: document.getElementById('camera-query').value,
+      state: document.getElementById('camera-state').value,
+      source: document.getElementById('camera-source').value,
+      type: document.getElementById('camera-type').value,
+      healthy: document.getElementById('camera-healthy').checked
+    };
+  }
+
+  function cameraSearchIsFiltered(filters) {
+    return Boolean(filters.query.trim() || filters.state.trim() || filters.source || filters.type ||
+      filters.healthy || document.getElementById('camera-favorites').checked);
+  }
+
+  function syncCameraMarkers(results, filtered) {
+    if (!cameraCluster) return;
+    cameraCluster.clearLayers();
+    var cameras = filtered ? results : allCameras;
+    cameraCluster.addLayers(cameras.map(function (camera) { return camera._marker; }).filter(Boolean));
+  }
+
+  function cameraResultSummary(camera) {
+    var parts = [];
+    if (camera.road && camera.road !== camera.name) parts.push(camera.road);
+    if (camera.county) parts.push(camera.county);
+    if (camera.state) parts.push(camera.state);
+    parts.push((camera.health || 'unknown') + ' • ' + (camera.source || camera.type || 'camera'));
+    return parts.join(' • ');
+  }
+
+  function selectCameraResult(camera) {
+    map.setView([camera.lat, camera.lon], Math.max(14, map.getZoom()));
+    openCameraModal(camera);
+  }
+
+  function toggleCameraFavorite(camera) {
+    try {
+      savedStore.toggleFavorite(camera.id);
+      updateFavoriteButton(camera);
+      renderCameraResults();
+    } catch (error) {
+      document.getElementById('camera-results-status').textContent = 'Unable to save favorite: ' + error.message;
+    }
+  }
+
+  function renderCameraResults() {
+    var list = document.getElementById('camera-results');
+    var scroller = document.getElementById('camera-results-scroll');
+    list.replaceChildren();
+    if (!cameraStore) {
+      document.getElementById('camera-results-status').textContent = 'Camera index is still loading.';
+      return;
+    }
+
+    var filters = cameraSearchFilters();
+    var center = map.getCenter();
+    var results = cameraStore.search(filters, {
+      sortBy: document.getElementById('camera-sort').value,
+      origin: { lat: center.lat, lon: center.lng },
+      healthFirst: true
+    });
+    if (document.getElementById('camera-favorites').checked) {
+      results = results.filter(function (camera) { return savedStore.isFavorite(camera.id); });
+    }
+    currentCameraResults = results;
+    var filtered = cameraSearchIsFiltered(filters);
+    syncCameraMarkers(results, filtered);
+    document.getElementById('camera-results-status').textContent = results.length.toLocaleString() +
+      (results.length === 1 ? ' result' : ' results') + (filtered ? ' shown on map' : '');
+
+    var virtual = StormScopeCameraStore.virtualize(results, {
+      scrollTop: scroller.scrollTop,
+      viewportHeight: scroller.clientHeight || 360,
+      itemHeight: 68,
+      overscan: 4
+    });
+    if (virtual.offsetTop) {
+      var before = document.createElement('li');
+      before.style.height = virtual.offsetTop + 'px';
+      before.setAttribute('aria-hidden', 'true');
+      list.appendChild(before);
+    }
+    virtual.items.forEach(function (camera) {
+      var item = document.createElement('li');
+      item.className = 'camera-result';
+      var openButton = document.createElement('button');
+      openButton.type = 'button';
+      openButton.className = 'camera-result-open';
+      var name = document.createElement('strong');
+      name.textContent = camera.name;
+      var summary = document.createElement('span');
+      summary.textContent = cameraResultSummary(camera);
+      openButton.appendChild(name);
+      openButton.appendChild(summary);
+      openButton.addEventListener('click', function () { selectCameraResult(camera); });
+      var favorite = document.createElement('button');
+      favorite.type = 'button';
+      favorite.className = 'favorite-result';
+      favorite.setAttribute('aria-label', (savedStore.isFavorite(camera.id) ? 'Remove ' : 'Add ') + camera.name +
+        (savedStore.isFavorite(camera.id) ? ' from favorites' : ' to favorites'));
+      favorite.setAttribute('aria-pressed', String(savedStore.isFavorite(camera.id)));
+      favorite.textContent = savedStore.isFavorite(camera.id) ? '★' : '☆';
+      favorite.addEventListener('click', function () { toggleCameraFavorite(camera); });
+      item.appendChild(openButton);
+      item.appendChild(favorite);
+      list.appendChild(item);
+    });
+    if (virtual.offsetBottom) {
+      var after = document.createElement('li');
+      after.style.height = virtual.offsetBottom + 'px';
+      after.setAttribute('aria-hidden', 'true');
+      list.appendChild(after);
+    }
+  }
+
+  function scheduleSearchRender(resetScroll) {
+    clearTimeout(searchRenderTimer);
+    if (resetScroll) document.getElementById('camera-results-scroll').scrollTop = 0;
+    searchRenderTimer = setTimeout(renderCameraResults, 100);
+  }
+
+  function updateFavoriteButton(camera) {
+    var button = document.getElementById('favorite-camera');
+    if (!camera || !savedStore) {
+      button.setAttribute('aria-pressed', 'false');
+      button.textContent = '☆ Favorite';
+      return;
+    }
+    var favorite = savedStore.isFavorite(camera.id);
+    button.setAttribute('aria-pressed', String(favorite));
+    button.textContent = favorite ? '★ Favorited' : '☆ Favorite';
+  }
+
+  function captureViewSnapshot() {
+    var center = map.getCenter();
+    return {
+      center: { lat: center.lat, lon: center.lng },
+      zoom: map.getZoom(),
+      layers: {
+        radar: document.getElementById('toggle-radar').checked,
+        cameras: document.getElementById('toggle-cameras').checked,
+        coverage: document.getElementById('toggle-coverage').checked,
+        alerts: document.getElementById('toggle-alerts').checked
+      },
+      opacity: { radar: radarOpacity }
+    };
+  }
+
+  function applyViewSnapshot(snapshot) {
+    if (!snapshot) return;
+    map.setView([snapshot.center.lat, snapshot.center.lon], snapshot.zoom);
+    var layers = snapshot.layers || {};
+    if (typeof layers.radar === 'boolean') {
+      radarVisible = layers.radar;
+      document.getElementById('toggle-radar').checked = radarVisible;
+      if (radarLayer) {
+        if (radarVisible) radarLayer.addTo(map);
+        else map.removeLayer(radarLayer);
+      }
+    }
+    if (typeof layers.cameras === 'boolean') {
+      document.getElementById('toggle-cameras').checked = layers.cameras;
+      if (cameraCluster) {
+        if (layers.cameras) cameraCluster.addTo(map);
+        else map.removeLayer(cameraCluster);
+      }
+    }
+    if (typeof layers.coverage === 'boolean') {
+      document.getElementById('toggle-coverage').checked = layers.coverage;
+      if (radarHost) updateCoverageLayer();
+    }
+    if (typeof layers.alerts === 'boolean') {
+      alertsVisible = layers.alerts;
+      document.getElementById('toggle-alerts').checked = alertsVisible;
+      if (!alertsVisible && alertLayerGroup) map.removeLayer(alertLayerGroup);
+      if (alertsVisible && alertLayerGroup) alertLayerGroup.addTo(map);
+    }
+    if (snapshot.opacity && typeof snapshot.opacity.radar === 'number') {
+      radarOpacity = snapshot.opacity.radar;
+      document.getElementById('radar-opacity').value = String(Math.round(radarOpacity * 100));
+      if (radarLayer) radarLayer.setOpacity(radarOpacity);
+    }
+  }
+
+  function setSavedStateStatus(message, error) {
+    var status = document.getElementById('saved-state-status');
+    status.textContent = message;
+    status.classList.toggle('error', Boolean(error));
+  }
+
+  function refreshSavedViews(selectedId) {
+    var select = document.getElementById('saved-views');
+    select.replaceChildren();
+    var placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Choose a view';
+    select.appendChild(placeholder);
+    savedStore.listViews().forEach(function (view) {
+      var option = document.createElement('option');
+      option.value = view.id;
+      option.textContent = view.name;
+      select.appendChild(option);
+    });
+    select.value = selectedId || '';
+    var hasSelection = Boolean(select.value);
+    document.getElementById('load-view').disabled = !hasSelection;
+    document.getElementById('delete-view').disabled = !hasSelection;
+  }
+
+  function scheduleLastViewSave() {
+    if (!savedStore) return;
+    clearTimeout(saveLastViewTimer);
+    saveLastViewTimer = setTimeout(function () {
+      try { savedStore.setLastView(captureViewSnapshot()); } catch (error) {
+        setSavedStateStatus('Last view could not be saved: ' + error.message, true);
+      }
+    }, 400);
+  }
+
+  function initSavedState() {
+    savedStore = StormScopeSavedState.createStore();
+    var storeStatus = savedStore.getStatus();
+    refreshSavedViews();
+    if (storeStatus.recoveredFromBackup) setSavedStateStatus('Recovered saved state from the last valid backup.');
+    else if (storeStatus.loadError) setSavedStateStatus('Saved state was corrupt and was safely reset.', true);
+    else if (!storeStatus.persistent) setSavedStateStatus('Browser storage is unavailable; changes last only for this session.', true);
+    applyViewSnapshot(savedStore.getLastView());
   }
 
   function updateDataFreshness(failed) {
@@ -716,6 +1004,7 @@
     if (cam.direction) locParts.push(cam.direction);
     locEl.textContent = locParts.join(' • ');
     updateModalCameraHealth(cam);
+    updateFavoriteButton(cam);
     sourceEl.href = cam.source_url || cam.url;
 
     feedEl.innerHTML = '<div class="feed-loading">Loading camera feed…</div>';
@@ -1387,10 +1676,25 @@
   // ── UI Bindings ──
 
   function bindUI() {
+    document.getElementById('btn-search').addEventListener('click', function () {
+      var panel = document.getElementById('search-panel');
+      var isHidden = panel.classList.toggle('hidden');
+      this.setAttribute('aria-expanded', String(!isHidden));
+      if (!isHidden) {
+        document.getElementById('layers-panel').classList.add('hidden');
+        document.getElementById('btn-layers').setAttribute('aria-expanded', 'false');
+        document.getElementById('alerts-panel').classList.add('hidden');
+        scheduleSearchRender();
+        document.getElementById('camera-query').focus();
+      }
+    });
+
     document.getElementById('btn-layers').addEventListener('click', function () {
       var panel = document.getElementById('layers-panel');
       var isHidden = panel.classList.toggle('hidden');
       this.setAttribute('aria-expanded', !isHidden);
+      document.getElementById('search-panel').classList.add('hidden');
+      document.getElementById('btn-search').setAttribute('aria-expanded', 'false');
       document.getElementById('alerts-panel').classList.toggle('hidden', !isHidden || !alertsVisible);
     });
 
@@ -1402,6 +1706,7 @@
         setRadarPlaying(false);
         if (radarLayer) map.removeLayer(radarLayer);
       }
+      scheduleLastViewSave();
     });
 
     document.getElementById('toggle-cameras').addEventListener('change', function () {
@@ -1410,9 +1715,13 @@
       } else {
         if (cameraCluster) map.removeLayer(cameraCluster);
       }
+      scheduleLastViewSave();
     });
 
-    document.getElementById('toggle-coverage').addEventListener('change', updateCoverageLayer);
+    document.getElementById('toggle-coverage').addEventListener('change', function () {
+      updateCoverageLayer();
+      scheduleLastViewSave();
+    });
 
     document.getElementById('toggle-alerts').addEventListener('change', function () {
       alertsVisible = this.checked;
@@ -1424,6 +1733,7 @@
       } else {
         fetchNwsAlerts();
       }
+      scheduleLastViewSave();
     });
 
     document.getElementById('alert-severity').addEventListener('change', fetchNwsAlerts);
@@ -1431,6 +1741,7 @@
     document.getElementById('radar-opacity').addEventListener('input', function () {
       radarOpacity = parseInt(this.value, 10) / 100;
       if (radarLayer) radarLayer.setOpacity(radarOpacity);
+      scheduleLastViewSave();
     });
 
     document.getElementById('weather-units').addEventListener('change', function () {
@@ -1446,6 +1757,92 @@
 
     document.getElementById('modal-close').addEventListener('click', closeCameraModal);
     document.querySelector('.modal-backdrop').addEventListener('click', closeCameraModal);
+    document.getElementById('favorite-camera').addEventListener('click', function () {
+      if (activeCamera) toggleCameraFavorite(activeCamera);
+    });
+
+    ['camera-query', 'camera-state'].forEach(function (id) {
+      document.getElementById(id).addEventListener('input', function () { scheduleSearchRender(true); });
+    });
+    ['camera-source', 'camera-type', 'camera-sort', 'camera-healthy', 'camera-favorites'].forEach(function (id) {
+      document.getElementById(id).addEventListener('change', function () { scheduleSearchRender(true); });
+    });
+    document.getElementById('camera-results-scroll').addEventListener('scroll', function () {
+      scheduleSearchRender(false);
+    }, { passive: true });
+
+    document.getElementById('saved-views').addEventListener('change', function () {
+      var hasSelection = Boolean(this.value);
+      document.getElementById('load-view').disabled = !hasSelection;
+      document.getElementById('delete-view').disabled = !hasSelection;
+      if (hasSelection) document.getElementById('view-name').value = savedStore.getView(this.value).name;
+    });
+    document.getElementById('save-view').addEventListener('click', function () {
+      try {
+        var nameInput = document.getElementById('view-name');
+        var state = savedStore.saveView(nameInput.value, captureViewSnapshot());
+        var normalizedName = nameInput.value.trim().toLowerCase();
+        var saved = state.views.find(function (view) { return view.name.toLowerCase() === normalizedName; });
+        refreshSavedViews(saved && saved.id);
+        setSavedStateStatus('View saved locally.');
+      } catch (error) {
+        setSavedStateStatus('Unable to save view: ' + error.message, true);
+      }
+    });
+    document.getElementById('load-view').addEventListener('click', function () {
+      var view = savedStore.getView(document.getElementById('saved-views').value);
+      if (!view) return;
+      applyViewSnapshot(view.snapshot);
+      scheduleSearchRender();
+      scheduleLastViewSave();
+      setSavedStateStatus('Loaded “' + view.name + '”.');
+    });
+    document.getElementById('delete-view').addEventListener('click', function () {
+      var select = document.getElementById('saved-views');
+      var view = savedStore.getView(select.value);
+      if (!view) return;
+      savedStore.deleteView(view.id);
+      refreshSavedViews();
+      document.getElementById('view-name').value = '';
+      setSavedStateStatus('Deleted “' + view.name + '”.');
+    });
+    document.getElementById('export-state').addEventListener('click', function () {
+      var blob = new Blob([savedStore.exportJson(2)], { type: 'application/json' });
+      var href = URL.createObjectURL(blob);
+      var link = document.createElement('a');
+      link.href = href;
+      link.download = 'stormscope-saved-state.json';
+      link.click();
+      setTimeout(function () { URL.revokeObjectURL(href); }, 0);
+      setSavedStateStatus('Saved state exported.');
+    });
+    document.getElementById('import-state').addEventListener('click', function () {
+      document.getElementById('import-state-file').click();
+    });
+    document.getElementById('import-state-file').addEventListener('change', function () {
+      var input = this;
+      var file = input.files && input.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function () {
+        try {
+          savedStore.importJson(String(reader.result));
+          refreshSavedViews();
+          updateFavoriteButton(activeCamera);
+          scheduleSearchRender();
+          setSavedStateStatus('Saved state imported and validated.');
+        } catch (error) {
+          setSavedStateStatus('Import rejected: ' + error.message, true);
+        } finally {
+          input.value = '';
+        }
+      };
+      reader.onerror = function () {
+        setSavedStateStatus('Import failed while reading the file.', true);
+        input.value = '';
+      };
+      reader.readAsText(file);
+    });
 
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape' && activeCamera) {
@@ -1456,12 +1853,16 @@
     map.on('click', function () {
       document.getElementById('layers-panel').classList.add('hidden');
       document.getElementById('btn-layers').setAttribute('aria-expanded', 'false');
+      document.getElementById('search-panel').classList.add('hidden');
+      document.getElementById('btn-search').setAttribute('aria-expanded', 'false');
       document.getElementById('alerts-panel').classList.toggle('hidden', !alertsVisible);
     });
     map.on('moveend', function () {
       if (radarFrames.length) sampleRadarCenter(radarFrames[radarIndex]);
       clearTimeout(alertMoveTimer);
       alertMoveTimer = setTimeout(fetchNwsAlerts, 600);
+      if (document.getElementById('camera-sort').value === 'distance') scheduleSearchRender();
+      scheduleLastViewSave();
     });
   }
 
@@ -1615,6 +2016,8 @@
       if (radarAbort) radarAbort.abort();
       if (weatherAbort) weatherAbort.abort();
       if (alertAbort) alertAbort.abort();
+      if (cameraStore) cameraStore.cancel();
+      clearTimeout(saveLastViewTimer);
       destroyActiveFeed(document.getElementById('modal-feed'));
     });
   }
@@ -1630,6 +2033,7 @@
 
   initMap();
   initWeatherUnits();
+  initSavedState();
   bindUI();
   initRadar();
   loadCameras();
@@ -1639,6 +2043,8 @@
 
   window._stormscope = {
     getMap: function () { return map; },
-    getRadarPreloadState: function () { return Object.assign({}, radarPreloadState); }
+    getRadarPreloadState: function () { return Object.assign({}, radarPreloadState); },
+    getCameraLoadMetrics: function () { return Object.assign({}, cameraLoadMetrics); },
+    getCameraResults: function () { return currentCameraResults.slice(); }
   };
 })();

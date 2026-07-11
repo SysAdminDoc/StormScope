@@ -13,7 +13,7 @@
  */
 'use strict';
 
-var VERSION = 'v3';
+var VERSION = 'v4';
 var RUNTIME_CACHE_VERSION = 'v1';
 var SHELL_CACHE = 'stormscope-shell-' + VERSION;
 var TILE_CACHE = 'stormscope-tiles-' + RUNTIME_CACHE_VERSION;
@@ -22,6 +22,9 @@ var DATA_CACHE = 'stormscope-data-' + RUNTIME_CACHE_VERSION;
 var TILE_CACHE_LIMIT = 600; // ~radar frames + visible basemap tiles
 var CACHE_PREFIX = 'stormscope-';
 var trimQueues = Object.create(null);
+var runtimeWrites = [];
+var runtimeClearing = false;
+var runtimeCachingPaused = false;
 
 var SHELL_ASSETS = [
   './',
@@ -32,6 +35,8 @@ var SHELL_ASSETS = [
   './js/weather.js',
   './js/nws-alerts.js',
   './js/radar-providers.js',
+  './js/camera-store.js',
+  './js/saved-state.js',
   './js/app.js',
   './vendor/leaflet/leaflet.css',
   './vendor/leaflet/leaflet.js',
@@ -98,7 +103,9 @@ function isLiveApiRequest(url) {
 }
 
 function isCameraData(url) {
-  return url.pathname.indexOf('data/cameras.json') !== -1;
+  return url.pathname.indexOf('data/cameras.json') !== -1 ||
+    url.pathname.indexOf('data/cameras.index.json') !== -1 ||
+    url.pathname.indexOf('data/camera-shards/') !== -1;
 }
 
 // Bound a cache to a max entry count (approximate LRU via insertion order).
@@ -146,6 +153,16 @@ function putInCache(cache, cacheName, request, response) {
   });
 }
 
+function trackRuntimeWrite(promise) {
+  runtimeWrites.push(promise);
+  function remove() {
+    var index = runtimeWrites.indexOf(promise);
+    if (index !== -1) runtimeWrites.splice(index, 1);
+  }
+  promise.then(remove, remove);
+  return promise;
+}
+
 function fetchTile(request) {
   // Leaflet image requests are commonly no-cors even when the tile provider
   // sends CORS headers. Upgrade the worker's network request where possible so
@@ -166,7 +183,8 @@ function fetchTile(request) {
 
 // Cache-first for immutable-ish assets (tiles, shell).
 function cacheFirst(request, cacheName, limit) {
-  return caches.open(cacheName).then(function (cache) {
+  if (cacheName === TILE_CACHE && (runtimeClearing || runtimeCachingPaused)) return fetchTile(request);
+  var operation = caches.open(cacheName).then(function (cache) {
     return cache.match(request).then(function (cached) {
       if (cached) return cached;
       var network = cacheName === TILE_CACHE ? fetchTile(request) : fetch(request);
@@ -183,21 +201,23 @@ function cacheFirst(request, cacheName, limit) {
       });
     });
   });
+  return cacheName === TILE_CACHE ? trackRuntimeWrite(operation) : operation;
 }
 
 // Stale-while-revalidate for the camera dataset.
 function staleWhileRevalidate(request, cacheName, event) {
+  if (cacheName === DATA_CACHE && (runtimeClearing || runtimeCachingPaused)) return fetch(request);
   var revalidation;
   var response = caches.open(cacheName).then(function (cache) {
     return cache.match(request).then(function (cached) {
-      revalidation = fetch(request).then(function (networkResponse) {
+      revalidation = trackRuntimeWrite(fetch(request).then(function (networkResponse) {
         if (networkResponse && networkResponse.ok && networkResponse.type !== 'opaque') {
           return putInCache(cache, cacheName, request, networkResponse.clone()).then(function () {
             return networkResponse;
           });
         }
         return networkResponse;
-      }).catch(function () { return cached; });
+      }).catch(function () { return cached; }));
       return cached || revalidation;
     });
   });
@@ -211,7 +231,8 @@ function staleWhileRevalidate(request, cacheName, event) {
 }
 
 function networkFirstWithCache(request, cacheName) {
-  return caches.open(cacheName).then(function (cache) {
+  if (cacheName === DATA_CACHE && (runtimeClearing || runtimeCachingPaused)) return fetch(request);
+  var operation = caches.open(cacheName).then(function (cache) {
     return fetch(request).then(function (response) {
       if (!response || !response.ok || response.type === 'opaque') return response;
       return putInCache(cache, cacheName, request, response.clone()).then(function () { return response; });
@@ -222,6 +243,7 @@ function networkFirstWithCache(request, cacheName) {
       });
     });
   });
+  return cacheName === DATA_CACHE ? trackRuntimeWrite(operation) : operation;
 }
 
 function stormScopeCacheNames() {
@@ -285,14 +307,31 @@ function inspectStormScopeCaches() {
 
 function clearStormScopeCaches() {
   // Preserve the active shell so clearing runtime data never destroys the
-  // offline launch path. Shell generations are managed by activation.
-  return stormScopeRuntimeCacheNames().then(function (names) {
+  // offline launch path. Wait for already-started revalidations so a late
+  // camera response cannot recreate a data cache immediately after clearing.
+  runtimeClearing = true;
+  runtimeCachingPaused = true;
+  function drainWrites() {
+    var pendingWrites = runtimeWrites.slice();
+    if (!pendingWrites.length) return Promise.resolve();
+    return Promise.all(pendingWrites.map(function (promise) {
+      return promise.catch(function () { return null; });
+    })).then(drainWrites);
+  }
+  var operation = drainWrites().then(stormScopeRuntimeCacheNames).then(function (names) {
     return Promise.all(names.map(function (name) { return caches.delete(name); })).then(function (results) {
       return {
         type: 'STORMSCOPE_CACHES_CLEARED',
         deleted: results.filter(function (deleted) { return deleted; }).length
       };
     });
+  });
+  return operation.then(function (result) {
+    runtimeClearing = false;
+    return result;
+  }, function (error) {
+    runtimeClearing = false;
+    throw error;
   });
 }
 
@@ -339,6 +378,7 @@ self.addEventListener('fetch', function (event) {
 
   // Navigations: network-first, offline fallback to cached shell.
   if (request.mode === 'navigate') {
+    runtimeCachingPaused = false;
     event.respondWith(
       fetch(request).catch(function () {
         return caches.match('./index.html').then(function (cached) {

@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.26.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.27.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
 [![Cameras](https://img.shields.io/badge/cameras-24%2C204-cyan)]()
@@ -12,6 +12,8 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 - **Live Weather Radar** — Animated RainViewer radar with official NOAA/NWS MRMS failover, source/age/coverage status, and adjustable opacity
 - **Official Weather Alerts** — Viewport-scoped NWS watches, warnings, and advisories with severity polygons and accessible details
 - **24,204 Live Cameras** — Traffic, weather, park, EarthCam, LiveBeaches, and webcam feeds across 48 US states plus international locations
+- **Fast Camera Discovery** — Progressive state shards make the map interactive before the full corpus loads; accessible search, health/source/type filters, health-first name/distance sorting, and a virtualized result list stay synchronized with the map
+- **Local Favorites and Views** — Favorite cameras, restore the last map/layer/opacity state, save named views, and validate portable JSON imports/exports without an account
 - **355 YouTube Live Streams** — Playback-verified 24/7 streams including beaches, airports, railcams, harbors, city skylines, landmarks, indoor/outdoor feeds, wildlife cams, volcano cams, and city-list discoveries (red markers)
 - **451 Provider Embed Feeds** — 275 EarthCam Network pages, 172 active NPS embed pages, and 4 direct LiveBeaches/Brownrice player embeds
 - **Click-to-View** — YouTube embeds, EarthCam pages, HLS video streams, and auto-refreshing image feeds in a modal viewer
@@ -73,7 +75,7 @@ Run the complete local regression gate before changing or publishing the app:
 python scripts/check.py
 ```
 
-It validates the camera corpus and runs Python units, lint, JavaScript syntax/contracts, service-worker tests, and a real headless desktop/mobile/modal/offline/cache/accessibility smoke.
+It validates the camera corpus and deterministic shards, runs Python units, lint, JavaScript syntax/contracts and service-worker tests, and enforces a real headless desktop/mobile/modal/offline/cache/accessibility smoke. The smoke requires the first camera shard to render within 2.5 seconds on the local Chromium test profile.
 
 ## Tech Stack
 
@@ -106,7 +108,13 @@ This queries 20+ live APIs and transactionally merges DOT/NPS results into `data
 python scripts/fetch_cameras.py --rollback
 ```
 
-All camera writers share the schema-v1 contract in `data/cameras.schema.json` and use an exclusive lock plus fsynced temporary file and atomic replacement. A dry-run city search may read `data/us_city_livestream_checkpoint.json` with `--resume`, but changes neither that checkpoint nor the camera dataset unless `--apply` is present.
+Rebuild the checked-in state shards and compact index after any accepted camera-data change:
+
+```bash
+python scripts/build_camera_shards.py
+```
+
+The app loads `data/cameras.index.json` and `data/camera-shards/` progressively, with the schema-v2 monolith retained as a tested migration fallback. All camera writers share the schema-v2 contract in `data/cameras.schema.json` and use an exclusive lock plus fsynced temporary file and atomic replacement. A dry-run city search may read `data/us_city_livestream_checkpoint.json` with `--resume`, but changes neither that checkpoint nor the camera dataset unless `--apply` is present.
 
 Run the YouTube discovery automation to exhaust live-filtered search queries, verify live streams with extractor playback metadata, and append only fixed-location streams with curated coordinates:
 

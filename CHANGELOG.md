@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.27.0 - 2026-07-11
+
+### Camera discovery and performance
+- Split the schema-v2 camera corpus into a deterministic compact index and 33 bounded state shards, with cancellable progressive loading, progressive counts, chunked clustering, service-worker shard caching, and a tested monolith fallback.
+- Added accessible name/road/state/county search, source/type/health filters, health-first name/distance sorting, a virtualized keyboard/screen-reader result list, and one shared result model for list and map markers.
+- Enforced a 2.5-second first-shard browser budget and expanded the headless smoke to cover progressive, offline, mobile, search, favorites, and persistence paths.
+
+### Local continuity and cache reliability
+- Added local camera favorites, named map/layer/opacity views, last-view restoration, and versioned validated JSON import/export with safe migration, corrupt-state recovery, and no account dependency.
+- Made runtime cache clearing wait for in-flight camera revalidation, suppress refills for the current page, preserve the offline shell, and resume caching on the next navigation.
+
 ## v0.26.0 - 2026-07-11
 
 ### Weather intelligence
