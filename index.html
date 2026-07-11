@@ -163,6 +163,11 @@
       <label><input id="camera-favorites" type="checkbox"> Favorites only</label>
     </div>
     <div id="camera-results-status" class="camera-results-status" role="status" aria-live="polite"></div>
+    <div class="monitor-actions">
+      <span id="monitor-selection-status" role="status" aria-live="polite">0 of 4 selected</span>
+      <span id="monitor-bandwidth" class="monitor-bandwidth hidden">Multiple live feeds can use significant bandwidth.</span>
+      <button id="open-monitor" type="button" disabled>Start monitor</button>
+    </div>
     <div id="camera-results-scroll" class="camera-results-scroll" tabindex="0" aria-label="Camera search results">
       <ul id="camera-results" class="camera-results"></ul>
     </div>
@@ -227,6 +232,20 @@
     </div>
   </div>
 
+  <div id="monitor-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="monitor-heading">
+    <div class="modal-backdrop monitor-backdrop"></div>
+    <div class="modal-content monitor-content">
+      <div class="modal-header">
+        <div class="modal-title-area">
+          <h2 id="monitor-heading">Multi-camera monitor</h2>
+          <span class="modal-subtitle">Only visible feeds stay active.</span>
+        </div>
+        <button id="monitor-close" class="modal-close-btn" title="Close" aria-label="Close multi-camera monitor">&times;</button>
+      </div>
+      <div id="monitor-grid" class="monitor-grid"></div>
+    </div>
+  </div>
+
   <div id="camera-count" class="camera-count" role="status" aria-live="polite"></div>
 
   <script src="vendor/leaflet/leaflet.js"></script>
@@ -238,6 +257,7 @@
   <script src="js/i18n.js"></script>
   <script src="js/camera-store.js"></script>
   <script src="js/saved-state.js"></script>
+  <script src="js/multi-camera.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

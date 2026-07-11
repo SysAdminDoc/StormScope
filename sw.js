@@ -13,7 +13,7 @@
  */
 'use strict';
 
-var VERSION = 'v6';
+var VERSION = 'v7';
 var RUNTIME_CACHE_VERSION = 'v1';
 var SHELL_CACHE = 'stormscope-shell-' + VERSION;
 var TILE_CACHE = 'stormscope-tiles-' + RUNTIME_CACHE_VERSION;
@@ -38,6 +38,7 @@ var SHELL_ASSETS = [
   './js/i18n.js',
   './js/camera-store.js',
   './js/saved-state.js',
+  './js/multi-camera.js',
   './js/app.js',
   './vendor/leaflet/leaflet.css',
   './vendor/leaflet/leaflet.js',

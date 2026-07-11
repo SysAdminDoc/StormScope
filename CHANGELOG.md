@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.30.0 - 2026-07-11
+
+### Bounded multi-camera monitoring
+- Added an accessible 2–4 camera selection flow to search results with a visible bandwidth warning before any multi-feed playback starts.
+- Added a responsive two-column monitor for HLS, image, MJPEG, and YouTube feeds; unsupported provider embeds degrade to safe source links instead of nested third-party players.
+- Added visibility-aware player lifecycle management: offscreen and hidden-tab feeds pause network/playback work, visible feeds resume, and one close action destroys every HLS instance, timer, media source, iframe, observer, and DOM node.
+- Added selection/capability/lifecycle unit contracts and live browser coverage for direct-feed start, four-feed bounds, embed fallback, and zero-player teardown.
+
 ## v0.29.0 - 2026-07-11
 
 ### Internationalization

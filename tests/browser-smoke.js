@@ -245,7 +245,35 @@ async function main() {
     await page.locator('#camera-favorites').check();
     await page.locator('#camera-results-status').filter({ hasText: '1 result shown on map' }).waitFor({ state: 'visible' });
     await page.locator('#camera-favorites').uncheck();
+    await visibleResults.nth(0).locator('.monitor-result').click();
+    await visibleResults.nth(1).locator('.monitor-result').click();
+    await page.locator('#monitor-selection-status').filter({ hasText: '2 of 4 selected' }).waitFor({ state: 'visible' });
+    await page.locator('#monitor-bandwidth').waitFor({ state: 'visible' });
+    await page.locator('#open-monitor').click();
+    await page.locator('#monitor-modal').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('.monitor-cell').count(), 2);
+    assert.equal((await page.evaluate(() => window._stormscope.getMonitorState())).players, 2);
+    await page.getByRole('button', { name: 'Close multi-camera monitor' }).click();
+    await page.locator('#monitor-modal').waitFor({ state: 'hidden' });
+    assert.deepEqual(await page.evaluate(() => window._stormscope.getMonitorState()), { selected: 2, players: 0 });
+    assert.equal(await page.locator('#monitor-grid > *').count(), 0);
+    await page.getByRole('button', { name: 'Find cameras' }).click();
     await page.locator('#camera-query').fill('');
+    await page.locator('#camera-source').selectOption('earthcam');
+    await page.waitForFunction(() => {
+      const results = window._stormscope.getCameraResults();
+      return results.length > 1 && results.every((camera) => camera.source === 'earthcam');
+    });
+    await visibleResults.nth(0).locator('.monitor-result').click();
+    await visibleResults.nth(1).locator('.monitor-result').click();
+    await page.locator('#open-monitor').click();
+    await page.locator('#monitor-modal').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('.monitor-cell').count(), 4);
+    assert.equal(await page.locator('.monitor-link-fallback').count(), 2,
+      'unsupported provider embeds should degrade to source links');
+    await page.getByRole('button', { name: 'Close multi-camera monitor' }).click();
+    await page.getByRole('button', { name: 'Find cameras' }).click();
+    await page.locator('#camera-source').selectOption('');
     await page.getByRole('button', { name: 'Find cameras' }).click();
 
     await page.getByRole('button', { name: 'Toggle layers panel' }).click();

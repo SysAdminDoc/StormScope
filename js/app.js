@@ -69,6 +69,9 @@
   var alertNationalPayload = null;
   var alertNationalFetchedAt = 0;
   var appLocale = 'en';
+  var monitorSelection = new StormScopeMultiCamera.Selection({ minimum: 2, maximum: 4 });
+  var monitorRegistry = null;
+  var monitorObserver = null;
 
   function tr(key, variables) {
     return StormScopeI18n.t(key, variables, appLocale);
@@ -783,6 +786,27 @@
     }
   }
 
+  function updateMonitorSelectionUi(message) {
+    var count = monitorSelection.count();
+    var status = document.getElementById('monitor-selection-status');
+    status.textContent = message || tr('monitor.selection', { count: localNumber(count) });
+    status.classList.toggle('error', Boolean(message));
+    document.getElementById('monitor-bandwidth').classList.toggle('hidden', count < 2);
+    var start = document.getElementById('open-monitor');
+    start.disabled = !monitorSelection.canStart();
+    start.textContent = count ? tr('monitor.startCount', { count: localNumber(count) }) : tr('monitor.start');
+  }
+
+  function toggleMonitorCamera(camera) {
+    try {
+      monitorSelection.toggle(camera);
+      updateMonitorSelectionUi();
+      renderCameraResults();
+    } catch (error) {
+      updateMonitorSelectionUi(tr('monitor.maximum'));
+    }
+  }
+
   function renderCameraResults() {
     var list = document.getElementById('camera-results');
     var scroller = document.getElementById('camera-results-scroll');
@@ -845,8 +869,16 @@
       favorite.setAttribute('aria-pressed', String(savedStore.isFavorite(camera.id)));
       favorite.textContent = savedStore.isFavorite(camera.id) ? '★' : '☆';
       favorite.addEventListener('click', function () { toggleCameraFavorite(camera); });
+      var monitor = document.createElement('button');
+      monitor.type = 'button';
+      monitor.className = 'monitor-result';
+      monitor.setAttribute('aria-pressed', String(monitorSelection.has(camera)));
+      monitor.setAttribute('aria-label', tr(monitorSelection.has(camera) ? 'monitor.remove' : 'monitor.add', { name: camera.name }));
+      monitor.textContent = monitorSelection.has(camera) ? '−' : '+';
+      monitor.addEventListener('click', function () { toggleMonitorCamera(camera); });
       item.appendChild(openButton);
       item.appendChild(favorite);
+      item.appendChild(monitor);
       list.appendChild(item);
     });
     if (virtual.offsetBottom) {
@@ -1031,7 +1063,7 @@
   }
 
   function trapFocus(e) {
-    var modal = document.querySelector('.modal-content');
+    var modal = document.querySelector('.modal:not(.hidden) .modal-content');
     if (!modal) return;
     var focusable = getFocusableElements(modal);
     if (focusable.length === 0) return;
@@ -1083,7 +1115,7 @@
     weatherData.classList.add('hidden');
 
     modal.classList.remove('hidden');
-    setModalBackgroundInert(true);
+    setModalBackgroundInert(true, modal);
     document.getElementById('modal-close').focus();
     document.addEventListener('keydown', trapFocus);
 
@@ -1112,7 +1144,7 @@
     destroyActiveFeed(feedEl);
 
     document.getElementById('camera-modal').classList.add('hidden');
-    setModalBackgroundInert(false);
+    setModalBackgroundInert(false, document.getElementById('camera-modal'));
     feedEl.replaceChildren();
 
     if (priorFocusEl && priorFocusEl.focus) {
@@ -1121,8 +1153,8 @@
     }
   }
 
-  function setModalBackgroundInert(inert) {
-    var modal = document.getElementById('camera-modal');
+  function setModalBackgroundInert(inert, modal) {
+    modal = modal || document.getElementById('camera-modal');
     var children = document.body.children;
     for (var i = 0; i < children.length; i++) {
       var element = children[i];
@@ -1142,6 +1174,182 @@
         delete element.dataset.modalInert;
         delete element.dataset.previousAriaHidden;
       }
+    }
+  }
+
+  function monitorSourceUrl(camera) {
+    if (camera.type === 'youtube') return 'https://www.youtube.com/watch?v=' + encodeURIComponent(camera.url);
+    return camera.source_url || camera.url;
+  }
+
+  function appendMonitorLink(container, camera, message) {
+    var fallback = document.createElement('div');
+    fallback.className = 'monitor-link-fallback';
+    var text = document.createElement('span');
+    text.textContent = message;
+    var link = document.createElement('a');
+    link.href = monitorSourceUrl(camera);
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = tr('monitor.openSource');
+    fallback.appendChild(text);
+    fallback.appendChild(link);
+    container.replaceChildren(fallback);
+  }
+
+  function createMonitorImagePlayer(camera, container, refreshing) {
+    var image = document.createElement('img');
+    image.alt = camera.name;
+    var timer = null;
+    var active = false;
+    function source() {
+      return camera.url + (camera.url.indexOf('?') >= 0 ? '&' : '?') + '_t=' + Date.now();
+    }
+    function pause() {
+      active = false;
+      clearInterval(timer);
+      timer = null;
+      image.removeAttribute('src');
+    }
+    function resume() {
+      if (active) return;
+      active = true;
+      image.src = refreshing ? source() : camera.url;
+      if (refreshing) timer = setInterval(function () { if (active) image.src = source(); }, IMAGE_REFRESH_INTERVAL);
+    }
+    container.replaceChildren(image);
+    resume();
+    return { pause: pause, resume: resume, destroy: function () { pause(); image.remove(); } };
+  }
+
+  function createMonitorYouTubePlayer(camera, container) {
+    var iframe = document.createElement('iframe');
+    iframe.title = camera.name;
+    iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
+    iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+    iframe.src = 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(camera.url) +
+      '?autoplay=1&mute=1&enablejsapi=1&rel=0';
+    function command(name) {
+      if (iframe.contentWindow) iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: name, args: [] }), '*');
+    }
+    container.replaceChildren(iframe);
+    return {
+      pause: function () { command('pauseVideo'); },
+      resume: function () { command('playVideo'); },
+      destroy: function () { command('stopVideo'); iframe.src = 'about:blank'; iframe.remove(); }
+    };
+  }
+
+  function createMonitorHlsPlayer(camera, container) {
+    var video = document.createElement('video');
+    video.controls = true;
+    video.muted = true;
+    video.autoplay = true;
+    video.playsInline = true;
+    var hls = null;
+    var nativePlayback = video.canPlayType('application/vnd.apple.mpegurl');
+    if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+      hls = new Hls({ enableWorker: true });
+      hls.loadSource(camera.url);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, function () { video.play().catch(function () { /* controls remain */ }); });
+    } else if (nativePlayback) {
+      video.src = camera.url;
+      video.play().catch(function () { /* controls remain */ });
+    } else {
+      throw new Error('HLS unsupported');
+    }
+    container.replaceChildren(video);
+    return {
+      pause: function () {
+        video.pause();
+        if (hls) hls.stopLoad();
+        else video.removeAttribute('src');
+      },
+      resume: function () {
+        if (hls) hls.startLoad(-1);
+        else if (!video.hasAttribute('src')) { video.src = camera.url; video.load(); }
+        video.play().catch(function () { /* controls remain */ });
+      },
+      destroy: function () {
+        video.pause();
+        if (hls) hls.destroy();
+        video.removeAttribute('src');
+        video.load();
+        video.remove();
+      }
+    };
+  }
+
+  function createMonitorPlayer(camera, container) {
+    var mode = StormScopeMultiCamera.capability(camera).mode;
+    if (mode === 'image') return createMonitorImagePlayer(camera, container, true);
+    if (mode === 'mjpeg') return createMonitorImagePlayer(camera, container, false);
+    if (mode === 'youtube') return createMonitorYouTubePlayer(camera, container);
+    if (mode === 'hls') return createMonitorHlsPlayer(camera, container);
+    return null;
+  }
+
+  function openMonitor() {
+    if (!monitorSelection.canStart()) return;
+    if (activeCamera) closeCameraModal();
+    closeMonitor(false);
+    var modal = document.getElementById('monitor-modal');
+    var grid = document.getElementById('monitor-grid');
+    priorFocusEl = document.activeElement;
+    monitorRegistry = new StormScopeMultiCamera.PlayerRegistry();
+    if ('IntersectionObserver' in window) {
+      monitorObserver = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          monitorRegistry.setVisible(entry.target, entry.isIntersecting && entry.intersectionRatio > 0);
+        });
+      }, { root: grid, threshold: 0.05 });
+    }
+
+    monitorSelection.list().forEach(function (camera) {
+      var cell = document.createElement('article');
+      cell.className = 'monitor-cell';
+      var heading = document.createElement('h3');
+      heading.textContent = camera.name;
+      var playerContainer = document.createElement('div');
+      playerContainer.className = 'monitor-player';
+      cell.appendChild(heading);
+      cell.appendChild(playerContainer);
+      grid.appendChild(cell);
+      if (!StormScopeMultiCamera.capability(camera).playable) {
+        appendMonitorLink(playerContainer, camera, tr('monitor.unsupported'));
+        return;
+      }
+      try {
+        var player = createMonitorPlayer(camera, playerContainer);
+        monitorRegistry.register(cell, player);
+        if (monitorObserver) monitorObserver.observe(cell);
+      } catch (error) {
+        appendMonitorLink(playerContainer, camera, tr('monitor.loadError'));
+      }
+    });
+    monitorRegistry.setDocumentHidden(document.hidden);
+    modal.classList.remove('hidden');
+    document.getElementById('search-panel').classList.add('hidden');
+    document.getElementById('btn-search').setAttribute('aria-expanded', 'false');
+    setModalBackgroundInert(true, modal);
+    document.addEventListener('keydown', trapFocus);
+    document.getElementById('monitor-close').focus();
+  }
+
+  function closeMonitor(restoreFocus) {
+    var modal = document.getElementById('monitor-modal');
+    if (monitorObserver) monitorObserver.disconnect();
+    monitorObserver = null;
+    if (monitorRegistry) monitorRegistry.destroyAll();
+    monitorRegistry = null;
+    document.getElementById('monitor-grid').replaceChildren();
+    if (!modal.classList.contains('hidden')) {
+      modal.classList.add('hidden');
+      setModalBackgroundInert(false, modal);
+      document.removeEventListener('keydown', trapFocus);
+      if (restoreFocus !== false && priorFocusEl && priorFocusEl.focus) priorFocusEl.focus();
+      priorFocusEl = null;
     }
   }
 
@@ -1832,6 +2040,7 @@
       if (cameraDataTimestamp) updateDataFreshness();
       refreshCameraLoadLabels();
       refreshSavedViews(document.getElementById('saved-views').value);
+      updateMonitorSelectionUi();
       scheduleSearchRender();
       renderAlerts();
       if (activeCamera) {
@@ -1868,6 +2077,9 @@
     document.getElementById('favorite-camera').addEventListener('click', function () {
       if (activeCamera) toggleCameraFavorite(activeCamera);
     });
+    document.getElementById('open-monitor').addEventListener('click', openMonitor);
+    document.getElementById('monitor-close').addEventListener('click', function () { closeMonitor(true); });
+    document.querySelector('.monitor-backdrop').addEventListener('click', function () { closeMonitor(true); });
 
     ['camera-query', 'camera-state'].forEach(function (id) {
       document.getElementById(id).addEventListener('input', function () { scheduleSearchRender(true); });
@@ -1955,6 +2167,8 @@
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape' && activeCamera) {
         closeCameraModal();
+      } else if (e.key === 'Escape' && !document.getElementById('monitor-modal').classList.contains('hidden')) {
+        closeMonitor(true);
       }
     });
 
@@ -2086,6 +2300,7 @@
 
     document.addEventListener('visibilitychange', function () {
       var container = document.getElementById('modal-feed');
+      if (monitorRegistry) monitorRegistry.setDocumentHidden(document.hidden);
       if (document.hidden) {
         radarWasPlaying = radarPlaying;
         setRadarPlaying(false);
@@ -2129,6 +2344,7 @@
       if (weatherAbort) weatherAbort.abort();
       if (alertAbort) alertAbort.abort();
       if (cameraStore) cameraStore.cancel();
+      if (monitorRegistry) monitorRegistry.destroyAll();
       clearTimeout(saveLastViewTimer);
       destroyActiveFeed(document.getElementById('modal-feed'));
     });
@@ -2176,6 +2392,7 @@
   initRadarPreferences();
   initSavedState();
   bindUI();
+  updateMonitorSelectionUi();
   initRadar();
   loadCameras();
   fetchNwsAlerts();
@@ -2186,6 +2403,9 @@
     getMap: function () { return map; },
     getRadarPreloadState: function () { return Object.assign({}, radarPreloadState); },
     getCameraLoadMetrics: function () { return Object.assign({}, cameraLoadMetrics); },
-    getCameraResults: function () { return currentCameraResults.slice(); }
+    getCameraResults: function () { return currentCameraResults.slice(); },
+    getMonitorState: function () {
+      return { selected: monitorSelection.count(), players: monitorRegistry ? monitorRegistry.count() : 0 };
+    }
   };
 })();
