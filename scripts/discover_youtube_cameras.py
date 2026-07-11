@@ -72,7 +72,7 @@ NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 "
-    "StormScope/0.32.0"
+    "StormScope/0.33.0"
 )
 
 US_STATES = {
@@ -289,6 +289,7 @@ GENERIC_LOCATION_REJECTS = {
     "real time",
     "runway",
     "skyline",
+    "skyline view",
     "traffic",
     "train",
     "webcam",
@@ -298,17 +299,51 @@ GENERIC_LOCATION_REJECTS = {
 
 BROAD_LOCATION_QUERIES = {
     "alaska",
+    "australia",
+    "austria",
     "british columbia, canada",
+    "canada",
     "canary islands, spain",
+    "czechia",
+    "denmark",
+    "finland",
+    "france",
+    "germany",
+    "greece",
     "hawaii",
+    "iceland",
     "iceland volcano",
+    "ireland",
+    "israel",
+    "italy",
     "java",
+    "japan",
+    "kenya",
+    "mexico",
+    "netherlands",
+    "new zealand",
+    "norway",
+    "portugal",
     "sicily, italy",
+    "south africa",
     "southern california",
+    "spain",
+    "sweden",
+    "switzerland",
+    "tanzania",
     "the forest",
     "the french alps",
     "the lower keys",
+    "uk",
+    "united kingdom",
     "west maui",
+}
+
+COUNTRY_ONLY_TOKENS = {
+    "africa", "australia", "austria", "canada", "czechia", "denmark", "finland",
+    "france", "germany", "greece", "iceland", "ireland", "israel", "italy", "japan",
+    "kenya", "mexico", "netherlands", "norway", "portugal", "spain", "sweden",
+    "switzerland", "tanzania", "zealand",
 }
 
 TOKEN_STOPWORDS = {
@@ -798,7 +833,8 @@ def add_location_query(queries: list[str], value: str) -> None:
         return
     if value.lower() in GENERIC_LOCATION_REJECTS or value.lower() in BROAD_LOCATION_QUERIES:
         return
-    if not significant_tokens(value):
+    tokens = significant_tokens(value)
+    if not tokens or (len(tokens) == 1 and tokens[0] in COUNTRY_ONLY_TOKENS):
         return
     if value.lower() not in {item.lower() for item in queries}:
         queries.append(value)

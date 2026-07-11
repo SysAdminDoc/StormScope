@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.33.0 - 2026-07-11
+
+### Live-camera discovery
+- Added 13 currently live, playback-verified YouTube cameras across African wildlife reserves, international beaches/ports, an underwater Honduran reef, New York, Redding, and Redondo Beach, bringing the corpus to 24,217 cameras and 368 YouTube streams.
+- Manually validated and curated precise locations for ten broad-search discoveries, and rejected two live results whose generic titles produced unrelated geocoder matches.
+- Hardened automatic location extraction against generic view names and country-only fallback pins, with regression tests for the observed false-geocode cases.
+- Continued the resumable Census city search through 25 additional California cities and rebuilt all 33 deterministic camera shards.
+
 ## v0.32.0 - 2026-07-11
 
 ### Optional official hazard context

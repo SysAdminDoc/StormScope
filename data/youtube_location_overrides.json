@@ -105,5 +105,15 @@
   "O0UGT7AT3aw": {"name": "Chicago Skydeck Live", "lat": 41.878926, "lon": -87.636071, "state": "Illinois", "county": "Cook County"},
   "lcANlrXCR0Q": {"name": "Bald Head Island Beach Live", "lat": 33.863937, "lon": -77.958927, "state": "North Carolina", "county": "Brunswick County"},
   "aZ0tx7eeLYU": {"name": "Galveston Seawall Murdochs Live", "lat": 29.272757, "lon": -94.816888, "state": "Texas", "county": "Galveston County"},
-  "ssK_R9pa4yA": {"name": "52nd Avenue Myrtle Beach Live", "lat": 33.695646, "lon": -78.890041, "state": "South Carolina", "county": "Horry County"}
+  "ssK_R9pa4yA": {"name": "52nd Avenue Myrtle Beach Live", "lat": 33.695646, "lon": -78.890041, "state": "South Carolina", "county": "Horry County"},
+  "7x5kRo1B84Y": {"name": "Mpala African River Wildlife Live", "lat": 0.29, "lon": 36.9, "state": "Kenya", "county": "Laikipia County"},
+  "0P_LBKqVbfs": {"name": "Tembe Elephant Park Live", "lat": -27.046672, "lon": 32.448858, "state": "South Africa", "county": "Umkhanyakude District Municipality"},
+  "sQAhSkjRKGk": {"name": "Nkorho Bush Lodge Wildlife Live", "lat": -24.734432, "lon": 31.597092, "state": "South Africa", "county": "Ehlanzeni District Municipality"},
+  "BmOLK7LTKbY": {"name": "Serengeti Explorer Wildlife Live", "lat": -2.597064, "lon": 34.678789, "state": "Tanzania", "county": "Serengeti"},
+  "VF2WmFgrtGg": {"name": "Departure Bay Ferry and Weather Live", "lat": 49.201768, "lon": -123.957515, "state": "Canada", "county": "Regional District of Nanaimo"},
+  "k9_uTRCJy7Q": {"name": "Skiathos Bay and Port Live", "lat": 39.16287, "lon": 23.49106, "state": "Greece", "county": "Skiathos"},
+  "RPrjsndH_qg": {"name": "East 34th Street Ferry Live", "lat": 40.74394, "lon": -73.97071, "state": "New York", "county": "New York County"},
+  "8FIi9RyBsKE": {"name": "Great Bay Beach and Cruise Port Live", "lat": 18.022227, "lon": -63.04436, "state": "Sint Maarten", "county": "Philipsburg"},
+  "kkVrj2cr9Ko": {"name": "Crystal Bay Yacht Club Beach Live", "lat": 9.476803, "lon": 100.067757, "state": "Thailand", "county": "Ko Samui District"},
+  "1zcIUk66HX4": {"name": "Utopia Village Underwater Reef Live", "lat": 16.0723, "lon": -86.95133, "state": "Honduras", "county": "Bay Islands Department"}
 }
