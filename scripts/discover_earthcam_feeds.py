@@ -28,6 +28,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+try:
+    from camera_data import atomic_write_json, load_json, update_camera_data
+except ModuleNotFoundError:  # pragma: no cover - package import during tests
+    from scripts.camera_data import atomic_write_json, load_json, update_camera_data
+
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -47,7 +52,7 @@ EARTHCAM_REGION_URL = "https://www.earthcam.com/api/dotcom/network_search.php?r=
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 "
-    "StormScope/0.22.0"
+    "StormScope/0.25.0"
 )
 
 US_STATES = {
@@ -243,17 +248,11 @@ def curl_json(url: str, *, timeout: int = 30) -> Any:
 
 
 def load_json_file(path: Path, default: Any) -> Any:
-    if not path.exists():
-        return default
-    with path.open(encoding="utf-8") as f:
-        return json.load(f)
+    return load_json(path, default)
 
 
 def save_json_file(path: Path, value: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(value, f, ensure_ascii=True, indent=2)
-        f.write("\n")
+    atomic_write_json(path, value, indent=2)
 
 
 def normalize_url(url: str) -> str:
@@ -611,69 +610,67 @@ def discover_youtube_feeds(
 
 
 def append_feeds(data_file: Path, provider_feeds: list[ProviderFeed], youtube_feeds: list[YouTubeFeed]) -> tuple[int, int]:
-    cameras = load_json_file(data_file, [])
-    if not isinstance(cameras, list):
-        raise RuntimeError(f"{data_file} does not contain a JSON array")
-    existing_embed_urls = {
-        compact_key(str(cam.get("url") or ""))
-        for cam in cameras
-        if cam.get("type") == "embed"
-    }
-    existing_youtube_ids = {
-        str(cam.get("url") or "")
-        for cam in cameras
-        if cam.get("type") == "youtube"
-    }
-    max_id = max(int(cam.get("id") or 0) for cam in cameras) if cameras else 0
-    added_provider = 0
-    added_youtube = 0
+    def append(cameras: list[dict[str, Any]]) -> tuple[int, int]:
+        existing_embed_urls = {
+            compact_key(str(cam.get("url") or ""))
+            for cam in cameras
+            if cam.get("type") == "embed"
+        }
+        existing_youtube_ids = {
+            str(cam.get("url") or "")
+            for cam in cameras
+            if cam.get("type") == "youtube"
+        }
+        max_id = max(int(cam.get("id") or 0) for cam in cameras) if cameras else 0
+        added_provider = 0
+        added_youtube = 0
 
-    for feed in provider_feeds:
-        key = compact_key(feed.url)
-        if key in existing_embed_urls:
-            continue
-        max_id += 1
-        cameras.append(
-            {
-                "id": max_id,
-                "name": feed.name,
-                "lat": feed.lat,
-                "lon": feed.lon,
-                "url": feed.url,
-                "type": "embed",
-                "state": feed.state,
-                "county": feed.county,
-                "direction": "",
-                "source": "earthcam",
-            }
-        )
-        existing_embed_urls.add(key)
-        added_provider += 1
+        for feed in provider_feeds:
+            key = compact_key(feed.url)
+            if key in existing_embed_urls:
+                continue
+            max_id += 1
+            cameras.append(
+                {
+                    "id": max_id,
+                    "name": feed.name,
+                    "lat": feed.lat,
+                    "lon": feed.lon,
+                    "url": feed.url,
+                    "type": "embed",
+                    "state": feed.state,
+                    "county": feed.county,
+                    "direction": "",
+                    "source": "earthcam",
+                }
+            )
+            existing_embed_urls.add(key)
+            added_provider += 1
 
-    for feed in youtube_feeds:
-        if feed.video_id in existing_youtube_ids:
-            continue
-        max_id += 1
-        cameras.append(
-            {
-                "id": max_id,
-                "name": feed.name,
-                "lat": round(feed.lat, 6),
-                "lon": round(feed.lon, 6),
-                "url": feed.video_id,
-                "type": "youtube",
-                "state": feed.state,
-                "county": feed.county,
-                "direction": "",
-                "source": "youtube",
-            }
-        )
-        existing_youtube_ids.add(feed.video_id)
-        added_youtube += 1
+        for feed in youtube_feeds:
+            if feed.video_id in existing_youtube_ids:
+                continue
+            max_id += 1
+            cameras.append(
+                {
+                    "id": max_id,
+                    "name": feed.name,
+                    "lat": round(feed.lat, 6),
+                    "lon": round(feed.lon, 6),
+                    "url": feed.video_id,
+                    "type": "youtube",
+                    "state": feed.state,
+                    "county": feed.county,
+                    "direction": "",
+                    "source": "youtube",
+                }
+            )
+            existing_youtube_ids.add(feed.video_id)
+            added_youtube += 1
+        return added_provider, added_youtube
 
-    with data_file.open("w", encoding="utf-8") as f:
-        json.dump(cameras, f, ensure_ascii=True)
-    return added_provider, added_youtube
+    added, _ = update_camera_data(data_file, append)
+    return added
 
 
 def unique_new_provider_feeds(provider_feeds: list[ProviderFeed], existing_embed_urls: set[str]) -> list[ProviderFeed]:

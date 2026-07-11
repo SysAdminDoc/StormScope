@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
-import json
 import re
 import sys
 import time
@@ -21,6 +20,11 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
+
+try:
+    from camera_data import atomic_write_json, load_json as load_json_shared, update_camera_data
+except ModuleNotFoundError:  # pragma: no cover - package import during tests
+    from scripts.camera_data import atomic_write_json, load_json as load_json_shared, update_camera_data
 
 
 try:
@@ -74,16 +78,11 @@ class AuditResult:
 
 
 def load_json(path: Path) -> Any:
-    with path.open(encoding="utf-8") as f:
-        return json.load(f)
+    return load_json_shared(path)
 
 
 def save_json(path: Path, value: Any, *, indent: int | None = None) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(value, f, ensure_ascii=True, indent=indent)
-        if indent is not None:
-            f.write("\n")
+    atomic_write_json(path, value, indent=indent)
 
 
 def is_transient_error(message: str) -> bool:
@@ -207,13 +206,17 @@ def apply_removals(
     remove_ids = {result.video_id for result in results if result.status in remove_statuses}
     if not remove_ids:
         return 0
-    kept = [
-        cam
-        for cam in cameras
-        if not (cam.get("type") == "youtube" and str(cam.get("url") or "") in remove_ids)
-    ]
-    save_json(data_file, kept)
-    return len(cameras) - len(kept)
+    def remove(current: list[dict[str, Any]]) -> int:
+        before = len(current)
+        current[:] = [
+            cam
+            for cam in current
+            if not (cam.get("type") == "youtube" and str(cam.get("url") or "") in remove_ids)
+        ]
+        return before - len(current)
+
+    removed, _ = update_camera_data(data_file, remove)
+    return removed
 
 
 def dataset_summary(cameras: list[dict[str, Any]]) -> dict[str, Any]:

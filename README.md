@@ -1,7 +1,7 @@
-[![Version](https://img.shields.io/badge/version-0.24.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.25.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
-[![Cameras](https://img.shields.io/badge/cameras-24%2C234-cyan)]()
+[![Cameras](https://img.shields.io/badge/cameras-24%2C204-cyan)]()
 
 # StormScope
 
@@ -10,9 +10,9 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 ## Features
 
 - **Live Weather Radar** — Real-time NEXRAD radar via RainViewer (animated, adjustable opacity)
-- **24,234 Live Cameras** — Traffic, weather, park, EarthCam, LiveBeaches, and webcam feeds across 48 US states plus international locations
+- **24,204 Live Cameras** — Traffic, weather, park, EarthCam, LiveBeaches, and webcam feeds across 48 US states plus international locations
 - **355 YouTube Live Streams** — Playback-verified 24/7 streams including beaches, airports, railcams, harbors, city skylines, landmarks, indoor/outdoor feeds, wildlife cams, volcano cams, and city-list discoveries (red markers)
-- **468 Provider Embed Feeds** — 275 EarthCam Network pages, 189 NPS embed pages, and 4 direct LiveBeaches/Brownrice player embeds
+- **451 Provider Embed Feeds** — 275 EarthCam Network pages, 172 active NPS embed pages, and 4 direct LiveBeaches/Brownrice player embeds
 - **Click-to-View** — YouTube embeds, EarthCam pages, HLS video streams, and auto-refreshing image feeds in a modal viewer
 - **Current Weather** — NWS hourly forecast data shown alongside each camera feed
 - **Dark Theme** — CartoDB dark matter tiles with glassmorphism UI
@@ -22,25 +22,25 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 
 ## Camera Coverage
 
-24,234 cameras across 48 US states:
+24,204 cameras across 48 US states:
 
 | State | Cameras | | State | Cameras |
 |-------|--------:|-|-------|--------:|
-| Florida | 4,956 | | Ohio | 1,067 |
-| California | 3,126 | | Colorado | 1,013 |
+| Florida | 4,956 | | Ohio | 1,066 |
+| California | 3,120 | | Colorado | 1,013 |
 | Utah | 2,053 | | New York | 993 |
 | Pennsylvania | 1,515 | | Georgia | 848 |
-| Washington | 1,356 | | Texas | 832 |
-| Michigan | 779 | | Missouri | 565 |
+| Washington | 1,354 | | Texas | 832 |
+| Michigan | 777 | | Missouri | 563 |
 | Nevada | 661 | | Idaho | 459 |
 | Alabama | 595 | | Wisconsin | 452 |
 | Indiana | 573 | | New Hampshire | 408 |
 | Connecticut | 352 | | Louisiana | 338 |
 | Illinois | 331 | | Kentucky | 226 |
-| NPS Parks | 189 | | Arizona | 108 |
+| NPS Parks | 172 | | Arizona | 108 |
 | Alaska | 104 | | South Dakota | 43 |
 
-Plus: Montana, South Carolina, the remaining lower-count US states, 43 international country/territory buckets, 189 National Park webcams, 275 EarthCam Network feeds, 4 LiveBeaches direct embeds, and 355 playback-verified YouTube streams.
+Plus: Montana, South Carolina, the remaining lower-count US states, 43 international country/territory buckets, 172 active National Park webcams, 275 EarthCam Network feeds, 4 LiveBeaches direct embeds, and 355 playback-verified YouTube streams.
 
 ## Quick Start
 
@@ -58,6 +58,21 @@ npx serve .
 ```
 
 Open `http://localhost:8000` in your browser.
+
+Install the local quality-gate dependency once:
+
+```bash
+npm install
+npx playwright install chromium
+```
+
+Run the complete local regression gate before changing or publishing the app:
+
+```bash
+python scripts/check.py
+```
+
+It validates the camera corpus and runs Python units, lint, JavaScript syntax/contracts, service-worker tests, and a real headless desktop/mobile/modal/offline/cache/accessibility smoke.
 
 ## Tech Stack
 
@@ -83,7 +98,13 @@ Run the data fetcher to pull fresh camera data from all state DOT APIs:
 python scripts/fetch_cameras.py
 ```
 
-This queries 20+ live APIs and merges 23,000+ DOT/NPS cameras into `data/cameras.json`.
+This queries 20+ live APIs and transactionally merges DOT/NPS results into `data/cameras.json`. Provider failures retain their last-known-good rows, curated sources are preserved, schema and coverage gates run before replacement, and the previous valid dataset is saved as `data/cameras.json.bak`. Restore it with:
+
+```bash
+python scripts/fetch_cameras.py --rollback
+```
+
+All camera writers share the schema-v1 contract in `data/cameras.schema.json` and use an exclusive lock plus fsynced temporary file and atomic replacement. A dry-run city search may read `data/us_city_livestream_checkpoint.json` with `--resume`, but changes neither that checkpoint nor the camera dataset unless `--apply` is present.
 
 Run the YouTube discovery automation to exhaust live-filtered search queries, verify live streams with extractor playback metadata, and append only fixed-location streams with curated coordinates:
 

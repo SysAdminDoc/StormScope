@@ -4,16 +4,23 @@ Pulls cameras from multiple US state DOT APIs and merges into data/cameras.json.
 
 Usage: python scripts/fetch_cameras.py
 """
+import argparse
 import json
 import gzip
 import re
 import ssl
 import sys
-import os
 import urllib.request
 import urllib.error
 import urllib.parse
 from pathlib import Path
+from dataclasses import dataclass
+from typing import Callable
+
+try:
+    from camera_data import feed_identity, restore_camera_data, update_camera_data, validate_camera_data
+except ModuleNotFoundError:  # pragma: no cover - package import during tests
+    from scripts.camera_data import feed_identity, restore_camera_data, update_camera_data, validate_camera_data
 
 sys.stdout.reconfigure(encoding='utf-8')
 ctx = ssl.create_default_context()
@@ -25,6 +32,23 @@ OUTPUT = DATA_DIR / 'cameras.json'
 cameras = []
 cam_id = 0
 stats = {}
+active_provider = ''
+PROVIDER_RETENTION_RATIO = 0.9
+
+
+class IncompleteProviderError(RuntimeError):
+    """Raised when a multi-request provider returns only a partial snapshot."""
+
+
+@dataclass(frozen=True)
+class ProviderResult:
+    name: str
+    cameras: list[dict]
+    error: str = ''
+
+    @property
+    def succeeded(self):
+        return not self.error and bool(self.cameras)
 
 
 def next_id():
@@ -46,8 +70,8 @@ def add_camera(name, lat, lon, url, cam_type='image', state='', county='',
         return
     if not (-90 <= lat <= 90 and -180 <= lon <= 180):
         return
-    name = re.sub(r'<[^>]+>', '', str(name)).strip() or f'Camera {next_id()}'
-    cameras.append({
+    name = re.sub(r'<[^>]+>', '', str(name)).strip() or 'Unnamed camera'
+    camera = {
         'id': next_id(),
         'name': name,
         'lat': round(lat, 6),
@@ -58,7 +82,10 @@ def add_camera(name, lat, lon, url, cam_type='image', state='', county='',
         'county': county,
         'direction': direction,
         'source': source
-    })
+    }
+    if active_provider:
+        camera['provider'] = active_provider
+    cameras.append(camera)
 
 
 def fetch_json(url, headers=None, timeout=15):
@@ -103,6 +130,7 @@ def detect_type(url):
 # ── Caltrans (California) ──
 def fetch_caltrans():
     count = 0
+    failed_districts = []
     for d in range(1, 13):
         try:
             url = f'https://cwwp2.dot.ca.gov/data/d{d}/cctv/cctvStatusD{d:02d}.json'
@@ -124,6 +152,9 @@ def fetch_caltrans():
                 count += 1
         except Exception as e:
             print(f'  Caltrans D{d}: {e}')
+            failed_districts.append(d)
+    if failed_districts:
+        raise IncompleteProviderError(f'Caltrans districts failed: {failed_districts}')
     return count
 
 
@@ -144,7 +175,6 @@ def fetch_511_mapicons(base_url, state_name):
             item_id = item.get('itemId', '')
             name = item.get('title', '') or f'{state_name} Camera {item_id}'
             img_url = f'{base_url}/map/Cctv/{item_id}'
-            video = item.get('expando', {}).get('videoEnabled', False)
             add_camera(name, lat, lon, img_url, 'image', state_name, '', '', 'dot')
             count += 1
         return count
@@ -389,9 +419,11 @@ def fetch_txdot():
 def fetch_nps():
     try:
         url = 'https://developer.nps.gov/api/v1/webcams?api_key=DEMO_KEY&limit=500'
-        data = fetch_json(url, headers={'User-Agent': 'StormScope/1.0'})
+        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.25.0'})
         count = 0
         for cam in data.get('data', []):
+            if str(cam.get('status') or '').lower() == 'inactive':
+                continue
             lat = cam.get('latitude', '')
             lon = cam.get('longitude', '')
             if not lat or not lon:
@@ -901,93 +933,159 @@ def load_otcm_baseline(filepath):
 
 
 def run_fetcher(name, func):
+    global active_provider
     print(f'Fetching {name}...')
+    start = len(cameras)
+    active_provider = name
     try:
         count = func()
-        stats[name] = count
-        print(f'  {name}: {count} cameras')
+        rows = cameras[start:]
+        del cameras[start:]
+        if not count or not rows:
+            error = 'provider returned no cameras'
+            stats[name] = f'ERROR: {error}'
+            print(f'  {name}: {error}; retaining last-known-good rows')
+            return ProviderResult(name, [], error)
+        stats[name] = len(rows)
+        print(f'  {name}: {len(rows)} cameras')
+        return ProviderResult(name, rows)
     except Exception as e:
+        del cameras[start:]
         stats[name] = f'ERROR: {e}'
-        print(f'  {name}: ERROR - {e}')
+        print(f'  {name}: ERROR - {e}; retaining last-known-good rows')
+        return ProviderResult(name, [], str(e))
+    finally:
+        active_provider = ''
 
 
-def main():
-    print('StormScope Camera Data Fetcher')
-    print('=' * 50)
-
-    # Load OpenTrafficCamMap baseline (AL, AK, AZ, DE, IN, KY, OH - states not covered by live APIs)
-    # CA, CO, GA are covered by live fetchers; skip duplicates
+def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
+    providers = []
     otcm_file = DATA_DIR / 'otcm_baseline.json'
     if otcm_file.exists():
-        run_fetcher('OpenTrafficCamMap baseline', lambda: load_otcm_baseline(otcm_file))
+        providers.append(('OpenTrafficCamMap baseline', lambda: load_otcm_baseline(otcm_file)))
+    providers.extend([
+        ('Caltrans (California)', fetch_caltrans),
+        ('Florida (FL511)', lambda: fetch_511_mapicons('https://fl511.com', 'Florida')),
+        ('NYC DOT', fetch_nycdot),
+        ('WSDOT (Washington)', fetch_wsdot),
+        ('Illinois DOT', fetch_illinois),
+        ('Michigan DOT', fetch_michigan),
+        ('Colorado DOT (live)', fetch_colorado),
+        ('Austin TX', fetch_austin_tx),
+        ('TxDOT (statewide)', fetch_txdot),
+        ('Louisiana (LA511)', lambda: fetch_511_mapicons('https://www.511la.org', 'Louisiana')),
+        ('Pennsylvania (PA511)', lambda: fetch_511_mapicons('https://511pa.com', 'Pennsylvania')),
+        ('Wisconsin (WI511)', lambda: fetch_511_mapicons('https://511wi.gov', 'Wisconsin')),
+        ('Utah DOT', fetch_utah),
+        ('Nevada (NV511)', lambda: fetch_511_mapicons('https://nvroads.com', 'Nevada')),
+        ('New Hampshire (NE511)', lambda: fetch_511_mapicons('https://www.newengland511.org', 'New Hampshire')),
+        ('Connecticut (CT511)', lambda: fetch_511_mapicons('https://www.ctroads.org', 'Connecticut')),
+        ('Idaho (ID511)', lambda: fetch_511_mapicons('https://511.idaho.gov', 'Idaho')),
+        ('South Carolina (Iteris)', lambda: fetch_iteris_geojson('SC', 'South Carolina')),
+        ('Montana (Iteris)', lambda: fetch_iteris_geojson('MT', 'Montana')),
+        ('South Dakota (Iteris)', lambda: fetch_iteris_geojson('SD', 'South Dakota')),
+        ('Missouri DOT', fetch_missouri),
+        ('Delaware (live HLS)', fetch_delaware_live),
+        ('New Mexico DOT', fetch_newmexico),
+        ('Minnesota (IRIS)', fetch_mn_iris),
+        ('Iowa (IRIS)', fetch_ia_iris),
+        ('Wyoming DOT', fetch_wyoming),
+        ('Maryland (CHART)', fetch_maryland_chart),
+        ('Florida (ArcGIS)', fetch_fl_arcgis),
+        ('Georgia DOT (DataTables)', lambda: fetch_511_datatables(
+            'https://511ga.org', 'Georgia', 'https://511ga.org/cctv')),
+        ('NPS Webcams', fetch_nps),
+    ])
+    return providers
 
-    # Fetch from live APIs
-    run_fetcher('Caltrans (California)', fetch_caltrans)
-    run_fetcher('Florida (FL511)', lambda: fetch_511_mapicons('https://fl511.com', 'Florida'))
-    run_fetcher('NYC DOT', fetch_nycdot)
-    run_fetcher('WSDOT (Washington)', fetch_wsdot)
-    run_fetcher('Illinois DOT', fetch_illinois)
-    run_fetcher('Michigan DOT', fetch_michigan)
-    run_fetcher('Colorado DOT (live)', fetch_colorado)
-    run_fetcher('Austin TX', fetch_austin_tx)
-    run_fetcher('TxDOT (statewide)', fetch_txdot)
-    run_fetcher('Louisiana (LA511)', lambda: fetch_511_mapicons('https://www.511la.org', 'Louisiana'))
-    run_fetcher('Pennsylvania (PA511)', lambda: fetch_511_mapicons('https://511pa.com', 'Pennsylvania'))
-    run_fetcher('Wisconsin (WI511)', lambda: fetch_511_mapicons('https://511wi.gov', 'Wisconsin'))
-    run_fetcher('Utah DOT', fetch_utah)
-    run_fetcher('Nevada (NV511)', lambda: fetch_511_mapicons('https://nvroads.com', 'Nevada'))
-    run_fetcher('New Hampshire (NE511)', lambda: fetch_511_mapicons('https://www.newengland511.org', 'New Hampshire'))
-    run_fetcher('Connecticut (CT511)', lambda: fetch_511_mapicons('https://www.ctroads.org', 'Connecticut'))
-    run_fetcher('Idaho (ID511)', lambda: fetch_511_mapicons('https://511.idaho.gov', 'Idaho'))
-    run_fetcher('South Carolina (Iteris)', lambda: fetch_iteris_geojson('SC', 'South Carolina'))
-    run_fetcher('Montana (Iteris)', lambda: fetch_iteris_geojson('MT', 'Montana'))
-    run_fetcher('South Dakota (Iteris)', lambda: fetch_iteris_geojson('SD', 'South Dakota'))
-    run_fetcher('Missouri DOT', fetch_missouri)
-    run_fetcher('Delaware (live HLS)', fetch_delaware_live)
-    run_fetcher('New Mexico DOT', fetch_newmexico)
-    run_fetcher('Minnesota (IRIS)', fetch_mn_iris)
-    run_fetcher('Iowa (IRIS)', fetch_ia_iris)
-    run_fetcher('Wyoming DOT', fetch_wyoming)
-    run_fetcher('Maryland (CHART)', fetch_maryland_chart)
-    run_fetcher('Florida (ArcGIS)', fetch_fl_arcgis)
-    run_fetcher('Georgia DOT (DataTables)', lambda: fetch_511_datatables(
-        'https://511ga.org', 'Georgia', 'https://511ga.org/cctv'))
-    run_fetcher('NPS Webcams', fetch_nps)
 
-    # Deduplicate by lat/lon proximity
-    print(f'\nTotal before dedup: {len(cameras)}')
+def merge_provider_results(
+        existing: list[dict],
+        results: list[ProviderResult],
+        retention_ratio: float = PROVIDER_RETENTION_RATIO) -> list[dict]:
+    accepted_results = []
+    for result in results:
+        if not result.succeeded:
+            continue
+        previous_count = sum(1 for camera in existing if camera.get('provider') == result.name)
+        minimum_count = int(previous_count * retention_ratio + 0.999999)
+        if previous_count and len(result.cameras) < minimum_count:
+            stats[result.name] = (
+                f'ERROR: incomplete snapshot ({len(result.cameras)} < {minimum_count}); '
+                'retaining last-known-good rows'
+            )
+            continue
+        accepted_results.append(result)
+    successful = {result.name for result in accepted_results}
+    retained = [camera for camera in existing if camera.get('provider') not in successful]
+    fresh = [camera for result in accepted_results for camera in result.cameras]
+    merged = []
     seen = set()
-    unique = []
-    for cam in cameras:
-        key = (round(cam['lat'], 4), round(cam['lon'], 4))
-        if key not in seen:
-            seen.add(key)
-            unique.append(cam)
+    for camera in [*fresh, *retained]:
+        identity = feed_identity(camera)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        merged.append(camera)
+    for index, camera in enumerate(merged, 1):
+        camera['id'] = index
+    return merged
 
-    # Re-assign IDs
-    for i, cam in enumerate(unique):
-        cam['id'] = i + 1
 
-    print(f'Total after dedup: {len(unique)}')
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--rollback', action='store_true', help='restore the last-known-good camera dataset')
+    return parser.parse_args(argv)
 
-    # Write output
-    with open(OUTPUT, 'w', encoding='utf-8') as f:
-        json.dump(unique, f, ensure_ascii=True)
 
-    print(f'\nWrote {len(unique)} cameras to {OUTPUT}')
+def main(argv=None):
+    args = parse_args(argv)
+    if args.rollback:
+        summary = restore_camera_data(OUTPUT)
+        print(f'Restored schema v{summary.schema_version} dataset with {summary.total} cameras')
+        return 0
+
+    print('StormScope Camera Data Fetcher')
+    print('=' * 50)
+    results = [run_fetcher(name, fetcher) for name, fetcher in provider_fetchers()]
+    if not any(result.succeeded for result in results):
+        raise RuntimeError('all providers failed; dataset was not changed')
+
+    def commit(current):
+        merged = merge_provider_results(current, results)
+        source_counts = {}
+        for camera in current:
+            source = camera['source']
+            source_counts[source] = source_counts.get(source, 0) + 1
+        minimum_sources = {
+            source: count if source in {'earthcam', 'livebeaches', 'youtube'} else int(count * 0.9)
+            for source, count in source_counts.items()
+        }
+        validate_camera_data(
+            merged,
+            minimum_total=int(len(current) * 0.9),
+            minimum_source_counts=minimum_sources,
+        )
+        current[:] = merged
+        return merged
+
+    merged, summary = update_camera_data(OUTPUT, commit)
+
+    print(f'\nWrote {summary.total} schema v{summary.schema_version} cameras to {OUTPUT}')
     print(f'File size: {OUTPUT.stat().st_size / 1024:.0f} KB')
 
     # Summary by state
     print('\n' + '=' * 50)
     print('Summary by state:')
     state_counts = {}
-    for cam in unique:
+    for cam in merged:
         s = cam.get('state', 'Unknown')
         state_counts[s] = state_counts.get(s, 0) + 1
     for s in sorted(state_counts.keys()):
         print(f'  {s}: {state_counts[s]}')
-    print(f'\n  TOTAL: {len(unique)} cameras across {len(state_counts)} states')
+    print(f'\n  TOTAL: {len(merged)} cameras across {len(state_counts)} states')
+    return 0
 
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())

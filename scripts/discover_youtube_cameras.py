@@ -21,7 +21,6 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
-import os
 import re
 import subprocess
 import sys
@@ -30,6 +29,11 @@ import urllib.parse
 from collections import Counter
 from pathlib import Path
 from typing import Any, Iterable
+
+try:
+    from camera_data import atomic_write_json, load_json, update_camera_data
+except ModuleNotFoundError:  # pragma: no cover - package import during tests
+    from scripts.camera_data import atomic_write_json, load_json, update_camera_data
 
 
 try:
@@ -54,7 +58,7 @@ NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 "
-    "StormScope/0.22.0"
+    "StormScope/0.25.0"
 )
 
 US_STATES = {
@@ -807,7 +811,7 @@ def location_phrase_candidates(source: str) -> list[str]:
         "Runway|Square|Station|Village|Volcano|Yard"
     )
     candidates: list[str] = []
-    for match in re.finditer(rf"\b(Port of [A-Z][A-Za-z0-9 .'&/-]{{2,45}})", source):
+    for match in re.finditer(r"\b(Port of [A-Z][A-Za-z0-9 .'&/-]{2,45})", source):
         candidates.append(clean_for_location(match.group(1)))
     for match in re.finditer(rf"\b([A-Z][A-Za-z0-9 .'&/-]{{1,55}}\b(?:{phrase_types}))\b", source):
         phrase = clean_for_location(match.group(1))
@@ -912,17 +916,11 @@ def geocode_result_matches_query(query: str, result: dict[str, Any], candidate: 
 
 
 def load_json_file(path: Path, default: Any) -> Any:
-    if not path.exists():
-        return default
-    with path.open(encoding="utf-8") as f:
-        return json.load(f)
+    return load_json(path, default)
 
 
 def save_json_file(path: Path, value: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(value, f, indent=2, ensure_ascii=True)
-        f.write("\n")
+    atomic_write_json(path, value, indent=2)
 
 
 def geocode_query(query: str, cache: dict[str, Any], sleep_seconds: float) -> dict[str, Any] | None:
@@ -1046,36 +1044,35 @@ def locate_candidate(
 
 
 def append_cameras(data_file: Path, located: list[LocatedCamera], limit_add: int) -> int:
-    cameras = load_json_file(data_file, [])
-    if not isinstance(cameras, list):
-        raise RuntimeError(f"{data_file} does not contain a JSON array")
-    existing_ids = {str(cam.get("url")) for cam in cameras if cam.get("type") == "youtube"}
-    max_id = max(int(cam.get("id") or 0) for cam in cameras) if cameras else 0
-    added = 0
-    for camera in located:
-        if limit_add and added >= limit_add:
-            break
-        if camera.video_id in existing_ids:
-            continue
-        max_id += 1
-        cameras.append(
-            {
-                "id": max_id,
-                "name": camera.name,
-                "lat": camera.lat,
-                "lon": camera.lon,
-                "url": camera.video_id,
-                "type": "youtube",
-                "state": camera.state,
-                "county": camera.county,
-                "direction": "",
-                "source": "youtube",
-            }
-        )
-        existing_ids.add(camera.video_id)
-        added += 1
-    with data_file.open("w", encoding="utf-8") as f:
-        json.dump(cameras, f, ensure_ascii=True)
+    def append(cameras: list[dict[str, Any]]) -> int:
+        existing_ids = {str(cam.get("url")) for cam in cameras if cam.get("type") == "youtube"}
+        max_id = max(int(cam.get("id") or 0) for cam in cameras) if cameras else 0
+        added = 0
+        for camera in located:
+            if limit_add and added >= limit_add:
+                break
+            if camera.video_id in existing_ids:
+                continue
+            max_id += 1
+            cameras.append(
+                {
+                    "id": max_id,
+                    "name": camera.name,
+                    "lat": camera.lat,
+                    "lon": camera.lon,
+                    "url": camera.video_id,
+                    "type": "youtube",
+                    "state": camera.state,
+                    "county": camera.county,
+                    "direction": "",
+                    "source": "youtube",
+                }
+            )
+            existing_ids.add(camera.video_id)
+            added += 1
+        return added
+
+    added, _ = update_camera_data(data_file, append)
     return added
 
 

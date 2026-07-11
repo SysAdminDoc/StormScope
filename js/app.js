@@ -5,24 +5,32 @@
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var IMAGE_REFRESH_INTERVAL = 15000;
-  var EMBED_ALLOWLIST = [
-    'earthcam.com', 'nps.gov', 'livebeaches.com', 'brownrice.com',
-    'wxyz.com', 'skylinewebcams.com', 'webcamtaxi.com', 'windy.com',
-    'dot.gov', 'dot.state', '511', 'wsdot.wa.gov'
-  ];
+  var TRUSTED_EMBED_HOST_SUFFIXES = Object.freeze([
+    'earthcam.com',
+    'myearthcam.com',
+    'nps.gov',
+    'brownrice.com',
+    'abbeyroad.com',
+    'esbnyc.com'
+  ]);
+  var RAINVIEWER_API_URL = 'https://api.rainviewer.com/public/weather-maps.json';
+  var RAINVIEWER_COLOR_SCHEME = 2;
+  var RAINVIEWER_MAX_NATIVE_ZOOM = 7;
 
   var map, radarLayer, radarLayerNext, cameraCluster;
   var radarFrames = [];
-  var radarPastCount = 0;
+  var radarHost = '';
   var radarIndex = 0;
   var radarPlaying = false;
   var radarAnimTimer = null;
+  var radarAbort = null;
   var radarOpacity = 0.65;
   var radarVisible = true;
   var activeCamera = null;
   var priorFocusEl = null;
   var weatherAbort = null;
   var imageRefreshTimer = null;
+  var activeFeedCleanup = null;
   var allCameras = [];
 
   function escapeHtml(str) {
@@ -46,6 +54,7 @@
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
       subdomains: 'abcd',
+      crossOrigin: 'anonymous',
       maxZoom: 19
     }).addTo(map);
   }
@@ -53,31 +62,105 @@
   // ── RainViewer Radar ──
 
   async function initRadar() {
+    if (radarAbort) radarAbort.abort();
+    radarAbort = new AbortController();
+    setRadarPlaying(false);
+    setRadarStatus('Loading past radar…', false, true);
+
     try {
-      var resp = await fetch('https://api.rainviewer.com/public/weather-maps.json');
-      if (!resp.ok) throw new Error(resp.status);
+      var resp = await fetch(RAINVIEWER_API_URL, {
+        cache: 'no-store',
+        signal: radarAbort.signal
+      });
+      if (resp.status === 429) {
+        clearRadarDisplay();
+        setRadarStatus('Radar temporarily rate-limited.', true, true);
+        return;
+      }
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
       var data = await resp.json();
-      var past = data.radar.past || [];
-      var nowcast = data.radar.nowcast || [];
-      radarPastCount = past.length;
-      radarFrames = past.concat(nowcast);
-      if (radarFrames.length === 0) return;
+      var nextHost = getTrustedRainViewerHost(data.host);
+      var past = data.radar && Array.isArray(data.radar.past) ? data.radar.past : [];
+      var validPast = past.filter(function (frame) {
+        return frame && Number.isFinite(frame.time) &&
+          typeof frame.path === 'string' && frame.path.indexOf('/v2/radar/') === 0;
+      });
+
+      if (!nextHost) throw new Error('Untrusted radar tile host');
+      if (validPast.length === 0) {
+        clearRadarDisplay();
+        setRadarStatus('No recent past radar frames are available.', true, true);
+        return;
+      }
+
+      radarHost = nextHost;
+      radarFrames = validPast;
       radarIndex = radarFrames.length - 1;
       showRadarFrame(radarIndex);
       preloadRadarFrame(radarIndex > 0 ? radarIndex - 1 : radarFrames.length - 1);
       updateRadarTimeDisplay();
     } catch (e) {
-      document.getElementById('radar-time').textContent = 'Radar unavailable';
+      if (e.name !== 'AbortError') {
+        clearRadarDisplay();
+        setRadarStatus('Past radar is unavailable.', true, true);
+      }
+    }
+  }
+
+  function clearRadarDisplay() {
+    radarFrames = [];
+    radarHost = '';
+    radarIndex = 0;
+    setRadarPlaying(false);
+    showRadarFrame(-1);
+    if (radarLayerNext) {
+      map.removeLayer(radarLayerNext);
+      radarLayerNext = null;
+    }
+  }
+
+  function getTrustedRainViewerHost(value) {
+    try {
+      var parsed = new URL(value);
+      var hostname = parsed.hostname.toLowerCase();
+      if (parsed.protocol !== 'https:' || !hostMatchesSuffix(hostname, 'rainviewer.com')) return '';
+      return parsed.origin;
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function setRadarStatus(message, canRetry, disabled) {
+    document.getElementById('radar-time').textContent = message;
+    document.getElementById('radar-retry').classList.toggle('hidden', !canRetry);
+    var controls = ['radar-prev', 'radar-play', 'radar-next'];
+    for (var i = 0; i < controls.length; i++) {
+      document.getElementById(controls[i]).disabled = !!disabled;
     }
   }
 
   function createRadarTileLayer(index) {
     var frame = radarFrames[index];
-    if (!frame) return null;
-    return L.tileLayer(
-      'https://tilecache.rainviewer.com' + frame.path + '/256/{z}/{x}/{y}/6/1_1.png',
-      { opacity: radarOpacity, zIndex: 400 }
+    if (!frame || !radarHost) return null;
+    var layer = L.tileLayer(
+      radarHost + frame.path + '/256/{z}/{x}/{y}/' + RAINVIEWER_COLOR_SCHEME + '/1_1.png',
+      {
+        opacity: radarOpacity,
+        zIndex: 400,
+        maxNativeZoom: RAINVIEWER_MAX_NATIVE_ZOOM,
+        maxZoom: 18,
+        crossOrigin: 'anonymous',
+        attribution: 'Radar: <a href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer">RainViewer</a>'
+      }
     );
+    var tileErrors = 0;
+    layer.on('tileerror', function () {
+      tileErrors += 1;
+      if (tileErrors < 3 || radarLayer !== layer) return;
+      clearRadarDisplay();
+      setRadarStatus('Radar tiles are unavailable.', true, true);
+    });
+    return layer;
   }
 
   function preloadRadarFrame(index) {
@@ -113,8 +196,7 @@
       hour12: true,
       timeZoneName: 'short'
     });
-    var label = radarIndex >= radarPastCount ? 'Forecast' : 'Past';
-    document.getElementById('radar-time').textContent = timeStr + ' • ' + label;
+    setRadarStatus(timeStr + ' • Past radar', false, false);
   }
 
   function stepRadar(delta) {
@@ -298,8 +380,6 @@
 
   function closeCameraModal() {
     activeCamera = null;
-    clearInterval(imageRefreshTimer);
-    imageRefreshTimer = null;
     if (weatherAbort) {
       weatherAbort.abort();
       weatherAbort = null;
@@ -308,21 +388,10 @@
     document.removeEventListener('keydown', trapFocus);
 
     var feedEl = document.getElementById('modal-feed');
-    var video = feedEl.querySelector('video');
-    if (video) {
-      video.pause();
-      if (video._hls) {
-        video._hls.destroy();
-      }
-      video.src = '';
-    }
-    var iframe = feedEl.querySelector('iframe');
-    if (iframe) {
-      iframe.src = '';
-    }
+    destroyActiveFeed(feedEl);
 
     document.getElementById('camera-modal').classList.add('hidden');
-    feedEl.innerHTML = '';
+    feedEl.replaceChildren();
 
     if (priorFocusEl && priorFocusEl.focus) {
       priorFocusEl.focus();
@@ -331,7 +400,7 @@
   }
 
   function loadCameraFeed(cam, container) {
-    clearInterval(imageRefreshTimer);
+    destroyActiveFeed(container);
 
     if (cam.type === 'youtube') {
       loadYouTubeFeed(cam, container);
@@ -346,15 +415,121 @@
     }
   }
 
+  function destroyActiveFeed(container) {
+    clearInterval(imageRefreshTimer);
+    imageRefreshTimer = null;
+
+    var cleanup = activeFeedCleanup;
+    activeFeedCleanup = null;
+    if (cleanup) cleanup();
+
+    if (!container) return;
+    var orphanedVideos = container.querySelectorAll('video');
+    for (var i = 0; i < orphanedVideos.length; i++) {
+      orphanedVideos[i].pause();
+      orphanedVideos[i].removeAttribute('src');
+      orphanedVideos[i].load();
+    }
+    var orphanedFrames = container.querySelectorAll('iframe');
+    for (var j = 0; j < orphanedFrames.length; j++) {
+      orphanedFrames[j].src = 'about:blank';
+    }
+  }
+
+  function renderFeedError(cam, container, message) {
+    if (activeCamera !== cam) return;
+    destroyActiveFeed(container);
+
+    var error = document.createElement('div');
+    error.className = 'feed-error';
+    error.setAttribute('role', 'alert');
+
+    var text = document.createElement('p');
+    text.textContent = message;
+    error.appendChild(text);
+
+    var retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'feed-retry-btn';
+    retry.textContent = 'Retry feed';
+    retry.addEventListener('click', function () {
+      if (activeCamera !== cam) return;
+      var loading = document.createElement('div');
+      loading.className = 'feed-loading';
+      loading.textContent = 'Retrying camera feed…';
+      container.replaceChildren(loading);
+      loadCameraFeed(cam, container);
+    });
+    error.appendChild(retry);
+
+    var source = document.createElement('a');
+    source.className = 'feed-source-link';
+    source.href = cam.type === 'youtube'
+      ? 'https://www.youtube.com/watch?v=' + encodeURIComponent(cam.url)
+      : cam.url;
+    source.target = '_blank';
+    source.rel = 'noopener noreferrer';
+    source.textContent = 'Open source';
+    error.appendChild(source);
+    container.replaceChildren(error);
+  }
+
+  function appendFrameFallback(cam, container, iframe, sourceUrl) {
+    var actions = document.createElement('div');
+    actions.className = 'feed-frame-actions';
+
+    var retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'feed-retry-btn';
+    retry.textContent = 'Reload feed';
+    retry.addEventListener('click', function () {
+      if (activeCamera !== cam) return;
+      destroyActiveFeed(container);
+      loadCameraFeed(cam, container);
+    });
+
+    var source = document.createElement('a');
+    source.className = 'feed-source-link';
+    source.href = sourceUrl;
+    source.target = '_blank';
+    source.rel = 'noopener noreferrer';
+    source.textContent = 'Open source';
+    actions.appendChild(retry);
+    actions.appendChild(source);
+    container.appendChild(actions);
+
+    var timeout = setTimeout(function () {
+      if (activeCamera === cam) {
+        renderFeedError(cam, container, 'The embedded feed did not finish loading.');
+      }
+    }, 12000);
+    iframe.addEventListener('load', function () { clearTimeout(timeout); }, { once: true });
+    return function () { clearTimeout(timeout); };
+  }
+
   function loadHLSFeed(cam, container) {
     var video = document.createElement('video');
     video.autoplay = true;
     video.muted = true;
     video.playsInline = true;
     video.controls = true;
+    var hls = null;
+    var destroyed = false;
+
+    activeFeedCleanup = function () {
+      if (destroyed) return;
+      destroyed = true;
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+      if (hls) {
+        hls.destroy();
+        hls = null;
+      }
+    };
 
     if (typeof Hls !== 'undefined' && Hls.isSupported()) {
-      var hls = new Hls({
+      hls = new Hls({
         enableWorker: true,
         lowLatencyMode: true,
         maxBufferLength: 10,
@@ -364,19 +539,20 @@
       hls.attachMedia(video);
       hls.on(Hls.Events.ERROR, function (event, data) {
         if (data.fatal) {
-          container.innerHTML = '<div class="feed-error">Stream unavailable. The camera may be offline or blocked by CORS.</div>';
+          renderFeedError(cam, container, 'Stream unavailable. The camera may be offline or blocked by CORS.');
         }
       });
-      video._hls = hls;
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = cam.url;
+      video.addEventListener('error', function () {
+        renderFeedError(cam, container, 'Stream unavailable. The camera may be offline or blocked by CORS.');
+      }, { once: true });
     } else {
-      container.innerHTML = '<div class="feed-error">HLS not supported in this browser.</div>';
+      renderFeedError(cam, container, 'HLS playback is not supported in this browser.');
       return;
     }
 
-    container.innerHTML = '';
-    container.appendChild(video);
+    container.replaceChildren(video);
     appendLiveIndicator(container, 'Live stream');
   }
 
@@ -387,35 +563,50 @@
 
     img.onerror = function () {
       if (activeCamera === cam) {
-        container.innerHTML = '<div class="feed-error">Camera feed unavailable. The camera may be offline.</div>';
+        renderFeedError(cam, container, 'Camera feed unavailable. The camera may be offline.');
       }
     };
 
-    container.innerHTML = '';
-    container.appendChild(img);
+    activeFeedCleanup = function () {
+      img.onerror = null;
+      img.src = '';
+    };
+    container.replaceChildren(img);
     appendLiveIndicator(container, 'Live MJPEG stream');
   }
 
   function loadYouTubeFeed(cam, container) {
     var iframe = document.createElement('iframe');
-    iframe.src = 'https://www.youtube.com/embed/' + encodeURIComponent(cam.url) + '?autoplay=1&mute=1&playsinline=1';
+    var sourceUrl = 'https://www.youtube.com/watch?v=' + encodeURIComponent(cam.url);
+    iframe.src = 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(cam.url) + '?autoplay=1&mute=1&playsinline=1';
     iframe.width = '100%';
     iframe.height = '100%';
     iframe.style.cssText = 'min-height:400px;border:none;';
     iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
     iframe.allowFullscreen = true;
     iframe.title = cam.name;
+    iframe.referrerPolicy = 'no-referrer';
 
-    container.innerHTML = '';
-    container.appendChild(iframe);
+    container.replaceChildren(iframe);
+    var clearLoadTimeout = appendFrameFallback(cam, container, iframe, sourceUrl);
+    activeFeedCleanup = function () {
+      clearLoadTimeout();
+      iframe.src = 'about:blank';
+    };
     appendLiveIndicator(container, 'YouTube live stream');
+  }
+
+  function hostMatchesSuffix(hostname, suffix) {
+    return hostname === suffix || hostname.endsWith('.' + suffix);
   }
 
   function isAllowedEmbedUrl(url) {
     try {
-      var hostname = new URL(url).hostname.toLowerCase();
-      for (var i = 0; i < EMBED_ALLOWLIST.length; i++) {
-        if (hostname.indexOf(EMBED_ALLOWLIST[i]) !== -1) return true;
+      var parsed = new URL(url);
+      var hostname = parsed.hostname.toLowerCase();
+      if (parsed.protocol !== 'https:') return false;
+      for (var i = 0; i < TRUSTED_EMBED_HOST_SUFFIXES.length; i++) {
+        if (hostMatchesSuffix(hostname, TRUSTED_EMBED_HOST_SUFFIXES[i])) return true;
       }
     } catch (e) {
       return false;
@@ -425,7 +616,7 @@
 
   function loadEmbedFeed(cam, container) {
     if (!isAllowedEmbedUrl(cam.url)) {
-      container.innerHTML = '<div class="feed-error">This embed source is not recognized.</div>';
+      renderFeedError(cam, container, 'This embed source is not trusted.');
       return;
     }
 
@@ -437,17 +628,23 @@
     iframe.allow = 'autoplay; encrypted-media';
     iframe.allowFullscreen = true;
     iframe.title = cam.name;
+    iframe.referrerPolicy = 'no-referrer';
     iframe.setAttribute('loading', 'lazy');
     iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups');
 
     iframe.onerror = function () {
       if (activeCamera === cam) {
-        container.innerHTML = '<div class="feed-error">Embed unavailable. The camera page may be offline.</div>';
+        renderFeedError(cam, container, 'Embed unavailable. The camera page may be offline.');
       }
     };
 
-    container.innerHTML = '';
-    container.appendChild(iframe);
+    container.replaceChildren(iframe);
+    var clearLoadTimeout = appendFrameFallback(cam, container, iframe, cam.url);
+    activeFeedCleanup = function () {
+      clearLoadTimeout();
+      iframe.onerror = null;
+      iframe.src = 'about:blank';
+    };
   }
 
   function loadImageFeed(cam, container) {
@@ -460,8 +657,7 @@
 
     img.onerror = function () {
       if (activeCamera === cam) {
-        container.innerHTML = '<div class="feed-error">Camera image unavailable. The camera may be offline.</div>';
-        clearInterval(imageRefreshTimer);
+        renderFeedError(cam, container, 'Camera image unavailable. The camera may be offline.');
       }
     };
 
@@ -471,8 +667,12 @@
     };
 
     setImageSrc();
-    container.innerHTML = '';
-    container.appendChild(img);
+    activeFeedCleanup = function () {
+      img.onload = null;
+      img.onerror = null;
+      img.src = '';
+    };
+    container.replaceChildren(img);
     appendLiveIndicator(container, 'Auto-refreshes every 15s');
 
     imageRefreshTimer = setInterval(setImageSrc, IMAGE_REFRESH_INTERVAL);
@@ -526,7 +726,7 @@
   async function fetchWeatherNWS(lat, lon, cam, signal, weatherLoading, weatherData) {
     try {
       var pointResp = await fetch('https://api.weather.gov/points/' + lat.toFixed(4) + ',' + lon.toFixed(4), {
-        headers: { 'Accept': 'application/geo+json', 'User-Agent': 'StormScope/1.0' },
+        headers: { 'Accept': 'application/geo+json' },
         signal: signal
       });
       if (!pointResp.ok) throw new Error('NWS point lookup failed');
@@ -535,7 +735,7 @@
       if (!forecastUrl) throw new Error('No forecast URL');
 
       var fcResp = await fetch(forecastUrl, {
-        headers: { 'Accept': 'application/geo+json', 'User-Agent': 'StormScope/1.0' },
+        headers: { 'Accept': 'application/geo+json' },
         signal: signal
       });
       if (!fcResp.ok) throw new Error('NWS forecast failed');
@@ -645,6 +845,7 @@
     document.getElementById('radar-prev').addEventListener('click', function () { stepRadar(-1); });
     document.getElementById('radar-next').addEventListener('click', function () { stepRadar(1); });
     document.getElementById('radar-play').addEventListener('click', function () { setRadarPlaying(!radarPlaying); });
+    document.getElementById('radar-retry').addEventListener('click', initRadar);
 
     document.getElementById('modal-close').addEventListener('click', closeCameraModal);
     document.querySelector('.modal-backdrop').addEventListener('click', closeCameraModal);
@@ -661,12 +862,82 @@
     });
   }
 
+  function registerServiceWorker() {
+    var status = document.getElementById('cache-status');
+    var clearButton = document.getElementById('clear-cache');
+    if (!('serviceWorker' in navigator) || location.protocol.indexOf('http') !== 0) {
+      status.textContent = 'Offline cache requires HTTP or HTTPS.';
+      return;
+    }
+
+    function formatBytes(bytes) {
+      if (!bytes) return '0 MB';
+      return (bytes / (1024 * 1024)).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1) + ' MB';
+    }
+
+    function setCacheError(message) {
+      status.textContent = message;
+      status.classList.add('error');
+    }
+
+    function requestWorker(registration, type) {
+      var worker = navigator.serviceWorker.controller || registration.active;
+      if (!worker) return Promise.reject(new Error('Offline cache is not active yet.'));
+      return new Promise(function (resolve, reject) {
+        var channel = new MessageChannel();
+        var timeout = setTimeout(function () { reject(new Error('Offline cache did not respond.')); }, 4000);
+        channel.port1.onmessage = function (event) {
+          clearTimeout(timeout);
+          resolve(event.data || {});
+        };
+        worker.postMessage({ type: type }, [channel.port2]);
+      });
+    }
+
+    function refreshUsage(registration) {
+      return requestWorker(registration, 'STORMSCOPE_GET_CACHE_USAGE').then(function (usage) {
+        status.classList.remove('error');
+        status.textContent = 'Offline cache: ' + formatBytes(usage.bytes) + ' in ' + (usage.entries || 0) + ' items';
+        clearButton.disabled = false;
+      });
+    }
+
+    navigator.serviceWorker.addEventListener('message', function (event) {
+      if (!event.data || event.data.type !== 'STORMSCOPE_CACHE_ERROR') return;
+      setCacheError(event.data.reason === 'quota-exceeded'
+        ? 'Offline cache is full. Clear cached data and retry.'
+        : 'Offline cache could not save new data.');
+    });
+
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').then(function (registration) {
+        return navigator.serviceWorker.ready.then(function () {
+          clearButton.addEventListener('click', function () {
+            clearButton.disabled = true;
+            status.classList.remove('error');
+            status.textContent = 'Clearing cached data…';
+            requestWorker(registration, 'STORMSCOPE_CLEAR_CACHES').then(function () {
+              return refreshUsage(registration);
+            }).catch(function (error) {
+              setCacheError(error.message);
+              clearButton.disabled = false;
+            });
+          });
+          return refreshUsage(registration);
+        });
+      }).catch(function (error) {
+        setCacheError('Offline cache unavailable: ' + error.message);
+      });
+    });
+  }
+
   // ── Boot ──
 
   initMap();
   bindUI();
   initRadar();
   loadCameras();
+  registerServiceWorker();
 
   window._stormscope = { getMap: function () { return map; } };
 })();

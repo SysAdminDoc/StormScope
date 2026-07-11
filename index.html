@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://api.rainviewer.com https://tilecache.rainviewer.com https://api.weather.gov https://api.open-meteo.com https://cdn3.wowza.com https://s2.ozarkstrafficoneview.com https://sfs01-traveler.modot.mo.gov https://sfs02-traveler.modot.mo.gov https://sfs03-traveler.modot.mo.gov https://sfs04-traveler.modot.mo.gov https://sfs07-traveler.modot.mo.gov https://wzmedia.dot.ca.gov; media-src 'self' blob: https://cdn3.wowza.com https://s2.ozarkstrafficoneview.com https://sfs01-traveler.modot.mo.gov https://sfs02-traveler.modot.mo.gov https://sfs03-traveler.modot.mo.gov https://sfs04-traveler.modot.mo.gov https://sfs07-traveler.modot.mo.gov https://wzmedia.dot.ca.gov; frame-src https://www.youtube-nocookie.com https://earthcam.com https://*.earthcam.com https://myearthcam.com https://*.myearthcam.com https://nps.gov https://*.nps.gov https://brownrice.com https://*.brownrice.com https://abbeyroad.com https://*.abbeyroad.com https://esbnyc.com https://*.esbnyc.com; object-src 'none'; base-uri 'none'; form-action 'none'; manifest-src 'self'; worker-src 'self' blob:">
   <title>StormScope — Live Weather Radar & Webcams</title>
   <meta name="description" content="Real-time weather radar with live traffic and weather cameras. See the weather through webcams across America and the world.">
   <meta name="theme-color" content="#0a0a14">
@@ -54,9 +55,13 @@
       <label for="radar-opacity">Radar Opacity</label>
       <input type="range" id="radar-opacity" min="0" max="100" value="65" aria-label="Radar opacity">
     </div>
+    <div class="cache-panel">
+      <div id="cache-status" class="cache-status" role="status" aria-live="polite">Checking offline cache…</div>
+      <button id="clear-cache" class="cache-clear" type="button" disabled>Clear cached data</button>
+    </div>
   </div>
 
-  <div id="radar-controls" role="toolbar" aria-label="Radar animation controls">
+  <div id="radar-controls" role="toolbar" aria-label="Past radar animation controls">
     <button id="radar-prev" class="radar-btn" title="Previous frame" aria-label="Previous radar frame">
       <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="4" x2="5" y2="20" stroke="currentColor" stroke-width="2"/></svg>
     </button>
@@ -68,6 +73,8 @@
       <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="4" x2="19" y2="20" stroke="currentColor" stroke-width="2"/></svg>
     </button>
     <span id="radar-time" role="status" aria-live="polite">Loading radar…</span>
+    <button id="radar-retry" class="radar-retry hidden" type="button">Retry</button>
+    <a class="radar-source" href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer">RainViewer</a>
   </div>
 
   <div id="camera-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-cam-name">
@@ -98,14 +105,5 @@
   <script src="vendor/markercluster/leaflet.markercluster.js"></script>
   <script src="vendor/hls/hls.min.js"></script>
   <script src="js/app.js"></script>
-  <script>
-    // Register the service worker for offline shell + radar/tile/data caching.
-    // Skipped on file:// where service workers are unavailable.
-    if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
-      window.addEventListener('load', function () {
-        navigator.serviceWorker.register('sw.js').catch(function () { /* offline caching unavailable */ });
-      });
-    }
-  </script>
 </body>
 </html>

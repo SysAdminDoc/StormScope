@@ -23,7 +23,6 @@ from __future__ import annotations
 import argparse
 import csv
 import io
-import json
 import re
 import subprocess
 import sys
@@ -33,6 +32,11 @@ from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+try:
+    from camera_data import atomic_write_json, load_json, update_camera_data, update_json
+except ModuleNotFoundError:  # pragma: no cover - package import during tests
+    from scripts.camera_data import atomic_write_json, load_json, update_camera_data, update_json
 
 
 try:
@@ -57,7 +61,7 @@ CENSUS_GAZETTEER_URL = (
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 "
-    "StormScope/0.22.0"
+    "StormScope/0.25.0"
 )
 
 STATE_NAMES = {
@@ -360,17 +364,28 @@ def run_curl(args: list[str], *, data: bytes | None = None, timeout: int = 30) -
 
 
 def load_json_file(path: Path, default: Any) -> Any:
-    if not path.exists():
-        return default
-    with path.open(encoding="utf-8") as f:
-        return json.load(f)
+    return load_json(path, default)
 
 
 def save_json_file(path: Path, value: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(value, f, ensure_ascii=True, indent=2)
-        f.write("\n")
+    atomic_write_json(path, value, indent=2)
+
+
+def update_checkpoint_file(path: Path, processed: set[str], accepted: set[str]) -> dict[str, list[str]]:
+    default = {"processed_geoids": [], "accepted_video_ids": []}
+
+    def merge(current: Any) -> dict[str, list[str]]:
+        if not isinstance(current, dict):
+            raise RuntimeError(f"{path} does not contain a checkpoint object")
+        disk_processed = current.get("processed_geoids", [])
+        disk_accepted = current.get("accepted_video_ids", [])
+        if not isinstance(disk_processed, list) or not isinstance(disk_accepted, list):
+            raise RuntimeError(f"{path} contains invalid checkpoint lists")
+        current["processed_geoids"] = sorted({str(value) for value in disk_processed} | processed)
+        current["accepted_video_ids"] = sorted({str(value) for value in disk_accepted} | accepted)
+        return current
+
+    return update_json(path, default, merge, indent=2)
 
 
 def clean_place_name(value: str) -> str:
@@ -638,38 +653,37 @@ def select_city_batch(
     return pending
 
 
-def append_streams(data_file: Path, streams: list[CityLocatedStream], limit_add: int) -> int:
-    cameras = load_json_file(data_file, [])
-    if not isinstance(cameras, list):
-        raise RuntimeError(f"{data_file} does not contain a JSON array")
-    existing_youtube = {str(cam.get("url") or "") for cam in cameras if cam.get("type") == "youtube"}
-    max_id = max(int(cam.get("id") or 0) for cam in cameras) if cameras else 0
-    added = 0
-    for stream in streams:
-        if limit_add and added >= limit_add:
-            break
-        if stream.video_id in existing_youtube:
-            continue
-        max_id += 1
-        cameras.append(
-            {
-                "id": max_id,
-                "name": stream.name,
-                "lat": stream.lat,
-                "lon": stream.lon,
-                "url": stream.video_id,
-                "type": "youtube",
-                "state": stream.state,
-                "county": stream.county,
-                "direction": "",
-                "source": "youtube",
-            }
-        )
-        existing_youtube.add(stream.video_id)
-        added += 1
-    with data_file.open("w", encoding="utf-8") as f:
-        json.dump(cameras, f, ensure_ascii=True)
-    return added
+def append_streams(data_file: Path, streams: list[CityLocatedStream], limit_add: int) -> tuple[int, set[str]]:
+    def append(cameras: list[dict[str, Any]]) -> tuple[int, set[str]]:
+        existing_youtube = {str(cam.get("url") or "") for cam in cameras if cam.get("type") == "youtube"}
+        max_id = max(int(cam.get("id") or 0) for cam in cameras) if cameras else 0
+        committed: set[str] = set()
+        for stream in streams:
+            if limit_add and len(committed) >= limit_add:
+                break
+            if stream.video_id in existing_youtube:
+                continue
+            max_id += 1
+            cameras.append(
+                {
+                    "id": max_id,
+                    "name": stream.name,
+                    "lat": stream.lat,
+                    "lon": stream.lon,
+                    "url": stream.video_id,
+                    "type": "youtube",
+                    "state": stream.state,
+                    "county": stream.county,
+                    "direction": "",
+                    "source": "youtube",
+                }
+            )
+            existing_youtube.add(stream.video_id)
+            committed.add(stream.video_id)
+        return len(committed), committed
+
+    committed, _ = update_camera_data(data_file, append)
+    return committed
 
 
 def stream_to_report(stream: CityLocatedStream) -> dict[str, Any]:
@@ -767,19 +781,14 @@ def search_city_batch(args: argparse.Namespace) -> int:
             completed_geoids.append(city.geoid)
         status = "retryable_error" if city_had_error else "complete"
         print(f"[{city_index}/{len(batch)}] {city.label}: candidates={city_new} status={status}")
-        if args.resume and (city_index % args.checkpoint_every == 0):
-            processed_geoids.update(completed_geoids)
-            save_json_file(
-                args.checkpoint,
-                {"processed_geoids": sorted(processed_geoids), "accepted_video_ids": sorted(accepted_video_ids)},
-            )
-
     live_streams: list[CityLocatedStream] = []
     live_rejected: list[dict[str, Any]] = []
+    verification_retryable_geoids: set[str] = set()
     for index, (candidate, city, query) in enumerate(raw_candidates.values(), 1):
         try:
             verified = ytd.verify_live(candidate, args.verify_sleep)
         except Exception as exc:
+            verification_retryable_geoids.add(city.geoid)
             live_rejected.append(
                 {
                     "video_id": candidate.video_id,
@@ -821,14 +830,33 @@ def search_city_batch(args: argparse.Namespace) -> int:
             print(f"Verified {index}/{len(raw_candidates)}; live={len(live_streams)}")
 
     live_streams.sort(key=lambda stream: (-stream.score, stream.state, stream.county, stream.name))
-    added = append_streams(args.data, live_streams, args.limit_add) if args.apply else 0
-    accepted_video_ids.update(stream.video_id for stream in live_streams)
-    if args.resume:
-        processed_geoids.update(completed_geoids)
-        save_json_file(
+    added = 0
+    committed_video_ids: set[str] = set()
+    if args.apply:
+        added, committed_video_ids = append_streams(args.data, live_streams, args.limit_add)
+    checkpointed_geoids: set[str] = set()
+    if args.apply and args.resume:
+        accepted_video_ids.update(committed_video_ids)
+        live_by_geoid: dict[str, set[str]] = {}
+        for stream in live_streams:
+            candidate_entry = raw_candidates.get(stream.video_id)
+            if candidate_entry is not None:
+                live_by_geoid.setdefault(candidate_entry[1].geoid, set()).add(stream.video_id)
+        persisted_video_ids = existing_youtube | committed_video_ids
+        checkpointed_geoids = {
+            geoid
+            for geoid in completed_geoids
+            if geoid not in verification_retryable_geoids
+            and live_by_geoid.get(geoid, set()).issubset(persisted_video_ids)
+        }
+        processed_geoids.update(checkpointed_geoids)
+        checkpoint_state = update_checkpoint_file(
             args.checkpoint,
-            {"processed_geoids": sorted(processed_geoids), "accepted_video_ids": sorted(accepted_video_ids)},
+            processed_geoids,
+            accepted_video_ids,
         )
+        processed_geoids = set(checkpoint_state["processed_geoids"])
+        accepted_video_ids = set(checkpoint_state["accepted_video_ids"])
 
     validation = validate_dataset(args.data)
     report = {
@@ -840,7 +868,8 @@ def search_city_batch(args: argparse.Namespace) -> int:
             "batch_cities": len(batch),
             "queries_per_city": len(templates),
             "completed_cities": len(completed_geoids),
-            "retryable_error_cities": len(set(retryable_geoids)),
+            "checkpointed_cities": len(checkpointed_geoids),
+            "retryable_error_cities": len(set(retryable_geoids) | verification_retryable_geoids),
             "search_errors": len(search_errors),
             "content_rejected": len(content_rejected),
             "candidate_count": len(raw_candidates),
@@ -875,7 +904,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--scope", choices=["city", "legal", "all"], default="city")
     parser.add_argument("--build-city-list", action="store_true", help="download Census Gazetteer and write city list files")
     parser.add_argument("--apply", action="store_true", help="append accepted streams to the dataset")
-    parser.add_argument("--resume", action="store_true", help="read/write checkpoint of processed city GEOIDs")
+    parser.add_argument("--resume", action="store_true", help="read checkpoint; write it only after applied dataset commits")
     parser.add_argument("--offset", type=int, default=0, help="skip this many unprocessed cities before searching")
     parser.add_argument("--limit-cities", type=int, default=0, help="maximum cities to search; 0 means all pending")
     parser.add_argument("--limit-add", type=int, default=0, help="maximum cameras to append; 0 means all accepted")

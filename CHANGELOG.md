@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.25.0 - 2026-07-11
+
+### Reliability and security
+- Made every camera-data writer use one schema-validated, exclusively locked, fsynced atomic replacement path with backup and rollback support.
+- Made provider refreshes non-destructive: outages, partial Caltrans runs, and truncated snapshots retain last-known-good rows; concurrent curated additions survive; global and per-provider coverage gates run before replacement.
+- Made dry-run discovery byte-preserving, verification errors retryable, and applied checkpoint updates atomic, union-preserving, and limited to cities and stream IDs actually committed.
+- Repaired the committed camera corpus by removing inactive, malformed, and duplicate feeds; upgrading safe HTTP URLs; normalizing IDs; and validating all 24,204 records.
+- Restricted service-worker cleanup to StormScope caches, retained runtime data across shell upgrades, awaited cache writes and trims, rejected opaque/lookalike tile caching, surfaced quota failures, and added shell-preserving usage/clear controls to the layers panel.
+- Hardened feed embeds with an exact-host allowlist, sandboxing, privacy-enhanced YouTube URLs, deterministic HLS/media cleanup, timeout/retry handling, and an always-available source fallback.
+
+### Radar and quality
+- Aligned RainViewer playback with its current public contract: API-provided host, Universal Blue scheme, native zoom 7, past-only frames, visible attribution, and actionable empty/rate-limit/index/tile error states that never leave stale radar displayed as current.
+- Added a strict content security policy covering the app's verified data, media, tile, and frame providers.
+- Added one local regression command, `python scripts/check.py`, covering Python tests, lint, JavaScript syntax/contracts, service-worker behavior, full camera schema validation, and a real headless desktop/mobile/modal/offline/cache/accessibility smoke.
+
 ## v0.24.0 - 2026-07-11
 
 ### Features

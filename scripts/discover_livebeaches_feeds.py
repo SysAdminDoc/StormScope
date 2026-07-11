@@ -28,6 +28,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+try:
+    from camera_data import atomic_write_json, load_json as load_json_shared, update_camera_data
+except ModuleNotFoundError:  # pragma: no cover - package import during tests
+    from scripts.camera_data import atomic_write_json, load_json as load_json_shared, update_camera_data
+
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -46,7 +51,7 @@ NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 "
-    "StormScope/0.22.0"
+    "StormScope/0.25.0"
 )
 
 DEFAULT_CATEGORIES = [
@@ -174,17 +179,11 @@ def run_curl(args: list[str], *, timeout: int = 35, check: bool = True) -> subpr
 
 
 def load_json(path: Path, default: Any) -> Any:
-    if not path.exists():
-        return default
-    with path.open(encoding="utf-8") as f:
-        return json.load(f)
+    return load_json_shared(path, default)
 
 
 def save_json(path: Path, value: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(value, f, ensure_ascii=True, indent=2)
-        f.write("\n")
+    atomic_write_json(path, value, indent=2)
 
 
 def clean_text(value: str) -> str:
@@ -441,34 +440,35 @@ def locate_candidate(candidate: PageCandidate, cache: dict[str, Any], sleep: flo
 
 
 def append_feeds(data_file: Path, feeds: list[LocatedFeed], limit_add: int) -> int:
-    cameras = load_json(data_file, [])
-    existing_urls = {str(cam.get("url") or "") for cam in cameras}
-    max_id = max(int(cam.get("id") or 0) for cam in cameras) if cameras else 0
-    added = 0
-    for feed in feeds:
-        if limit_add and added >= limit_add:
-            break
-        if feed.url in existing_urls:
-            continue
-        max_id += 1
-        cameras.append(
-            {
-                "id": max_id,
-                "name": feed.name,
-                "lat": feed.lat,
-                "lon": feed.lon,
-                "url": feed.url,
-                "type": feed.feed_type,
-                "state": feed.state,
-                "county": feed.county,
-                "direction": "",
-                "source": "livebeaches" if feed.feed_type == "embed" else "youtube",
-            }
-        )
-        existing_urls.add(feed.url)
-        added += 1
-    with data_file.open("w", encoding="utf-8") as f:
-        json.dump(cameras, f, ensure_ascii=True)
+    def append(cameras: list[dict[str, Any]]) -> int:
+        existing_urls = {str(cam.get("url") or "") for cam in cameras}
+        max_id = max(int(cam.get("id") or 0) for cam in cameras) if cameras else 0
+        added = 0
+        for feed in feeds:
+            if limit_add and added >= limit_add:
+                break
+            if feed.url in existing_urls:
+                continue
+            max_id += 1
+            cameras.append(
+                {
+                    "id": max_id,
+                    "name": feed.name,
+                    "lat": feed.lat,
+                    "lon": feed.lon,
+                    "url": feed.url,
+                    "type": feed.feed_type,
+                    "state": feed.state,
+                    "county": feed.county,
+                    "direction": "",
+                    "source": "livebeaches" if feed.feed_type == "embed" else "youtube",
+                }
+            )
+            existing_urls.add(feed.url)
+            added += 1
+        return added
+
+    added, _ = update_camera_data(data_file, append)
     return added
 
 

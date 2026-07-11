@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/SysAdminDoc/StormScope/master/data/cameras.schema.json",
+  "title": "StormScope camera dataset v1",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["id", "name", "lat", "lon", "url", "type", "source"],
+    "properties": {
+      "id": {"type": "integer", "minimum": 1},
+      "name": {"type": "string", "minLength": 1},
+      "lat": {"type": "number", "minimum": -90, "maximum": 90},
+      "lon": {"type": "number", "minimum": -180, "maximum": 180},
+      "url": {"type": "string", "minLength": 1},
+      "type": {"enum": ["embed", "hls", "image", "mjpeg", "youtube"]},
+      "source": {"enum": ["dot", "earthcam", "livebeaches", "nps", "youtube"]},
+      "state": {"type": "string"},
+      "county": {"type": "string"},
+      "direction": {"type": "string"},
+      "provider": {"type": "string", "minLength": 1},
+      "status": {"enum": ["Active", "Offline", "Unknown"]}
+    },
+    "additionalProperties": true
+  }
+}
