@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.31.0 - 2026-07-11
+
+### Vendored dependency provenance
+- Added a machine-readable inventory for Leaflet 1.9.4, Leaflet.markercluster 1.5.3, and HLS.js 1.6.16 with licenses, pinned npm tarballs, tarball hashes, every shipped-file hash, and exact third-party license texts.
+- Added a local verifier that reports versions/licenses, detects byte or license drift, queries npm for newer stable releases, queries OSV for exact-version advisories, and exits distinctly for broken integrity versus update/security attention.
+- Added deterministic, path-safe, atomic rebuilds from individually extracted hash-pinned package members; a clean scratch rebuild reproduced every checked-in byte.
+- Integrated offline vendor verification into `scripts/check.py` and added Chromium runtime assertions for Leaflet, markercluster, and HLS versions/capabilities before upgrades.
+
 ## v0.30.0 - 2026-07-11
 
 ### Bounded multi-camera monitoring

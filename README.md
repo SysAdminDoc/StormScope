@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.30.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.31.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
 [![Cameras](https://img.shields.io/badge/cameras-24%2C204-cyan)]()
@@ -78,16 +78,30 @@ Run the complete local regression gate before changing or publishing the app:
 python scripts/check.py
 ```
 
-It validates the camera corpus and deterministic shards, runs Python units, lint, JavaScript syntax/contracts and service-worker tests, and enforces a real headless desktop/mobile/modal/offline/cache/accessibility smoke. The smoke requires the first camera shard to render within 2.5 seconds on the local Chromium test profile.
+It validates the camera corpus and deterministic shards, verifies vendored dependency/license hashes, runs Python units, lint, JavaScript syntax/contracts and service-worker tests, and enforces a real headless desktop/mobile/modal/offline/cache/accessibility smoke. The smoke requires the first camera shard to render within 2.5 seconds on the local Chromium test profile.
+
+Audit exact vendored versions, licenses, newer stable releases, and OSV advisories while also exercising Leaflet 1.9.4, markercluster 1.5.3, and HLS.js 1.6.16 in Chromium:
+
+```bash
+python scripts/vendor_dependencies.py --check-updates --behavior
+```
+
+Rebuild every vendored file and third-party license from hash-pinned npm tarballs:
+
+```bash
+python scripts/vendor_dependencies.py --rebuild
+```
+
+The pinned package/tarball/file/license inventory is `vendor/dependencies.json`. Update that manifest deliberately before an upgrade; a newer version or advisory exits the audit with status 2, while any byte or license mismatch exits with status 1.
 
 ## Tech Stack
 
-- [Leaflet](https://leafletjs.com/) — Interactive map with CartoDB dark tiles
-- [Leaflet.markercluster](https://github.com/Leaflet/Leaflet.markercluster) — Camera marker clustering
+- [Leaflet 1.9.4](https://leafletjs.com/) (BSD-2-Clause) — Interactive map with CartoDB dark tiles
+- [Leaflet.markercluster 1.5.3](https://github.com/Leaflet/Leaflet.markercluster) (MIT) — Camera marker clustering
 - [RainViewer API](https://www.rainviewer.com/api.html) — Free weather radar tiles (no key)
 - [NOAA/NWS MRMS](https://mapservices.weather.noaa.gov/) — Official fallback radar imagery and history (no key)
 - [NWS API](https://www.weather.gov/documentation/services-web-api) — Free hourly weather data (no key)
-- [HLS.js](https://github.com/video-dev/hls.js/) — HLS video stream playback
+- [HLS.js 1.6.16](https://github.com/video-dev/hls.js/) (Apache-2.0) — HLS video stream playback
 - Camera data from 20+ state DOT APIs + [OpenTrafficCamMap](https://github.com/AidanWelch/OpenTrafficCamMap) (MIT) + NPS + EarthCam + LiveBeaches + verified-live YouTube streams
 
 ## Data Sources

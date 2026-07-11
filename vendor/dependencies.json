@@ -1,0 +1,59 @@
+{
+  "schema": 1,
+  "packages": [
+    {
+      "name": "leaflet",
+      "version": "1.9.4",
+      "license": "BSD-2-Clause",
+      "homepage": "https://leafletjs.com/",
+      "tarball": "https://registry.npmjs.org/leaflet/-/leaflet-1.9.4.tgz",
+      "tarball_sha256": "84c65a256e50657896f54c33bd857b6849ebe94c817803be818bf32a3dde0b77",
+      "license_file": {
+        "source": "package/LICENSE",
+        "local": "vendor/licenses/leaflet-BSD-2-Clause.txt",
+        "sha256": "bbc959aaef7488b38942e7f05cfd1244351f8bce54261951ea17dd7cf60f894b"
+      },
+      "files": [
+        { "source": "package/dist/leaflet.js", "local": "vendor/leaflet/leaflet.js", "sha256": "db49d009c841f5ca34a888c96511ae936fd9f5533e90d8b2c4d57596f4e5641a" },
+        { "source": "package/dist/leaflet.css", "local": "vendor/leaflet/leaflet.css", "sha256": "a7837102824184820dfa198d1ebcd109ff6d0ff9a2672a074b9a1b4d147d04c6" },
+        { "source": "package/dist/images/marker-icon.png", "local": "vendor/leaflet/images/marker-icon.png", "sha256": "574c3a5cca85f4114085b6841596d62f00d7c892c7b03f28cbfa301deb1dc437" },
+        { "source": "package/dist/images/marker-icon-2x.png", "local": "vendor/leaflet/images/marker-icon-2x.png", "sha256": "00179c4c1ee830d3a108412ae0d294f55776cfeb085c60129a39aa6fc4ae2528" },
+        { "source": "package/dist/images/marker-shadow.png", "local": "vendor/leaflet/images/marker-shadow.png", "sha256": "264f5c640339f042dd729062cfc04c17f8ea0f29882b538e3848ed8f10edb4da" }
+      ]
+    },
+    {
+      "name": "leaflet.markercluster",
+      "version": "1.5.3",
+      "license": "MIT",
+      "homepage": "https://github.com/Leaflet/Leaflet.markercluster",
+      "tarball": "https://registry.npmjs.org/leaflet.markercluster/-/leaflet.markercluster-1.5.3.tgz",
+      "tarball_sha256": "fc6b0b1d00b6c708ae54e43ee4a11ac345e41660e19f0a570190bb35babb1a1c",
+      "license_file": {
+        "source": "package/MIT-LICENCE.txt",
+        "local": "vendor/licenses/leaflet.markercluster-MIT.txt",
+        "sha256": "3133dacd38250bd1f524d8166cc60a016a382522e062fce143691c65bf5e4b3d"
+      },
+      "files": [
+        { "source": "package/dist/leaflet.markercluster.js", "local": "vendor/markercluster/leaflet.markercluster.js", "sha256": "1e4e1d22972a3926f48598e0caf14e3fe7049835d428a344fed4f9e3665b3508" },
+        { "source": "package/dist/MarkerCluster.css", "local": "vendor/markercluster/MarkerCluster.css", "sha256": "614dea0a98ff3f4ead74f04918f6b1d1b9ba435c25b5fc23b21a394d1e3e4d87" },
+        { "source": "package/dist/MarkerCluster.Default.css", "local": "vendor/markercluster/MarkerCluster.Default.css", "sha256": "61258232d98d64dc2a7b1e02130d67421bc5b9bda5994eef70228ff97570c170" }
+      ]
+    },
+    {
+      "name": "hls.js",
+      "version": "1.6.16",
+      "license": "Apache-2.0",
+      "homepage": "https://github.com/video-dev/hls.js/",
+      "tarball": "https://registry.npmjs.org/hls.js/-/hls.js-1.6.16.tgz",
+      "tarball_sha256": "d282339fed09a0987d55b49b41430a67d021861c24d33722e75e5ca2e5179c77",
+      "license_file": {
+        "source": "package/LICENSE",
+        "local": "vendor/licenses/hls.js-Apache-2.0.txt",
+        "sha256": "ca8773cf798c7ed997d4dd7c8e23c348699f8d5b7462636694cc14de6cda12db"
+      },
+      "files": [
+        { "source": "package/dist/hls.min.js", "local": "vendor/hls/hls.min.js", "sha256": "442f599c34f103c3355b375a23bdff560592d7117d09a8c847242ea3de2d40e0" }
+      ]
+    }
+  ]
+}

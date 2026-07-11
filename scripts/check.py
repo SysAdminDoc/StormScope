@@ -25,6 +25,7 @@ def main() -> int:
     node_tests = sorted(str(path.relative_to(ROOT)) for path in (ROOT / "tests").glob("*.test.js"))
     run(sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py", "-v")
     run(sys.executable, "-m", "ruff", "check", "scripts", "tests")
+    run(sys.executable, "scripts/vendor_dependencies.py")
     run("node", "--check", "js/app.js")
     run("node", "--check", "sw.js")
     if node_tests:

@@ -173,6 +173,13 @@ async function main() {
     await addNetworkFixtures(page);
     await waitForApp(page);
 
+    const vendorRuntime = await page.evaluate(() => ({
+      leaflet: window.L && window.L.version,
+      markercluster: typeof window.L.markerClusterGroup,
+      hls: window.Hls && window.Hls.version
+    }));
+    assert.deepEqual(vendorRuntime, { leaflet: '1.9.4', markercluster: 'function', hls: '1.6.16' });
+
     const cameraMetrics = await page.evaluate(() => window._stormscope.getCameraLoadMetrics());
     assert.equal(cameraMetrics.source, 'shards');
     assert.ok(cameraMetrics.firstBatchMs > 0 && cameraMetrics.firstBatchMs < 2500,
