@@ -23,6 +23,8 @@
   var radarHost = '';
   var radarIndex = 0;
   var radarPlaying = false;
+  var radarAnimationSpeed = RADAR_ANIMATION_SPEED;
+  var radarPalette = 'standard';
   var radarAnimTimer = null;
   var radarRefreshTimer = null;
   var radarPreloadTimer = null;
@@ -197,6 +199,7 @@
     radarFrames = discovery.frames;
     if (!radarFrames.length) throw new Error('selected provider returned no frames');
     radarIndex = radarFrames.length - 1;
+    updateRadarScrubber();
     updateRadarProviderUI();
     updateCoverageLayer();
     showRadarFrame(radarIndex);
@@ -209,6 +212,7 @@
     radarFrames = [];
     radarHost = '';
     radarIndex = 0;
+    updateRadarScrubber();
     setRadarPlaying(false);
     showRadarFrame(-1);
     if (radarLayerNext) {
@@ -241,10 +245,54 @@
   function setRadarStatus(message, canRetry, disabled) {
     document.getElementById('radar-time').textContent = message;
     document.getElementById('radar-retry').classList.toggle('hidden', !canRetry);
-    var controls = ['radar-prev', 'radar-play', 'radar-next'];
+    var controls = ['radar-prev', 'radar-next', 'radar-scrubber'];
     for (var i = 0; i < controls.length; i++) {
       document.getElementById(controls[i]).disabled = !!disabled;
     }
+    document.getElementById('radar-play').disabled = !!disabled || radarAnimationSpeed === 0;
+  }
+
+  function updateRadarScrubber() {
+    var scrubber = document.getElementById('radar-scrubber');
+    scrubber.max = String(Math.max(0, radarFrames.length - 1));
+    scrubber.value = String(Math.min(radarIndex, Math.max(0, radarFrames.length - 1)));
+    scrubber.disabled = radarFrames.length === 0;
+    document.getElementById('radar-frame-position').textContent = radarFrames.length
+      ? 'Frame ' + (radarIndex + 1) + ' of ' + radarFrames.length
+      : 'Frame 0 of 0';
+  }
+
+  function applyRadarPaletteToLayer(layer) {
+    if (!layer || !layer.getContainer) return;
+    var container = layer.getContainer();
+    if (!container) return;
+    container.classList.remove('radar-palette-colorblind', 'radar-palette-contrast');
+    if (radarPalette !== 'standard') container.classList.add('radar-palette-' + radarPalette);
+  }
+
+  function applyRadarPalette() {
+    applyRadarPaletteToLayer(radarLayer);
+    applyRadarPaletteToLayer(radarLayerNext);
+    var legend = document.getElementById('radar-legend');
+    legend.classList.remove('palette-standard', 'palette-colorblind', 'palette-contrast');
+    legend.classList.add('palette-' + radarPalette);
+    var labels = {
+      standard: 'Standard radar precipitation intensity scale: light, moderate, heavy',
+      colorblind: 'Color-vision-friendly blue to red precipitation intensity scale: light, moderate, heavy',
+      contrast: 'High-contrast precipitation intensity scale: light, moderate, heavy'
+    };
+    legend.setAttribute('aria-label', labels[radarPalette]);
+  }
+
+  function selectRadarFrame(index) {
+    if (!radarFrames.length) return;
+    radarIndex = Math.max(0, Math.min(radarFrames.length - 1, Number(index) || 0));
+    radarSemanticState = null;
+    showRadarFrame(radarIndex);
+    updateRadarTimeDisplay();
+    updateRadarScrubber();
+    sampleRadarCenter(radarFrames[radarIndex]);
+    preloadRadarFrame((radarIndex + 1) % radarFrames.length);
   }
 
   function createRadarTileLayer(index) {
@@ -311,6 +359,7 @@
       var preloadLayer = radarLayerNext;
       radarLayerNext.setOpacity(0);
       radarLayerNext.addTo(map);
+      applyRadarPaletteToLayer(radarLayerNext);
       function finishPreload(status) {
         if (radarLayerNext !== preloadLayer) return;
         clearTimeout(radarPreloadTimer);
@@ -340,6 +389,7 @@
     radarLayer = createRadarTileLayer(index);
     if (radarLayer && radarVisible) {
       radarLayer.addTo(map);
+      applyRadarPaletteToLayer(radarLayer);
     }
   }
 
@@ -356,7 +406,7 @@
     var age = StormScopeRadarProviders.getFrameAge(frame, radarProviderId);
     var state = radarSemanticState;
     var label = state && (state.state === 'clear' || state.state === 'no-coverage' || state.state === 'stale')
-      ? state.label
+      ? state.label + ' • ' + age.label
       : timeStr + ' • Past radar • ' + age.label;
     setRadarStatus(label, state ? state.canRetry : false, state ? !state.controlsEnabled : false);
     updateRadarProviderUI();
@@ -471,17 +521,11 @@
 
   function stepRadar(delta) {
     if (radarFrames.length === 0) return;
-    radarIndex = (radarIndex + delta + radarFrames.length) % radarFrames.length;
-    radarSemanticState = null;
-    showRadarFrame(radarIndex);
-    updateRadarTimeDisplay();
-    sampleRadarCenter(radarFrames[radarIndex]);
-    var nextIdx = (radarIndex + 1) % radarFrames.length;
-    preloadRadarFrame(nextIdx);
+    selectRadarFrame((radarIndex + delta + radarFrames.length) % radarFrames.length);
   }
 
   function setRadarPlaying(playing) {
-    radarPlaying = playing;
+    radarPlaying = Boolean(playing && radarAnimationSpeed > 0 && radarFrames.length);
     document.getElementById('icon-play').classList.toggle('hidden', radarPlaying);
     document.getElementById('icon-pause').classList.toggle('hidden', !radarPlaying);
     document.getElementById('radar-play').setAttribute('aria-pressed', String(radarPlaying));
@@ -493,7 +537,7 @@
     if (radarPlaying) {
       radarAnimTimer = setInterval(function () {
         stepRadar(1);
-      }, RADAR_ANIMATION_SPEED);
+      }, radarAnimationSpeed);
     }
   }
 
@@ -1753,6 +1797,24 @@
     document.getElementById('radar-prev').addEventListener('click', function () { stepRadar(-1); });
     document.getElementById('radar-next').addEventListener('click', function () { stepRadar(1); });
     document.getElementById('radar-play').addEventListener('click', function () { setRadarPlaying(!radarPlaying); });
+    document.getElementById('radar-scrubber').addEventListener('input', function () {
+      setRadarPlaying(false);
+      selectRadarFrame(parseInt(this.value, 10));
+    });
+    document.getElementById('radar-speed').addEventListener('change', function () {
+      var wasPlaying = radarPlaying;
+      radarAnimationSpeed = [0, 400, 800, 1600].indexOf(Number(this.value)) === -1
+        ? RADAR_ANIMATION_SPEED
+        : Number(this.value);
+      try { localStorage.setItem('stormscope-radar-speed', String(radarAnimationSpeed)); } catch (error) { /* optional */ }
+      setRadarPlaying(wasPlaying && radarAnimationSpeed > 0);
+      if (radarFrames.length) updateRadarTimeDisplay();
+    });
+    document.getElementById('radar-palette').addEventListener('change', function () {
+      radarPalette = ['standard', 'colorblind', 'contrast'].indexOf(this.value) === -1 ? 'standard' : this.value;
+      try { localStorage.setItem('stormscope-radar-palette', radarPalette); } catch (error) { /* optional */ }
+      applyRadarPalette();
+    });
     document.getElementById('radar-retry').addEventListener('click', initRadar);
 
     document.getElementById('modal-close').addEventListener('click', closeCameraModal);
@@ -2029,10 +2091,30 @@
     document.getElementById('weather-units').value = weatherUnits;
   }
 
+  function initRadarPreferences() {
+    var savedSpeed = null;
+    var savedPalette = null;
+    try {
+      savedSpeed = localStorage.getItem('stormscope-radar-speed');
+      savedPalette = localStorage.getItem('stormscope-radar-palette');
+    } catch (error) { /* optional */ }
+    var parsedSpeed = Number(savedSpeed);
+    if ([0, 400, 800, 1600].indexOf(parsedSpeed) !== -1 && savedSpeed !== null) {
+      radarAnimationSpeed = parsedSpeed;
+    } else if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      radarAnimationSpeed = 0;
+    }
+    radarPalette = ['standard', 'colorblind', 'contrast'].indexOf(savedPalette) === -1 ? 'standard' : savedPalette;
+    document.getElementById('radar-speed').value = String(radarAnimationSpeed);
+    document.getElementById('radar-palette').value = radarPalette;
+    applyRadarPalette();
+  }
+
   // ── Boot ──
 
   initMap();
   initWeatherUnits();
+  initRadarPreferences();
   initSavedState();
   bindUI();
   initRadar();

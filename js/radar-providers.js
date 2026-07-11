@@ -508,7 +508,6 @@
     } else if (coverageUnavailable(observation.coverage)) {
       state = RADAR_STATE.NO_COVERAGE;
       label = 'No radar coverage at this location';
-      controlsEnabled = false;
     } else if (age.stale || (health && health.reason === 'stale-frame')) {
       state = RADAR_STATE.STALE;
       label = 'Radar data is stale (' + age.label + ')';

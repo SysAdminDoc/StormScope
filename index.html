@@ -81,6 +81,23 @@
       </select>
     </div>
     <div class="select-row">
+      <label for="radar-speed">Radar playback</label>
+      <select id="radar-speed">
+        <option value="0">Manual only</option>
+        <option value="1600">0.5× speed</option>
+        <option value="800" selected>1× speed</option>
+        <option value="400">2× speed</option>
+      </select>
+    </div>
+    <div class="select-row">
+      <label for="radar-palette">Radar presentation</label>
+      <select id="radar-palette">
+        <option value="standard">Standard</option>
+        <option value="colorblind">Color-vision friendly</option>
+        <option value="contrast">High contrast</option>
+      </select>
+    </div>
+    <div class="select-row">
       <label for="alert-severity">Minimum alert severity</label>
       <select id="alert-severity">
         <option value="all">All alerts</option>
@@ -91,8 +108,9 @@
       </select>
     </div>
     <div id="radar-meta" class="radar-meta" role="status" aria-live="polite">Radar provider pending…</div>
-    <div class="radar-legend" aria-label="Radar precipitation intensity from light to heavy">
-      <span>Light</span><i aria-hidden="true"></i><span>Heavy</span>
+    <div id="radar-legend" class="radar-legend palette-standard" aria-label="Radar precipitation intensity scale: light, moderate, heavy">
+      <i aria-hidden="true"></i>
+      <div><span>Light</span><span>Moderate</span><span>Heavy</span></div>
     </div>
     <div class="cache-panel">
       <div id="cache-status" class="cache-status" role="status" aria-live="polite">Checking offline cache…</div>
@@ -153,20 +171,26 @@
     <p class="alerts-disclaimer">Informational only. Follow instructions from <a href="https://www.weather.gov/" target="_blank" rel="noopener noreferrer">weather.gov</a> and local authorities.</p>
   </aside>
 
-  <div id="radar-controls" role="toolbar" aria-label="Past radar animation controls">
-    <button id="radar-prev" class="radar-btn" title="Previous frame" aria-label="Previous radar frame">
-      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="4" x2="5" y2="20" stroke="currentColor" stroke-width="2"/></svg>
-    </button>
-    <button id="radar-play" class="radar-btn" title="Play/Pause" aria-label="Play or pause radar animation">
-      <svg id="icon-play" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-      <svg id="icon-pause" viewBox="0 0 24 24" fill="currentColor" class="hidden" aria-hidden="true"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-    </button>
-    <button id="radar-next" class="radar-btn" title="Next frame" aria-label="Next radar frame">
-      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="4" x2="19" y2="20" stroke="currentColor" stroke-width="2"/></svg>
-    </button>
-    <span id="radar-time" role="status" aria-live="polite">Loading radar…</span>
-    <button id="radar-retry" class="radar-retry hidden" type="button">Retry</button>
-    <a id="radar-source" class="radar-source" href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer">RainViewer</a>
+  <div id="radar-controls" role="group" aria-label="Past radar timeline">
+    <div class="radar-playback-row" role="toolbar" aria-label="Radar frame controls">
+      <button id="radar-prev" class="radar-btn" title="Previous frame" aria-label="Previous radar frame">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="4" x2="5" y2="20" stroke="currentColor" stroke-width="2"/></svg>
+      </button>
+      <button id="radar-play" class="radar-btn" title="Play/Pause" aria-label="Play or pause radar animation" aria-pressed="false">
+        <svg id="icon-play" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        <svg id="icon-pause" viewBox="0 0 24 24" fill="currentColor" class="hidden" aria-hidden="true"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+      </button>
+      <button id="radar-next" class="radar-btn" title="Next frame" aria-label="Next radar frame">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="4" x2="19" y2="20" stroke="currentColor" stroke-width="2"/></svg>
+      </button>
+      <span id="radar-time" role="status" aria-live="polite">Loading radar…</span>
+      <button id="radar-retry" class="radar-retry hidden" type="button">Retry</button>
+      <a id="radar-source" class="radar-source" href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer">RainViewer</a>
+    </div>
+    <label class="radar-scrubber-row" for="radar-scrubber">
+      <span id="radar-frame-position">Frame 0 of 0</span>
+      <input id="radar-scrubber" type="range" min="0" max="0" value="0" disabled aria-describedby="radar-time radar-frame-position">
+    </label>
   </div>
 
   <div id="camera-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-cam-name">

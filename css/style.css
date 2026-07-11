@@ -179,6 +179,9 @@ button:focus-visible {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   min-width: 200px;
+  max-height: calc(100vh - 80px - env(safe-area-inset-bottom));
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .alerts-panel {
@@ -334,19 +337,40 @@ button:focus-visible {
 }
 
 .radar-legend {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 7px;
   margin-top: 8px;
   color: var(--text-dim);
   font-size: 10px;
 }
 
 .radar-legend i {
+  display: block;
   height: 7px;
   border-radius: 999px;
   background: linear-gradient(90deg, #6ec7ff, #3178ff 35%, #ffce3a 65%, #ef3340);
+}
+
+.radar-legend div {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+
+.radar-legend.palette-colorblind i {
+  background: linear-gradient(90deg, #2166ac, #f7f7f7 50%, #b2182b);
+}
+
+.radar-legend.palette-contrast i {
+  height: 9px;
+  border: 1px solid #fff;
+  background: linear-gradient(90deg, #00e5ff, #004cff 35%, #fff200 65%, #ff003c);
+}
+
+.radar-palette-colorblind {
+  filter: hue-rotate(35deg) saturate(0.8) brightness(1.1);
+}
+
+.radar-palette-contrast {
+  filter: contrast(1.65) saturate(1.35) brightness(1.05);
 }
 
 .cache-panel {
@@ -450,15 +474,34 @@ button:focus-visible {
   left: 50%;
   transform: translateX(-50%);
   z-index: 1000;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  width: min(620px, calc(100% - 32px));
   padding: 8px 16px;
   background: var(--bg-panel);
   backdrop-filter: blur(var(--blur));
   -webkit-backdrop-filter: blur(var(--blur));
   border: 1px solid var(--border);
   border-radius: var(--radius);
+}
+
+.radar-playback-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.radar-scrubber-row {
+  display: grid;
+  grid-template-columns: 78px 1fr;
+  align-items: center;
+  gap: 8px;
+  margin-top: 5px;
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+.radar-scrubber-row input {
+  width: 100%;
+  accent-color: var(--accent);
 }
 
 .radar-btn {
@@ -1018,14 +1061,21 @@ button:focus-visible {
   #radar-controls {
     bottom: calc(8px + env(safe-area-inset-bottom));
     padding: 6px 10px;
+    width: calc(100% - 16px);
+  }
+
+  .radar-playback-row {
     gap: 4px;
-    max-width: calc(100% - 16px);
   }
 
   #radar-time {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .radar-source {
+    display: none;
   }
 
   .camera-count {

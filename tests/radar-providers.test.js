@@ -153,7 +153,7 @@ test('classifies clear, no-coverage, stale, and failure as distinct accessible s
 
   assert.deepEqual([clear.state, noCoverage.state, stale.state, failure.state], ['clear', 'no-coverage', 'stale', 'failure']);
   assert.equal(clear.label, 'Clear at map center');
-  assert.equal(noCoverage.controlsEnabled, false);
+  assert.equal(noCoverage.controlsEnabled, true, 'timeline navigation remains useful outside center-point coverage');
   assert.match(stale.label, /25 minutes old/);
   assert.equal(failure.canRetry, true);
   assert.equal(failure.controlsEnabled, false);

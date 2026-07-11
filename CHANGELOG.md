@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.28.0 - 2026-07-11
+
+### Radar timeline and accessibility
+- Added a direct frame scrubber with explicit position, persisted bounded manual/0.5×/1×/2× playback, and current frame age in every clear/coverage/data state.
+- Added standard, color-vision-friendly, and high-contrast radar presentations with matching textual light/moderate/heavy legends.
+- Kept previous/next/scrubber controls operational in manual and reduced-motion modes and outside center-point coverage; only provider failures disable the timeline.
+- Bounded the expanded layers panel to the viewport with keyboard/touch scrolling and extended the browser smoke across manual timeline and palette behavior.
+
 ## v0.27.0 - 2026-07-11
 
 ### Camera discovery and performance

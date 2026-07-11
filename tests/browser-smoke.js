@@ -56,7 +56,11 @@ async function addNetworkFixtures(page) {
         contentType: 'application/json',
         body: JSON.stringify({
           host: 'https://tilecache.rainviewer.com',
-          radar: { past: [{ time: Math.floor(Date.now() / 1000) - 300, path: '/v2/radar/fixture' }], nowcast: [] }
+          radar: { past: [
+            { time: Math.floor(Date.now() / 1000) - 900, path: '/v2/radar/fixture-older' },
+            { time: Math.floor(Date.now() / 1000) - 600, path: '/v2/radar/fixture-middle' },
+            { time: Math.floor(Date.now() / 1000) - 300, path: '/v2/radar/fixture-latest' }
+          ], nowcast: [] }
         })
       });
       return;
@@ -176,6 +180,27 @@ async function main() {
 
     assert.equal(await page.locator('html').evaluate((element) => element.scrollWidth > element.clientWidth), false);
     assert.equal(await page.locator('#radar-retry').isHidden(), true);
+    assert.match(await page.locator('#radar-time').textContent(), /old|ago|just now/i);
+    const scrubber = page.locator('#radar-scrubber');
+    assert.ok(Number(await scrubber.getAttribute('max')) > 0, 'radar timeline should expose multiple frames');
+    await page.getByRole('button', { name: 'Toggle layers panel' }).click();
+    await page.locator('#radar-speed').selectOption('0');
+    await page.locator('#radar-palette').selectOption('colorblind');
+    assert.equal(await page.locator('#radar-play').isDisabled(), true);
+    assert.equal(await page.locator('#radar-legend').getAttribute('class'), 'radar-legend palette-colorblind');
+    await page.getByRole('button', { name: 'Toggle layers panel' }).click();
+    await scrubber.fill('0');
+    assert.match(await page.locator('#radar-frame-position').textContent(), /^Frame 1 of /);
+    const manualFrame = await scrubber.inputValue();
+    await page.waitForTimeout(900);
+    assert.equal(await scrubber.inputValue(), manualFrame, 'manual-only mode must not animate');
+    await page.waitForFunction(() => !document.querySelector('#radar-time').textContent.startsWith('Loading'));
+    const nextRadar = page.getByRole('button', { name: 'Next radar frame' });
+    assert.equal(await nextRadar.isDisabled(), false, 'manual next control should remain enabled: ' +
+      await page.locator('#radar-time').textContent());
+    const frameBeforeNext = await scrubber.inputValue();
+    await nextRadar.click();
+    assert.notEqual(await scrubber.inputValue(), frameBeforeNext, 'manual frame controls must remain usable without animation');
     const unnamedButtons = await page.locator('button').evaluateAll((buttons) => buttons.filter((button) => {
       return !(button.getAttribute('aria-label') || button.textContent.trim() || button.title);
     }).length);
