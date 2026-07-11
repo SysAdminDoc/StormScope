@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.24.0 - 2026-07-11
+
+### Features
+- Installable PWA: added `manifest.json` (standalone display, dark theme, maskable icons) and app icons under `assets/`.
+- Added a service worker (`sw.js`) for offline support:
+  - Precaches the full app shell (HTML/CSS/JS, vendored Leaflet/markercluster/HLS.js, icons) for offline launch.
+  - Cache-first, LRU-bounded caching of RainViewer radar frames and CARTO basemap tiles so repeat visits reuse already-fetched imagery.
+  - Stale-while-revalidate caching of the 5.5 MB camera dataset for instant repeat loads.
+  - Time-sensitive APIs (NWS, Open-Meteo, RainViewer maps index) are always fetched fresh and never cached.
+  - Network-first navigations fall back to the cached shell when offline.
+- Service worker registration is guarded to `http(s)` so the app still works on `file://`.
+
 ## v0.23.0 - 2026-06-19
 
 ### Data

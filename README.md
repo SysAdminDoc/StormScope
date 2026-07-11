@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.23.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.24.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
 [![Cameras](https://img.shields.io/badge/cameras-24%2C234-cyan)]()
@@ -17,6 +17,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 - **Current Weather** — NWS hourly forecast data shown alongside each camera feed
 - **Dark Theme** — CartoDB dark matter tiles with glassmorphism UI
 - **No API Keys** — Runs entirely client-side with free, keyless APIs
+- **Installable PWA** — Add to home screen; a service worker caches the app shell, radar frames, basemap tiles, and camera dataset for fast repeat loads and offline launch
 - **Mobile Responsive** — Works on desktop and mobile browsers
 
 ## Camera Coverage
