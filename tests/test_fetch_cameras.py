@@ -190,6 +190,24 @@ class FetchMergeTests(unittest.TestCase):
             errors["https://stream.test/missing.m3u8"],
         )
 
+    def test_hls_verification_does_not_confirm_dead_from_one_failed_probe(self):
+        missing = urllib.error.HTTPError(
+            "https://stream.test/flaky.m3u8", 404, "Not Found", {}, None
+        )
+        with mock.patch.object(
+            fetch_cameras,
+            "_hls_snapshot",
+            side_effect=[missing, (11, ("segment-11.ts",))],
+        ):
+            verified, errors = fetch_cameras.verify_live_hls(
+                ["https://stream.test/flaky.m3u8"], probe_interval=0, workers=1
+            )
+        self.assertEqual(set(), verified)
+        self.assertEqual(
+            "transient_network:inconsistent_probes:confirmed_dead:http_404",
+            errors["https://stream.test/flaky.m3u8"],
+        )
+
     def test_oktraffic_uses_provider_coordinates_and_verified_hls(self):
         payload = [
             {
@@ -274,6 +292,70 @@ class FetchMergeTests(unittest.TestCase):
         self.assertEqual("KCAM002", row["provider_camera_id"])
         self.assertEqual(10, row["refresh_cadence_seconds"])
         self.assertEqual("https://tmc.deldot.gov/json/videocamera.json", row["source_url"])
+
+    def test_wv511_uses_official_map_coordinates_and_advancing_player_stream(self):
+        camera_id = "CAM117"
+        stream_url = "https://vtc2.roadsummary.com/rtplive/CAM117/playlist.m3u8"
+        inventory = {
+            "count": 1,
+            "cams": [
+                {
+                    "md5": camera_id,
+                    "title": "I-81",
+                    "description": (
+                        '<div id="camDescription">[BER]I-81 @ 0.5'
+                        '<span>West Virginia DOT</span></div><!--STREAMING:1-->'
+                    ),
+                    "start_lat": "39.302863",
+                    "start_lng": "-78.078892",
+                    "icon": "icon_feed",
+                }
+            ],
+        }
+
+        def response(url, **_kwargs):
+            if "buildCamerasJSONjs" in url:
+                return ("var camera_data = " + json.dumps(inventory)).encode()
+            if "flowplayeri.aspx" in url:
+                return f'<source src="{stream_url}">'.encode()
+            raise AssertionError(url)
+
+        with (
+            mock.patch.object(fetch_cameras, "_http_bytes", side_effect=response),
+            mock.patch.object(
+                fetch_cameras,
+                "verify_live_hls",
+                return_value=({stream_url}, {}),
+            ) as verifier,
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "West Virginia (WV511)", fetch_cameras.fetch_wv511
+            )
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual(1, len(result.cameras))
+        row = result.cameras[0]
+        self.assertEqual("West Virginia", row["state"])
+        self.assertEqual("Berkeley", row["county"])
+        self.assertEqual(camera_id, row["provider_camera_id"])
+        self.assertEqual("I-81 @ 0.5", row["name"])
+        self.assertEqual(39.302863, row["lat"])
+        self.assertEqual(-78.078892, row["lon"])
+        self.assertEqual(stream_url, row["url"])
+        self.assertEqual("hls", row["type"])
+        self.assertEqual(10, row["refresh_cadence_seconds"])
+        self.assertEqual(
+            "https://wv511.org/flowplayeri.aspx?CAMID=CAM117", row["source_url"]
+        )
+        verifier.assert_called_once_with(
+            [stream_url], probe_interval=10.0, workers=12, referer="https://wv511.org/"
+        )
+
+    def test_wv511_rejects_a_truncated_inventory_before_stream_resolution(self):
+        payload = "var camera_data = " + json.dumps({"count": 2, "cams": []})
+        with self.assertRaises(fetch_cameras.IncompleteProviderError):
+            fetch_cameras._parse_wv511_inventory(payload)
 
 
 if __name__ == "__main__":

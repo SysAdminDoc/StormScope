@@ -8,6 +8,7 @@ import argparse
 import concurrent.futures
 import json
 import gzip
+import html
 import re
 import ssl
 import sys
@@ -156,11 +157,11 @@ def detect_type(url):
     return 'image'
 
 
-def _hls_manifest_text(url, timeout=20):
+def _hls_manifest_text(url, timeout=20, referer='https://oktraffic.org/'):
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0',
         'Accept': 'application/vnd.apple.mpegurl, application/x-mpegURL, */*',
-        'Referer': 'https://oktraffic.org/',
+        'Referer': referer,
     }
     request = urllib.request.Request(url, headers=headers)
     response = urllib.request.urlopen(request, timeout=timeout, context=ctx)
@@ -171,8 +172,8 @@ def _hls_manifest_text(url, timeout=20):
     return text, response.geturl()
 
 
-def _hls_snapshot(url, timeout=20):
-    text, manifest_url = _hls_manifest_text(url, timeout)
+def _hls_snapshot(url, timeout=20, referer='https://oktraffic.org/'):
+    text, manifest_url = _hls_manifest_text(url, timeout, referer)
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     if '#EXT-X-ENDLIST' in lines:
         raise ValueError('confirmed_not_live:endlist')
@@ -181,7 +182,7 @@ def _hls_snapshot(url, timeout=20):
         if not variant:
             raise ValueError('confirmed_not_live:empty_master')
         manifest_url = urllib.parse.urljoin(manifest_url, variant)
-        text, manifest_url = _hls_manifest_text(manifest_url, timeout)
+        text, manifest_url = _hls_manifest_text(manifest_url, timeout, referer)
         lines = [line.strip() for line in text.splitlines() if line.strip()]
         if '#EXT-X-ENDLIST' in lines:
             raise ValueError('confirmed_not_live:endlist')
@@ -198,7 +199,7 @@ def _hls_snapshot(url, timeout=20):
         segments[-1],
         headers={
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0',
-            'Referer': 'https://oktraffic.org/',
+            'Referer': referer,
             'Range': 'bytes=0-1023',
         },
     )
@@ -209,14 +210,18 @@ def _hls_snapshot(url, timeout=20):
     return sequence, segments[-3:]
 
 
-def verify_live_hls(urls, probe_interval=6.0, workers=12):
+def verify_live_hls(urls, probe_interval=6.0, workers=12,
+                    referer='https://oktraffic.org/'):
     unique_urls = list(dict.fromkeys(urls))
 
     def probe_all():
         snapshots = {}
         errors = {}
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
-            futures = {executor.submit(_hls_snapshot, url): url for url in unique_urls}
+            futures = {
+                executor.submit(_hls_snapshot, url, 20, referer): url
+                for url in unique_urls
+            }
             for future in concurrent.futures.as_completed(futures):
                 url = futures[future]
                 try:
@@ -246,9 +251,25 @@ def verify_live_hls(urls, probe_interval=6.0, workers=12):
         if url in first and url in second
         and (second[url][0] > first[url][0] or second[url][1] != first[url][1])
     }
-    errors = {**first_errors, **second_errors}
+    errors = {}
     for url in unique_urls:
-        if url not in verified and url not in errors:
+        if url in verified:
+            continue
+        first_error = first_errors.get(url)
+        second_error = second_errors.get(url)
+        if first_error and second_error:
+            first_class = first_error.split(':', 1)[0]
+            second_class = second_error.split(':', 1)[0]
+            if first_class == second_class:
+                errors[url] = second_error
+            else:
+                errors[url] = (
+                    f'transient_network:inconsistent_probes:{first_class},{second_class}'
+                )
+        elif first_error or second_error:
+            detail = first_error or second_error
+            errors[url] = f'transient_network:inconsistent_probes:{detail}'
+        else:
             errors[url] = 'confirmed_not_live:not_advancing'
     return verified, errors
 
@@ -1591,6 +1612,225 @@ def _http_bytes(url, headers=None, data=None, method=None, timeout=30):
     return raw
 
 
+# ── West Virginia (WV511) — official map inventory + per-camera live HLS ──
+WV511_COUNTIES = {
+    'BER': 'Berkeley',
+    'BOO': 'Boone',
+    'BRA': 'Braxton',
+    'CAB': 'Cabell',
+    'FAY': 'Fayette',
+    'GRA': 'Grant',
+    'GRE': 'Greenbrier',
+    'HAR': 'Harrison',
+    'JAC': 'Jackson',
+    'JEF': 'Jefferson',
+    'KAN': 'Kanawha',
+    'LEW': 'Lewis',
+    'LOG': 'Logan',
+    'MAR': 'Marion',
+    'MER': 'Mercer',
+    'MIN': 'Mineral',
+    'MON': 'Monongalia',
+    'OHI': 'Ohio',
+    'PRE': 'Preston',
+    'PUT': 'Putnam',
+    'RAL': 'Raleigh',
+    'TUC': 'Tucker',
+    'WEZ': 'Wetzel',
+    'WOO': 'Wood',
+}
+
+
+def _parse_wv511_inventory(payload):
+    text = payload.decode('utf-8', 'replace') if isinstance(payload, bytes) else str(payload)
+    match = re.search(r'\bvar\s+camera_data\s*=\s*(\{.*\})\s*;?\s*$', text, re.DOTALL)
+    if not match:
+        raise ValueError('WV511 camera_data payload missing')
+    data = json.loads(match.group(1))
+    records = data.get('cams') or []
+    declared = int(data.get('count', -1))
+    if declared != len(records) or not records:
+        raise IncompleteProviderError(
+            f'WV511 inventory count mismatch ({declared} declared, {len(records)} returned)'
+        )
+    parsed = []
+    seen = set()
+    for record in records:
+        camera_id = str(record.get('md5', '')).strip().upper()
+        description_html = html.unescape(str(record.get('description', '')))
+        if (not re.fullmatch(r'CAM\d{3}', camera_id)
+                or camera_id in seen
+                or record.get('icon') != 'icon_feed'
+                or '<!--STREAMING:1-->' not in description_html):
+            continue
+        description_match = re.search(
+            r'<div[^>]+id=["\']camDescription["\'][^>]*>(.*?)<span\b',
+            description_html,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if not description_match:
+            continue
+        label = re.sub(r'<[^>]+>', ' ', description_match.group(1))
+        label = re.sub(r'\s+', ' ', label).strip()
+        county_match = re.match(r'^\[([A-Z]{3})\]\s*', label)
+        if not county_match or county_match.group(1) not in WV511_COUNTIES:
+            continue
+        label = label[county_match.end():].strip()
+        try:
+            lat = float(record.get('start_lat'))
+            lon = float(record.get('start_lng'))
+        except (TypeError, ValueError):
+            continue
+        if not (37.0 <= lat <= 41.0 and -83.0 <= lon <= -77.0):
+            continue
+        seen.add(camera_id)
+        parsed.append({
+            'camera_id': camera_id,
+            'name': label or str(record.get('title', '')).strip() or 'WV511 Camera',
+            'lat': lat,
+            'lon': lon,
+            'county': WV511_COUNTIES[county_match.group(1)],
+        })
+    if len(parsed) != declared:
+        raise IncompleteProviderError(
+            f'WV511 inventory validation rejected {declared - len(parsed)} of {declared} rows'
+        )
+    return parsed
+
+
+def _wv511_stream_url(camera_id):
+    player_url = f'https://wv511.org/flowplayeri.aspx?CAMID={camera_id}'
+    page = _http_bytes(
+        player_url,
+        headers={'Referer': 'https://wv511.org/CameraListing.aspx'},
+        timeout=20,
+    ).decode('utf-8', 'replace')
+    streams = set(re.findall(
+        r'https://vtc\d+\.roadsummary\.com/rtplive/(CAM\d{3})/playlist\.m3u8',
+        page,
+        re.IGNORECASE,
+    ))
+    if streams != {camera_id}:
+        raise ValueError('confirmed_not_live:player_stream_missing')
+    stream_match = re.search(
+        rf'https://vtc\d+\.roadsummary\.com/rtplive/{camera_id}/playlist\.m3u8',
+        page,
+        re.IGNORECASE,
+    )
+    return stream_match.group(0)
+
+
+def fetch_wv511():
+    inventory_url = 'https://wv511.org/wsvc/gmap.asmx/buildCamerasJSONjs'
+    source_page = 'https://wv511.org/CameraListing.aspx'
+    records = _parse_wv511_inventory(_http_bytes(
+        inventory_url,
+        headers={'Accept': 'application/javascript, text/javascript, */*',
+                 'Referer': 'https://wv511.org/webmapi.aspx'},
+        timeout=40,
+    ))
+    rejected = []
+    candidates = []
+
+    def resolve(record):
+        try:
+            return record, _wv511_stream_url(record['camera_id']), ''
+        except Exception as exc:
+            if isinstance(exc, urllib.error.HTTPError):
+                if exc.code in {404, 410}:
+                    reason = f'confirmed_dead:http_{exc.code}'
+                elif exc.code == 429:
+                    reason = 'rate_limited:http_429'
+                elif exc.code in {401, 403}:
+                    reason = f'authentication_required:http_{exc.code}'
+                else:
+                    reason = f'transient_network:http_{exc.code}'
+            else:
+                reason = str(exc)
+                if not reason.startswith(('confirmed_not_live:', 'confirmed_dead:')):
+                    reason = f'transient_network:{reason}'
+            return record, '', reason
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
+        futures = [executor.submit(resolve, record) for record in records]
+        for future in concurrent.futures.as_completed(futures):
+            record, stream_url, reason = future.result()
+            if reason:
+                rejected.append({
+                    'provider_camera_id': record['camera_id'],
+                    'name': record['name'],
+                    'failure_class': reason.split(':', 1)[0],
+                    'detail': reason,
+                })
+            else:
+                candidates.append({**record, 'url': stream_url})
+
+    verified, verification_errors = verify_live_hls(
+        [candidate['url'] for candidate in candidates],
+        probe_interval=10.0,
+        workers=12,
+        referer='https://wv511.org/',
+    )
+    count = 0
+    for candidate in sorted(candidates, key=lambda item: item['camera_id']):
+        stream_url = candidate['url']
+        if stream_url not in verified:
+            reason = verification_errors.get(stream_url, 'confirmed_not_live:verification_failed')
+            rejected.append({
+                'provider_camera_id': candidate['camera_id'],
+                'name': candidate['name'],
+                'failure_class': reason.split(':', 1)[0],
+                'detail': reason,
+            })
+            continue
+        player_url = f"https://wv511.org/flowplayeri.aspx?CAMID={candidate['camera_id']}"
+        add_camera(
+            candidate['name'], candidate['lat'], candidate['lon'], stream_url,
+            'hls', 'West Virginia', candidate['county'], '', 'dot', player_url, 10,
+        )
+        cameras[-1]['provider_camera_id'] = candidate['camera_id']
+        count += 1
+
+    failure_counts = {}
+    for item in rejected:
+        key = item['failure_class']
+        failure_counts[key] = failure_counts.get(key, 0) + 1
+    atomic_write_json(
+        DATA_DIR / 'wv511_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'West Virginia (WV511)',
+            'inventory_url': inventory_url,
+            'source_url': source_page,
+            'geographic_scope': 'West Virginia statewide',
+            'attribution': 'West Virginia DOT',
+            'license_or_usage_terms': (
+                'No explicit reuse license is displayed on the public WV511 camera pages; '
+                'public read-only viewing endpoints only.'
+            ),
+            'refresh_cadence_seconds': 10,
+            'inventory_count': len(records),
+            'stream_candidates': len(candidates),
+            'verified_live': count,
+            'rejected': len(rejected),
+            'rejected_by_class': failure_counts,
+            'rejections': sorted(rejected, key=lambda item: item['provider_camera_id']),
+        },
+    )
+    transient = [
+        item for item in rejected
+        if item['failure_class'] in {
+            'transient_network', 'rate_limited', 'authentication_required'
+        }
+    ]
+    if transient:
+        raise IncompleteProviderError(
+            f'WV511 had {len(transient)} retryable player/stream failures'
+        )
+    print(f'  WV511 HLS verification: {count}/{len(records)} advancing')
+    return count
+
+
 # ── Virginia (VDOT 511) — GeoJSON with absolute snapshot + HLS URLs ──
 def fetch_va_511():
     try:
@@ -1861,6 +2101,7 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
         ('Iowa DOT', fetch_iowa_dot),
         ('Wyoming DOT', fetch_wyoming),
         ('Maryland (CHART)', fetch_maryland_chart),
+        ('West Virginia (WV511)', fetch_wv511),
         ('Florida (ArcGIS)', fetch_fl_arcgis),
         ('Georgia DOT (DataTables)', lambda: fetch_511_datatables(
             'https://511ga.org', 'Georgia', 'https://511ga.org/cctv')),

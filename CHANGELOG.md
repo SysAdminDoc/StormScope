@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.44.0 - 2026-07-12
+
+### Complete verified coverage across all 50 states: 120 WV511 HLS cameras
+- Added a bounded West Virginia provider using WV511's public map-service inventory: all 127 rows have exact provider IDs, fixed coordinates, county codes, labels, and active streaming metadata supplied by West Virginia DOT. No geocoding or fuzzy ArcGIS join is used.
+- Resolved every camera ID through its official WV511 player page instead of assuming a stream host, then required valid non-ended HLS manifests, available media segments, and advancement across two probes. **120 cameras verified advancing**; seven feeds repeatedly returned HTTP 404 and were classified `confirmed_dead` in the ignored discovery report.
+- Hardened the shared HLS verifier so a single failed probe can never produce a permanent-death classification; inconsistent probes remain retryable. WV511 refreshes now abort and retain last-known-good rows if any player or stream has a transient, rate-limit, or authentication failure.
+- Manually reviewed all accepted WV511 label/county/coordinate tuples and immediately rechecked every accepted stream before commit. The release retains **119 healthy** rows; CAM096 was recently verified live but then returned repeated 404s, so it remains truthfully `degraded` and retryable rather than being deleted as permanently dead. Added the three exact RoadSummary media hosts to the CSP, rebuilt the deterministic corpus, and completed state-level coverage at **33,615 cameras across all 50 states plus Washington, D.C.** Service-worker cache bumped to v21.
+
 ## v0.43.0 - 2026-07-12
 
 ### Correctness: camera markers survive a mid-load shard→monolith fallback
