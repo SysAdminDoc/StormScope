@@ -997,6 +997,83 @@ class FetchMergeTests(unittest.TestCase):
             row["source_url"],
         )
 
+    def test_puerto_rico_neon_requires_complete_current_inventory(self):
+        camera_ids = {
+            item["provider_camera_id"]
+            for item in fetch_cameras.PUERTO_RICO_NEON_PHENOCAMS
+        }
+        snapshots = {
+            camera_id: (f"hash-{camera_id}", 120000, "2026-07-12T16:40:00+00:00")
+            for camera_id in camera_ids
+        }
+        with (
+            mock.patch.object(
+                fetch_cameras,
+                "verify_current_jpeg_images",
+                return_value=(camera_ids, {}, snapshots),
+            ) as verifier,
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Puerto Rico NSF NEON / PhenoCam",
+                fetch_cameras.fetch_puerto_rico_neon_phenocams,
+            )
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual(6, len(result.cameras))
+        self.assertTrue(all(row["state"] == "Puerto Rico" for row in result.cameras))
+        self.assertTrue(all(row["source"] == "university" for row in result.cameras))
+        self.assertTrue(all(
+            row["provider"] == "NSF NEON / PhenoCam Network"
+            for row in result.cameras
+        ))
+        self.assertEqual(camera_ids, {
+            row["provider_camera_id"] for row in result.cameras
+        })
+        verifier.assert_called_once_with(
+            [
+                {
+                    "provider_camera_id": item["provider_camera_id"],
+                    "url": item["url"],
+                    "max_age_seconds": 5400,
+                }
+                for item in fetch_cameras.PUERTO_RICO_NEON_PHENOCAMS
+            ],
+            probe_interval=2.0,
+            workers=6,
+        )
+
+    def test_puerto_rico_neon_fails_closed_on_partial_verification(self):
+        camera_ids = [
+            item["provider_camera_id"]
+            for item in fetch_cameras.PUERTO_RICO_NEON_PHENOCAMS
+        ]
+        verified = set(camera_ids[:-1])
+        snapshots = {
+            camera_id: (f"hash-{camera_id}", 120000, "2026-07-12T16:40:00+00:00")
+            for camera_id in verified
+        }
+        with (
+            mock.patch.object(
+                fetch_cameras,
+                "verify_current_jpeg_images",
+                return_value=(
+                    verified,
+                    {camera_ids[-1]: "transient_network:timeout"},
+                    snapshots,
+                ),
+            ),
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Puerto Rico NSF NEON / PhenoCam",
+                fetch_cameras.fetch_puerto_rico_neon_phenocams,
+            )
+
+        self.assertFalse(result.succeeded)
+        self.assertEqual([], result.cameras)
+        self.assertIn("truncated_verified_inventory:5<6", result.error)
+
     def test_guam_gntf_accepts_only_the_first_party_unlocked_advancing_embed(self):
         hls_url = "https://s116.ipcamlive.com/streams/currentstream/master.m3u8"
         homepage = (
@@ -1965,8 +2042,14 @@ class FetchMergeTests(unittest.TestCase):
             "https://nzp-wowza02.si.edu/live_edge_nmr/nmr_1080_all.smil/playlist.m3u8",
             "https://nzp-wowza02.si.edu/live_edge_nmr_02/nmr_02_1080_all.smil/playlist.m3u8",
             "https://nzp-wowza01.si.edu/live_edge_lion/smil:lion01_all.smil/playlist.m3u8",
+            "https://nzp-wowza01.si.edu/live_edge_panda25/smil:panda125_01.smil/playlist.m3u8",
+            "https://nzp-wowza01.si.edu/live_edge_panda25/smil:panda125_02.smil/playlist.m3u8",
+            "https://nzp-wowza01.si.edu/live_edge_elephant_zixi/elephant_zixi.smil/playlist.m3u8",
         ]
         with (
+            mock.patch.object(
+                fetch_cameras, "smithsonian_live_window_active", return_value=True
+            ),
             mock.patch.object(
                 fetch_cameras, "verify_live_hls", return_value=(set(urls), {})
             ) as verifier,
@@ -1978,8 +2061,8 @@ class FetchMergeTests(unittest.TestCase):
             )
 
         self.assertTrue(result.succeeded)
-        self.assertEqual(3, len(result.cameras))
-        self.assertEqual(["11305", "11307", "11330"], [
+        self.assertEqual(6, len(result.cameras))
+        self.assertEqual(["11305", "11307", "11330", "15789", "15791", "17420"], [
             row["provider_camera_id"] for row in result.cameras
         ])
         self.assertTrue(all(row["source"] == "smithsonian" for row in result.cameras))
@@ -1989,12 +2072,33 @@ class FetchMergeTests(unittest.TestCase):
             row["lat"] == 38.930417 and row["lon"] == -77.048944
             for row in result.cameras
         ))
+        self.assertEqual(2, sum(
+            row["lat"] == 38.931072 and row["lon"] == -77.052735
+            for row in result.cameras
+        ))
         verifier.assert_called_once_with(
             urls,
             probe_interval=8.0,
-            workers=3,
+            workers=6,
             referer="https://nationalzoo.si.edu/webcams",
         )
+
+    def test_smithsonian_fails_closed_outside_scheduled_live_window(self):
+        with (
+            mock.patch.object(
+                fetch_cameras, "smithsonian_live_window_active", return_value=False
+            ),
+            mock.patch.object(fetch_cameras, "verify_live_hls") as verifier,
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Smithsonian National Zoo",
+                fetch_cameras.fetch_smithsonian_national_zoo,
+            )
+
+        self.assertFalse(result.succeeded)
+        self.assertEqual([], result.cameras)
+        self.assertIn("outside the 07:00-19:00 ET live window", result.error)
+        verifier.assert_not_called()
 
     def test_nps_image_verification_requires_two_current_provider_snapshots(self):
         candidate = {

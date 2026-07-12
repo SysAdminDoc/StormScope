@@ -24,6 +24,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Callable
+from zoneinfo import ZoneInfo
 
 try:
     from camera_data import (
@@ -712,7 +713,7 @@ def fetch_txdot():
 def fetch_nps():
     try:
         url = 'https://developer.nps.gov/api/v1/webcams?api_key=DEMO_KEY&limit=500'
-        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.61.0'})
+        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.62.0'})
         count = 0
         for cam in data.get('data', []):
             if str(cam.get('status') or '').lower() == 'inactive':
@@ -842,7 +843,7 @@ def _current_jpeg_snapshot(
     request = urllib.request.Request(
         url,
         headers={
-            'User-Agent': 'StormScope/0.61.0',
+            'User-Agent': 'StormScope/0.62.0',
             'Accept': 'image/jpeg,image/*,*/*',
             'Cache-Control': 'no-cache',
         },
@@ -4060,6 +4061,151 @@ def fetch_pr_act():
     return count
 
 
+PUERTO_RICO_NEON_PHENOCAMS = (
+    {
+        'provider_camera_id': 'NEON.D04.GUAN.DP1.00033',
+        'name': 'NSF NEON Guánica Forest Phenocam - Tower Top',
+        'lat': 17.96955,
+        'lon': -66.8687,
+        'county': 'Guánica Municipio',
+        'url': 'https://phenocam.nau.edu/data/latest/NEON.D04.GUAN.DP1.00033.jpg',
+        'source_url': 'https://www.neonscience.org/field-sites/guan',
+        'category': 'research_phenology',
+    },
+    {
+        'provider_camera_id': 'NEON.D04.GUAN.DP1.00042',
+        'name': 'NSF NEON Guánica Forest Phenocam - Tower Bottom',
+        'lat': 17.96955,
+        'lon': -66.8687,
+        'county': 'Guánica Municipio',
+        'url': 'https://phenocam.nau.edu/data/latest/NEON.D04.GUAN.DP1.00042.jpg',
+        'source_url': 'https://www.neonscience.org/field-sites/guan',
+        'category': 'research_phenology',
+    },
+    {
+        'provider_camera_id': 'NEON.D04.LAJA.DP1.00033',
+        'name': 'NSF NEON Lajas Experimental Station Phenocam - Tower Top',
+        'lat': 18.021261,
+        'lon': -67.076889,
+        'county': 'Lajas Municipio',
+        'url': 'https://phenocam.nau.edu/data/latest/NEON.D04.LAJA.DP1.00033.jpg',
+        'source_url': 'https://www.neonscience.org/field-sites/laja',
+        'category': 'research_phenology',
+    },
+    {
+        'provider_camera_id': 'NEON.D04.LAJA.DP1.00042',
+        'name': 'NSF NEON Lajas Experimental Station Phenocam - Tower Bottom',
+        'lat': 18.021261,
+        'lon': -67.076889,
+        'county': 'Lajas Municipio',
+        'url': 'https://phenocam.nau.edu/data/latest/NEON.D04.LAJA.DP1.00042.jpg',
+        'source_url': 'https://www.neonscience.org/field-sites/laja',
+        'category': 'research_phenology',
+    },
+    {
+        'provider_camera_id': 'NEON.D04.CUPE.DP1.20002',
+        'name': 'NSF NEON Río Cupeyes Phenocam',
+        'lat': 18.11352,
+        'lon': -66.98676,
+        'county': 'San Germán Municipio',
+        'url': 'https://phenocam.nau.edu/data/latest/NEON.D04.CUPE.DP1.20002.jpg',
+        'source_url': 'https://www.neonscience.org/field-sites/cupe',
+        'category': 'river_research',
+    },
+    {
+        'provider_camera_id': 'NEON.D04.GUIL.DP1.20002',
+        'name': 'NSF NEON Río Yahuecas Phenocam',
+        'lat': 18.17406,
+        'lon': -66.79868,
+        'county': 'Adjuntas Municipio',
+        'url': 'https://phenocam.nau.edu/data/latest/NEON.D04.GUIL.DP1.20002.jpg',
+        'source_url': 'https://www.neonscience.org/field-sites/guil',
+        'category': 'river_research',
+    },
+)
+
+
+def fetch_puerto_rico_neon_phenocams():
+    candidates = [
+        {
+            'provider_camera_id': item['provider_camera_id'],
+            'url': item['url'],
+            'max_age_seconds': 5400,
+        }
+        for item in PUERTO_RICO_NEON_PHENOCAMS
+    ]
+    verified, errors, snapshots = verify_current_jpeg_images(
+        candidates, probe_interval=2.0, workers=6
+    )
+    rejected = [
+        {
+            'provider_camera_id': item['provider_camera_id'],
+            'name': item['name'],
+            'failure_class': errors.get(
+                item['provider_camera_id'], 'transient_network:verification_incomplete'
+            ).split(':', 1)[0],
+            'detail': errors.get(
+                item['provider_camera_id'], 'transient_network:verification_incomplete'
+            ),
+        }
+        for item in PUERTO_RICO_NEON_PHENOCAMS
+        if item['provider_camera_id'] not in verified
+    ]
+    accepted = []
+    for item in PUERTO_RICO_NEON_PHENOCAMS:
+        camera_id = item['provider_camera_id']
+        if camera_id not in verified:
+            continue
+        add_camera(
+            item['name'], item['lat'], item['lon'], item['url'], 'image',
+            'Puerto Rico', item['county'], '', 'university', item['source_url'], 1800,
+        )
+        cameras[-1]['provider'] = 'NSF NEON / PhenoCam Network'
+        cameras[-1]['provider_camera_id'] = camera_id
+        cameras[-1]['provider_hash'] = snapshots[camera_id][0]
+        cameras[-1]['provider_timestamp'] = snapshots[camera_id][2]
+        cameras[-1]['category'] = item['category']
+        accepted.append({
+            'provider_camera_id': camera_id,
+            'name': item['name'],
+            'lat': item['lat'],
+            'lon': item['lon'],
+            'url': item['url'],
+            'source_url': item['source_url'],
+            'provider_timestamp': snapshots[camera_id][2],
+            'provider_hash': snapshots[camera_id][0],
+        })
+    atomic_write_json(
+        DATA_DIR / 'pr_act_discovery_report_neon.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'NSF NEON / PhenoCam Network',
+            'inventory_url': 'https://www.neonscience.org/data-collection/phenocams',
+            'geographic_scope': 'Guánica, Lajas, Río Cupeyes, and Río Yahuecas',
+            'location_evidence': (
+                'Official NEON field-site coordinates and descriptions identify each '
+                'tower or land-water-interface camera; no geocoder is used.'
+            ),
+            'attribution': 'PhenoCam Network and applicable site acknowledgments',
+            'license_or_usage_terms': 'CC BY 4.0',
+            'terms_url': 'https://phenocam.nau.edu/webcam/fairuse_statement/',
+            'refresh_cadence_seconds': 1800,
+            'verified_live': len(accepted),
+            'accepted': accepted,
+            'rejections': rejected,
+        },
+        indent=2,
+    )
+    if len(accepted) != len(PUERTO_RICO_NEON_PHENOCAMS):
+        raise IncompleteProviderError(
+            f'truncated_verified_inventory:{len(accepted)}<'
+            f'{len(PUERTO_RICO_NEON_PHENOCAMS)}'
+        )
+    print('  Puerto Rico NSF NEON image verification: '
+          f'{len(accepted)}/{len(PUERTO_RICO_NEON_PHENOCAMS)} current')
+    return len(accepted)
+
+
 # ── Guam (GNTF/IPCamLive) — first-party fixed destination camera embed ──
 def fetch_guam_gntf():
     source_page = 'https://gntf.org/'
@@ -5287,7 +5433,7 @@ def fetch_faa_weathercams_north_dakota():
     headers = {
         'User-Agent': (
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-            'AppleWebKit/537.36 Chrome/130.0 StormScope/0.61.0'
+            'AppleWebKit/537.36 Chrome/130.0 StormScope/0.62.0'
         ),
         'Accept': 'application/json, image/*, */*',
         'Referer': state_page,
@@ -5667,7 +5813,16 @@ def fetch_alaska_avo_verified():
     return count
 
 
+def smithsonian_live_window_active(now=None):
+    current = now or datetime.now(timezone.utc)
+    return 7 <= current.astimezone(ZoneInfo('America/New_York')).hour < 19
+
+
 def fetch_smithsonian_national_zoo():
+    if not smithsonian_live_window_active():
+        raise IncompleteProviderError(
+            'Smithsonian scheduled feeds are outside the 07:00-19:00 ET live window'
+        )
     source_root = 'https://nationalzoo.si.edu/webcams'
     candidates = [
         {
@@ -5700,11 +5855,41 @@ def fetch_smithsonian_national_zoo():
             'source_url': 'https://nationalzoo.si.edu/webcams/lion-cam',
             'refresh_cadence_seconds': 11,
         },
+        {
+            'provider_camera_id': '15789',
+            'name': 'Smithsonian National Zoo Giant Panda Cam 1',
+            'lat': 38.931072,
+            'lon': -77.052735,
+            'url': ('https://nzp-wowza01.si.edu/live_edge_panda25/'
+                    'smil:panda125_01.smil/playlist.m3u8'),
+            'source_url': 'https://nationalzoo.si.edu/webcams/panda-cam',
+            'refresh_cadence_seconds': 12,
+        },
+        {
+            'provider_camera_id': '15791',
+            'name': 'Smithsonian National Zoo Giant Panda Cam 2',
+            'lat': 38.931072,
+            'lon': -77.052735,
+            'url': ('https://nzp-wowza01.si.edu/live_edge_panda25/'
+                    'smil:panda125_02.smil/playlist.m3u8'),
+            'source_url': 'https://nationalzoo.si.edu/webcams/panda-cam',
+            'refresh_cadence_seconds': 12,
+        },
+        {
+            'provider_camera_id': '17420',
+            'name': 'Smithsonian National Zoo Elephant Cam',
+            'lat': 38.931127,
+            'lon': -77.05117,
+            'url': ('https://nzp-wowza01.si.edu/live_edge_elephant_zixi/'
+                    'elephant_zixi.smil/playlist.m3u8'),
+            'source_url': 'https://nationalzoo.si.edu/webcams/elephants',
+            'refresh_cadence_seconds': 12,
+        },
     ]
     verified, errors = verify_live_hls(
         [item['url'] for item in candidates],
         probe_interval=8.0,
-        workers=3,
+        workers=6,
         referer=source_root,
     )
     accepted = []
@@ -5744,6 +5929,8 @@ def fetch_smithsonian_national_zoo():
             'location_evidence_urls': [
                 'https://nationalzoo.si.edu/animals/exhibits/small-mammal-house',
                 'https://nationalzoo.si.edu/animals/exhibits/great-cats',
+                'https://nationalzoo.si.edu/animals/giant-panda',
+                'https://nationalzoo.si.edu/animals/exhibits/elephant-trails',
             ],
             'attribution': 'Smithsonian National Zoo',
             'license_or_usage_terms': (
@@ -5752,16 +5939,17 @@ def fetch_smithsonian_national_zoo():
                 'live playlists and does not copy or rehost media.'
             ),
             'terms_url': 'https://www.si.edu/termsofuse',
+            'scheduled_live_window': '07:00-19:00 America/New_York',
             'verified_live': len(accepted),
             'rejected': len(rejected),
             'accepted': accepted,
             'rejections': rejected,
         },
     )
-    if any(item['failure_class'] in {
-            'transient_network', 'rate_limited', 'authentication_required'
-            } for item in rejected):
-        raise IncompleteProviderError('Smithsonian camera verification was incomplete')
+    if len(accepted) != len(candidates):
+        raise IncompleteProviderError(
+            f'truncated_verified_inventory:{len(accepted)}<{len(candidates)}'
+        )
     print(f'  Smithsonian National Zoo HLS verification: '
           f'{len(accepted)}/{len(candidates)} advancing')
     return len(accepted)
@@ -6774,6 +6962,7 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
         ('Maryland (CHART)', fetch_maryland_chart),
         ('West Virginia (WV511)', fetch_wv511),
         ('Puerto Rico (ACT/ITS)', fetch_pr_act),
+        ('Puerto Rico NSF NEON / PhenoCam', fetch_puerto_rico_neon_phenocams),
         ('Guam (GNTF/IPCamLive)', fetch_guam_gntf),
         ('American Samoa (Clipper Oil/IPCamLive)', fetch_american_samoa_clipper),
         ('Rhode Island URI Quadcams', fetch_rhode_island_uri_quadcams),

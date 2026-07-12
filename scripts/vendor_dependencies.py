@@ -19,7 +19,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST = ROOT / "vendor" / "dependencies.json"
-USER_AGENT = "StormScope/0.61.0 vendor-audit"
+USER_AGENT = "StormScope/0.62.0 vendor-audit"
 
 
 def sha256(data: bytes) -> str:

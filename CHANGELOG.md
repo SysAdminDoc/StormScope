@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.62.0 - 2026-07-12
+
+- Expanded Rhode Island **143 -> 148** with current fixed views at Newport Harbor, downtown Westerly, Block Island North Light, Davisville, and East Greenwich. All five YouTube IDs remained public, embed-enabled, backed by playable HLS, manually frame-reviewed, and fixed to operator or exact-address evidence; the fresh RIDOT inventory's 139 usable rows were already present.
+- Expanded Puerto Rico **22 -> 28** with the complete six-camera NSF NEON/PhenoCam inventory at Guánica, Lajas, Río Cupeyes, and Río Yahuecas. The fail-closed provider contract requires all six current JPEGs, provider timestamps, official field-site coordinates, and CC BY 4.0 attribution; 19 of 21 ACT rows remain current while two frozen provider images stay excluded.
+- Expanded Washington, D.C. **9 -> 13** with two distinct Smithsonian giant-panda views, the Elephant Community Center, and a current Union Station railcam. Smithsonian refreshes now run only during the operator's **07:00-19:00 ET** live window, require all six zoo playlists to advance, and retain last-known-good rows outside that window or on partial verification. DDOT exposes 250 authoritative CCTV locations but no supported public media endpoint.
+- Expanded Wyoming **15 -> 17** with Range's current Dubois town and Lava Mountain Lodge streams. Exact operator/NWS/location evidence and live browser/HLS checks passed; 757 WYDOT views remain licensing-restricted, and nine current Cheyenne BOPU images remain deferred until defensible per-camera coordinates are available.
+- The bounded state batches recorded **409 candidate rejection outcomes** before acceptance, led by wrong geography/content false positives, confirmed non-live or archived streams, placeholders, unsupported players, and ambiguous locations. **45 YouTube query families** returned HTTP 403 and remain retryable rather than exhausted.
+- Corpus **36,575 -> 36,592**; Rhode Island **143 -> 148**; Puerto Rico **22 -> 28**; Washington, D.C. **9 -> 13**; Wyoming **15 -> 17**; YouTube **591 -> 599**; University/PhenoCam **3 -> 9**; Smithsonian **3 -> 6**; images **28,489 -> 28,495**; HLS **6,986 -> 6,989**; deterministic shards remain **49**; service-worker cache v38.
+
 ## v0.61.0 - 2026-07-12
 
 - Expanded Arkansas **11 -> 28** with all 17 current Hazcams weather-network stations. The fail-closed provider contract requires the complete curated inventory, current online/video metadata, provider coordinates, fresh timestamps, and advancing HLS, while StormScope stores only branded public embeds with sponsor/link-out attribution.

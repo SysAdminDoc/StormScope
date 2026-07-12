@@ -1,7 +1,7 @@
-[![Version](https://img.shields.io/badge/version-0.61.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.62.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
-[![Cameras](https://img.shields.io/badge/cameras-36%2C575-cyan)]()
+[![Cameras](https://img.shields.io/badge/cameras-36%2C592-cyan)]()
 [![Live Site](https://img.shields.io/badge/live_site-open_StormScope-7c3aed)](https://sysadmindoc.github.io/StormScope/)
 
 # StormScope
@@ -16,12 +16,12 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 - **Accessible Radar Timeline** — Direct frame scrubbing, manual-only/0.5×/1×/2× playback, explicit frame age and light/moderate/heavy scale text, plus standard, color-vision-friendly, and high-contrast presentations
 - **Official Weather Alerts** — Viewport-scoped NWS watches, warnings, and advisories with severity polygons and accessible details
 - **Optional Hazard Context** — Keyless NOAA lightning density and viewport-bounded NIFC wildfire perimeters start off, show freshness and attribution, fail independently, and stay below warnings and cameras
-- **36,575 Live Cameras** — Traffic, FAA, NOAA/NWS, USGS, NRAO, national/state park, university, MWRA, Smithsonian, AngelCam, Hazcams, EarthCam, IPCamLive, RTSP.me, LiveBeaches, and webcam feeds across all 50 US states plus Washington, D.C., territories, and international locations
+- **36,592 Live Cameras** — Traffic, FAA, NOAA/NWS, USGS, NRAO, national/state park, university/NSF NEON PhenoCam, MWRA, Smithsonian, AngelCam, Hazcams, EarthCam, IPCamLive, RTSP.me, LiveBeaches, and webcam feeds across all 50 US states plus Washington, D.C., territories, and international locations
 - **Fast Camera Discovery** — Progressive state shards make the map interactive before the full corpus loads; accessible search, health/source/type filters, health-first name/distance sorting, and a virtualized result list stay synchronized with the map
 - **Local Favorites and Views** — Favorite cameras, restore the last map/layer/opacity state, save named views, and validate portable JSON imports/exports without an account
 - **English and Spanish UI** — Live language switching covers controls, recovery states, weather/radar labels, WMO conditions, alerts, dates, numbers, and units with deterministic English fallback
 - **Bounded Multi-Camera Monitor** — Select 2–4 search results after a bandwidth warning; offscreen/hidden direct feeds pause, one close destroys all players, and unsupported provider embeds become safe source links
-- **591 YouTube Live Streams** — Playback-verified 24/7 streams including beaches, airports, railcams, harbors, city skylines, landmarks, campuses, indoor/outdoor feeds, wildlife cams, volcano cams, and city-list discoveries (red markers)
+- **599 YouTube Live Streams** — Playback-verified streams including beaches, airports, railcams, harbors, city skylines, landmarks, campuses, indoor/outdoor feeds, wildlife cams, volcano cams, and city-list discoveries (red markers)
 - **509 Provider Embed Feeds** — 276 EarthCam Network pages, 162 active NPS embed pages, 18 FAA WeatherCam pages, 17 Hazcams weather players, 6 DRBA ferry players, 4 AngelCam players, 4 direct LiveBeaches/Brownrice players, 21 first-party IPCamLive embeds, and 1 first-party RTSP.me lake feed
 - **Click-to-View** — YouTube embeds, EarthCam pages, HLS video streams, and auto-refreshing image feeds in a modal viewer
 - **Current Weather** — Country-aware NWS forecasts with Open-Meteo fallback, metric/US units, and explicit issue/observation times
@@ -32,7 +32,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 
 ## Camera Coverage
 
-36,575 cameras across all 50 US states plus Washington, D.C.:
+36,592 cameras across all 50 US states plus Washington, D.C.:
 
 | State | Cameras | | State | Cameras |
 |-------|--------:|-|-------|--------:|
@@ -57,7 +57,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 | Tennessee | 677 | | South Dakota | 186 |
 | Nevada | 661 | | Mississippi | 162 |
 
-Plus: Maine (149, including Acadia NPS, Rockland Ferry, and Hog Island wildlife additions), New Jersey (144, including 129 advancing NJTA HLS cameras), Rhode Island (143, including 4 first-party URI campus views), West Virginia (127, including 3 Canaan Valley resort views, 3 current NCTC eagle views, and a corrected Canyon Rim NPS image), Vermont (96, including 6 current YouTube cameras), Massachusetts (49, including 11 directly verified NPS images, 2 MWRA HLS feeds, and 32 current YouTube cameras), Montana (49, including 9 current Glacier NPS images and 2 current YouTube cameras), Hawaii (37, including 14 current public-domain USGS HVO images and 19 current YouTube cameras), U.S. Virgin Islands (30, including 27 currently verified YouTube streams), Arkansas (28, including 17 advancing Hazcams weather players), Puerto Rico (22, including 19 advancing official ACT traffic cameras), Wyoming (15, including 8 directly verified NPS feeds), Washington, D.C. (9, including 3 first-party Smithsonian wildlife streams), Guam (1 verified first-party destination camera), American Samoa (1 current Pago Pago Harbor image), and the remaining lower-count US states and territories, international country buckets, 197 active National Park webcams, 2 MWRA HLS feeds, 276 EarthCam Network feeds, 18 FAA WeatherCam embeds, 17 Hazcams embeds, 4 AngelCam embeds, 22 first-party IPCamLive feeds, 3 NOAA/NWS stills, 32 USGS stills, 1 NRAO still, 3 university feeds, 4 LiveBeaches direct embeds, and 591 playback-verified YouTube streams.
+Plus: Maine (149, including Acadia NPS, Rockland Ferry, and Hog Island wildlife additions), Rhode Island (148, including 4 first-party URI campus views and 5 current harbor/downtown/wildlife/rail YouTube feeds), New Jersey (144, including 129 advancing NJTA HLS cameras), West Virginia (127, including 3 Canaan Valley resort views, 3 current NCTC eagle views, and a corrected Canyon Rim NPS image), Vermont (96, including 6 current YouTube cameras), Massachusetts (49, including 11 directly verified NPS images, 2 MWRA HLS feeds, and 32 current YouTube cameras), Montana (49, including 9 current Glacier NPS images and 2 current YouTube cameras), Hawaii (37, including 14 current public-domain USGS HVO images and 19 current YouTube cameras), U.S. Virgin Islands (30, including 27 currently verified YouTube streams), Arkansas (28, including 17 advancing Hazcams weather players), Puerto Rico (28, including 19 advancing ACT traffic cameras and 6 current CC BY 4.0 NSF NEON/PhenoCam research images), Wyoming (17, including 8 directly verified NPS feeds and 2 current Range destination cameras), Washington, D.C. (13, including 6 first-party Smithsonian wildlife streams and a Union Station railcam), Guam (1 verified first-party destination camera), American Samoa (1 current Pago Pago Harbor image), and the remaining lower-count US states and territories, international country buckets, 197 active National Park webcams, 2 MWRA HLS feeds, 276 EarthCam Network feeds, 18 FAA WeatherCam embeds, 17 Hazcams embeds, 4 AngelCam embeds, 22 first-party IPCamLive feeds, 6 Smithsonian HLS feeds, 3 NOAA/NWS stills, 32 USGS stills, 1 NRAO still, 9 university/PhenoCam feeds, 4 LiveBeaches direct embeds, and 599 playback-verified YouTube streams.
 
 ## Quick Start
 

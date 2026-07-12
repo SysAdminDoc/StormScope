@@ -2728,5 +2728,94 @@
     "refresh_cadence_seconds": 30,
     "provider": "Mount Washington Cog Railway",
     "category": "rail_destination"
+  },
+  "HlK9G6PdIUo": {
+    "name": "Sightsailing Newport Harbor Dock Cam",
+    "lat": 41.486498,
+    "lon": -71.316928,
+    "state": "Rhode Island",
+    "county": "Newport County",
+    "source_url": "https://sightsailing.com/live-newport-dock-cam/",
+    "refresh_cadence_seconds": 30,
+    "provider": "Sightsailing of Newport",
+    "category": "harbor"
+  },
+  "c9XTpzuSNo0": {
+    "name": "Downtown Westerly - Dixon Square Cam",
+    "lat": 41.377099,
+    "lon": -71.829854,
+    "state": "Rhode Island",
+    "county": "Washington County",
+    "source_url": "https://www.youtube.com/watch?v=c9XTpzuSNo0",
+    "refresh_cadence_seconds": 30,
+    "provider": "XC Media Design",
+    "category": "downtown"
+  },
+  "ejDld-hWwiU": {
+    "name": "Block Island North Light Seal Cam",
+    "lat": 41.227578,
+    "lon": -71.575848,
+    "state": "Rhode Island",
+    "county": "Washington County",
+    "source_url": "https://www.youtube.com/watch?v=ejDld-hWwiU",
+    "refresh_cadence_seconds": 30,
+    "provider": "Boston and Maine Live",
+    "category": "wildlife"
+  },
+  "9uAn-VdurrE": {
+    "name": "Davisville Northeast Corridor Railcam - South",
+    "lat": 41.613696,
+    "lon": -71.475125,
+    "state": "Rhode Island",
+    "county": "Washington County",
+    "direction": "S",
+    "source_url": "https://www.youtube.com/watch?v=9uAn-VdurrE",
+    "refresh_cadence_seconds": 30,
+    "provider": "Virtual Railfan",
+    "category": "rail"
+  },
+  "sFCofJMI4ew": {
+    "name": "East Greenwich Northeast Corridor Railcam",
+    "lat": 41.665843,
+    "lon": -71.445964,
+    "state": "Rhode Island",
+    "county": "Kent County",
+    "source_url": "https://www.youtube.com/watch?v=sFCofJMI4ew",
+    "refresh_cadence_seconds": 30,
+    "provider": "Railside Live / Doyle Sails Rhode Island",
+    "category": "rail"
+  },
+  "EV_XgdlS2BU": {
+    "name": "Washington Union Station Railcam",
+    "lat": 38.897414,
+    "lon": -77.008546,
+    "state": "DC",
+    "county": "Washington",
+    "source_url": "https://www.youtube.com/watch?v=EV_XgdlS2BU",
+    "refresh_cadence_seconds": 30,
+    "provider": "Capitol Rail Watch",
+    "category": "rail_transportation"
+  },
+  "cavcN9tRJzE": {
+    "name": "Range Dubois Town Camera - Ramshorn and 1st",
+    "lat": 43.533671,
+    "lon": -109.630856,
+    "state": "Wyoming",
+    "county": "Fremont County",
+    "source_url": "https://www.range.net/webcams/",
+    "refresh_cadence_seconds": 30,
+    "provider": "Range",
+    "category": "downtown"
+  },
+  "i5aqpgo31AE": {
+    "name": "Range Lava Mountain Lodge Cam",
+    "lat": 43.668579,
+    "lon": -109.946228,
+    "state": "Wyoming",
+    "county": "Fremont County",
+    "source_url": "https://www.range.net/webcams/",
+    "refresh_cadence_seconds": 30,
+    "provider": "Range",
+    "category": "mountain_weather"
   }
 }
