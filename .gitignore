@@ -18,6 +18,7 @@ data/livebeaches_geocode_cache.json
 data/us_city_livestream_checkpoint.json
 data/us_city_livestream_report*.json
 data/oktraffic_discovery_report*.json
+data/deldot_discovery_report*.json
 ROADMAP.md
 Roadmap_Blocked.md
 RESEARCH.md

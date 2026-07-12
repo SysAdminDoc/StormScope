@@ -232,6 +232,49 @@ class FetchMergeTests(unittest.TestCase):
         self.assertEqual("healthy", row["health"])
         self.assertEqual("https://oktraffic.org/tcameras/camera.aspx?id=3", row["source_url"])
 
+    def test_deldot_accepts_only_active_advancing_https_streams(self):
+        active_url = "https://video.deldot.gov/live/KCAM002.stream/playlist.m3u8"
+        payload = {
+            "timestamp": "2026-07-12T00:00:00Z",
+            "videoCameras": [
+                {
+                    "id": "KCAM002",
+                    "title": "W North St @ West Dover Connector",
+                    "county": "Kent",
+                    "lat": 39.153462,
+                    "lon": -75.542016,
+                    "enabled": True,
+                    "status": "Active",
+                    "urls": {"m3u8s": active_url},
+                },
+                {
+                    "id": "KCAM003",
+                    "title": "Unavailable",
+                    "enabled": True,
+                    "status": "Unavailable",
+                    "urls": {
+                        "m3u8s": "https://video.deldot.gov/live/KCAM003.stream/playlist.m3u8"
+                    },
+                },
+            ],
+        }
+        with (
+            mock.patch.object(fetch_cameras, "fetch_json", return_value=payload),
+            mock.patch.object(fetch_cameras, "verify_live_hls", return_value=({active_url}, {})),
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Delaware (live HLS)", fetch_cameras.fetch_delaware_live
+            )
+        self.assertTrue(result.succeeded)
+        self.assertEqual(1, len(result.cameras))
+        row = result.cameras[0]
+        self.assertEqual("Delaware", row["state"])
+        self.assertEqual("Kent", row["county"])
+        self.assertEqual("KCAM002", row["provider_camera_id"])
+        self.assertEqual(10, row["refresh_cadence_seconds"])
+        self.assertEqual("https://tmc.deldot.gov/json/videocamera.json", row["source_url"])
+
 
 if __name__ == "__main__":
     unittest.main()

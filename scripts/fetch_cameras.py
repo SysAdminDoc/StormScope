@@ -634,7 +634,7 @@ def fetch_txdot():
 def fetch_nps():
     try:
         url = 'https://developer.nps.gov/api/v1/webcams?api_key=DEMO_KEY&limit=500'
-        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.34.0'})
+        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.35.0'})
         count = 0
         for cam in data.get('data', []):
             if str(cam.get('status') or '').lower() == 'inactive':
@@ -960,22 +960,66 @@ def fetch_missouri():
 # ── Delaware DOT (live HLS) ──
 def fetch_delaware_live():
     try:
-        data = fetch_json('https://tmc.deldot.gov/json/videocamera.json')
-        count = 0
-        items = data if isinstance(data, list) else data.get('videocameras', [])
+        api_url = 'https://tmc.deldot.gov/json/videocamera.json'
+        data = fetch_json(api_url)
+        items = data if isinstance(data, list) else data.get('videoCameras', [])
+        candidates = []
         for cam in items:
-            if not cam.get('enabled'):
+            if not cam.get('enabled') or cam.get('status') != 'Active':
                 continue
-            lat = cam.get('lat')
-            lon = cam.get('lon')
-            name = cam.get('title', 'DE Camera')
             urls = cam.get('urls', {})
-            img_url = urls.get('m3u8s', '') or urls.get('m3u8', '') or urls.get('rtmp', '')
-            if not img_url:
+            stream_url = urls.get('m3u8s', '') or urls.get('m3u8', '')
+            if not stream_url.startswith('https://'):
                 continue
-            add_camera(name, lat, lon, img_url, detect_type(img_url),
-                       'Delaware', cam.get('county', ''), '', 'dot')
+            candidates.append((cam, stream_url))
+        verified_urls, verification_errors = verify_live_hls(
+            [stream_url for _, stream_url in candidates]
+        )
+        count = 0
+        rejected = []
+        for cam, stream_url in candidates:
+            if stream_url not in verified_urls:
+                rejected.append({
+                    'provider_camera_id': cam.get('id'),
+                    'name': cam.get('title'),
+                    'url': stream_url,
+                    'failure_class': verification_errors.get(
+                        stream_url, 'transient_network:verification_incomplete'
+                    ),
+                })
+                continue
+            before = len(cameras)
+            add_camera(
+                cam.get('title', 'DE Camera'), cam.get('lat'), cam.get('lon'),
+                stream_url, 'hls', 'Delaware', cam.get('county', ''), '', 'dot',
+                api_url, 10,
+            )
+            if len(cameras) == before:
+                rejected.append({
+                    'provider_camera_id': cam.get('id'),
+                    'name': cam.get('title'),
+                    'url': stream_url,
+                    'failure_class': 'location_ambiguous:invalid_coordinates',
+                })
+                continue
+            cameras[-1]['provider_camera_id'] = str(cam.get('id'))
             count += 1
+        atomic_write_json(
+            DATA_DIR / 'deldot_discovery_report.json',
+            {
+                'generated_at': utc_now_iso(),
+                'provider': 'Delaware (live HLS)',
+                'source_url': api_url,
+                'attribution': 'Delaware Department of Transportation',
+                'provider_timestamp': None if isinstance(data, list) else data.get('timestamp'),
+                'inventory_total': len(items),
+                'candidates': len(candidates),
+                'verified_live': count,
+                'rejected': rejected,
+            },
+            indent=2,
+        )
+        print(f'  DelDOT HLS verification: {count}/{len(candidates)} advancing')
         return count
     except Exception as e:
         print(f'  Delaware live: {e}')

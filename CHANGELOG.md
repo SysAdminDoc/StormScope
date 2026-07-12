@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.35.0 - 2026-07-11
+
+### Delaware and Kansas coverage
+- Added 314 provider-located Delaware DOT HLS cameras after correcting the official inventory key casing, bringing the corpus to 24,892 cameras across 48 states plus Washington, D.C.
+- Accepted only `Active`, HTTPS DelDOT rows whose media playlists served segments and advanced across two probes; 14 provider-declared unavailable rows were skipped and 30 reproducible HTTP 404 playlists were classified `confirmed_dead` in the ignored report.
+- Added the playback-verified, embeddable Wichita Great Plains Transportation Museum railcam from an eight-page-per-query state/territory gap search, bringing YouTube coverage to 369 streams and eliminating Kansas as a state-level gap.
+- Added the exact DelDOT HLS origin to the CSP, provider IDs/attribution/timestamps/cadence, updated localized totals, and rebuilt deterministic shards.
+
 ## v0.34.0 - 2026-07-11
 
 ### Verified official-camera expansion
