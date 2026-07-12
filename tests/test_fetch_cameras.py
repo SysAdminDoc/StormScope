@@ -985,6 +985,100 @@ class FetchMergeTests(unittest.TestCase):
             referer=row["url"],
         )
 
+    def test_american_samoa_clipper_accepts_only_current_first_party_snapshot(self):
+        alias = "6477b73ed2f62"
+        player_url = (
+            "https://g3.ipcamlive.com/player/player.php?alias=6477b73ed2f62"
+        )
+        hls_url = "https://s116.ipcamlive.com/streams/currentstream/master.m3u8"
+        provider_timestamp = "2026-07-12T12:52:38+00:00"
+        with (
+            mock.patch.object(
+                fetch_cameras,
+                "_resolve_ipcamlive_player",
+                return_value=(player_url, hls_url),
+            ),
+            mock.patch.object(
+                fetch_cameras,
+                "verify_current_jpeg_images",
+                return_value=(
+                    {alias},
+                    {},
+                    {alias: ("frame-hash", 169031, provider_timestamp)},
+                ),
+            ) as verifier,
+            mock.patch.object(fetch_cameras, "atomic_write_json") as report_writer,
+        ):
+            result = fetch_cameras.run_fetcher(
+                "American Samoa (Clipper Oil/IPCamLive)",
+                fetch_cameras.fetch_american_samoa_clipper,
+            )
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual(1, len(result.cameras))
+        row = result.cameras[0]
+        self.assertEqual("American Samoa", row["state"])
+        self.assertEqual("Maoputasi County", row["county"])
+        self.assertEqual("image", row["type"])
+        self.assertEqual("ipcamlive", row["source"])
+        self.assertEqual(alias, row["provider_camera_id"])
+        self.assertEqual("harbor", row["category"])
+        self.assertEqual(-14.277244, row["lat"])
+        self.assertEqual(-170.685222, row["lon"])
+        self.assertEqual(120, row["refresh_cadence_seconds"])
+        self.assertEqual(
+            "https://clipperoil.com/americansamoa/webcam/", row["source_url"]
+        )
+        self.assertEqual(provider_timestamp, row["provider_timestamp"])
+        candidates = verifier.call_args.args[0]
+        self.assertEqual(
+            [{
+                "provider_camera_id": alias,
+                "url": row["url"],
+                "max_age_seconds": 300,
+            }],
+            candidates,
+        )
+        self.assertEqual(2.0, verifier.call_args.kwargs["probe_interval"])
+        self.assertEqual(1, verifier.call_args.kwargs["workers"])
+        report = report_writer.call_args.args[1]
+        self.assertEqual(1, report["verified_live"])
+        self.assertEqual([], report["rejected"])
+
+    def test_american_samoa_clipper_fails_closed_on_stale_snapshot(self):
+        alias = "6477b73ed2f62"
+        with (
+            mock.patch.object(
+                fetch_cameras,
+                "_resolve_ipcamlive_player",
+                return_value=("https://example.test/player", "https://example.test/live.m3u8"),
+            ),
+            mock.patch.object(
+                fetch_cameras,
+                "verify_current_jpeg_images",
+                return_value=(
+                    set(),
+                    {alias: "placeholder:stale_provider_timestamp"},
+                    {},
+                ),
+            ),
+            mock.patch.object(fetch_cameras, "atomic_write_json") as report_writer,
+        ):
+            result = fetch_cameras.run_fetcher(
+                "American Samoa (Clipper Oil/IPCamLive)",
+                fetch_cameras.fetch_american_samoa_clipper,
+            )
+
+        self.assertFalse(result.succeeded)
+        self.assertEqual([], result.cameras)
+        self.assertIn("snapshot unavailable", result.error)
+        report = report_writer.call_args.args[1]
+        self.assertEqual(0, report["verified_live"])
+        self.assertEqual(
+            "placeholder:stale_provider_timestamp",
+            report["rejected"][0]["failure_class"],
+        )
+
     def test_smithsonian_accepts_only_advancing_first_party_zoo_hls(self):
         urls = [
             "https://nzp-wowza02.si.edu/live_edge_nmr/nmr_1080_all.smil/playlist.m3u8",

@@ -711,7 +711,7 @@ def fetch_txdot():
 def fetch_nps():
     try:
         url = 'https://developer.nps.gov/api/v1/webcams?api_key=DEMO_KEY&limit=500'
-        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.56.0'})
+        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.57.0'})
         count = 0
         for cam in data.get('data', []):
             if str(cam.get('status') or '').lower() == 'inactive':
@@ -841,7 +841,7 @@ def _current_jpeg_snapshot(
     request = urllib.request.Request(
         url,
         headers={
-            'User-Agent': 'StormScope/0.56.0',
+            'User-Agent': 'StormScope/0.57.0',
             'Accept': 'image/jpeg,image/*,*/*',
             'Cache-Control': 'no-cache',
         },
@@ -3775,6 +3775,93 @@ def fetch_guam_gntf():
     return 1
 
 
+def fetch_american_samoa_clipper():
+    source_page = 'https://clipperoil.com/americansamoa/webcam/'
+    alias = '6477b73ed2f62'
+    try:
+        player_url, _ = _resolve_ipcamlive_player(source_page, alias)
+    except ValueError as exc:
+        raise IncompleteProviderError(f'Clipper Oil player unavailable: {exc}') from exc
+
+    snapshot_url = (
+        'https://g3.ipcamlive.com/player/snapshot.php?alias=6477b73ed2f62'
+    )
+    candidates = [{
+        'provider_camera_id': alias,
+        'url': snapshot_url,
+        'max_age_seconds': 300,
+    }]
+    verified, errors, snapshots = verify_current_jpeg_images(
+        candidates, probe_interval=2.0, workers=1
+    )
+    if alias not in verified:
+        reason = errors.get(alias, 'transient_network:verification_incomplete')
+        atomic_write_json(
+            DATA_DIR / 'american_samoa_clipper_discovery_report.json',
+            {
+                'generated_at': utc_now_iso(),
+                'provider': 'Clipper Oil American Samoa / IPCamLive',
+                'source_url': source_page,
+                'verified_live': 0,
+                'rejected': [{
+                    'provider_camera_id': alias,
+                    'failure_class': reason,
+                }],
+            },
+            indent=2,
+        )
+        raise IncompleteProviderError(f'Clipper Oil snapshot unavailable: {reason}')
+
+    add_camera(
+        'Clipper Oil Pago Pago Harbor Cam',
+        -14.277244,
+        -170.685222,
+        snapshot_url,
+        'image',
+        'American Samoa',
+        'Maoputasi County',
+        'N',
+        'ipcamlive',
+        source_page,
+        120,
+    )
+    cameras[-1]['provider_camera_id'] = alias
+    cameras[-1]['provider_timestamp'] = snapshots[alias][2]
+    cameras[-1]['category'] = 'harbor'
+    atomic_write_json(
+        DATA_DIR / 'american_samoa_clipper_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'Clipper Oil American Samoa / IPCamLive',
+            'source_url': source_page,
+            'player_url': player_url,
+            'snapshot_url': snapshot_url,
+            'geographic_scope': (
+                'Clipper Oil office and warehouse, southern Pago Pago Harbor, '
+                'Fagatogo, Maoputasi County, American Samoa'
+            ),
+            'location_evidence': (
+                'The first-party page identifies the fixed office/warehouse view '
+                'at the southern end of Pago Pago Harbor; the public camera-map '
+                'point reverse-geocodes to Route 001 at the Port of Pago Pago.'
+            ),
+            'attribution': 'Clipper Oil American Samoa; IPCamLive',
+            'license_or_usage_terms': (
+                'The first-party operator publishes a domain-unlocked IPCamLive '
+                'player. IPCamLive documents the alias snapshot as a public '
+                'two-minute preview endpoint; StormScope links it and does not mirror it.'
+            ),
+            'verified_live': 1,
+            'provider_timestamp': snapshots[alias][2],
+            'refresh_cadence_seconds': 120,
+            'rejected': [],
+        },
+        indent=2,
+    )
+    print('  American Samoa Clipper Oil image verification: 1/1 current')
+    return 1
+
+
 def fetch_smithsonian_national_zoo():
     source_root = 'https://nationalzoo.si.edu/webcams'
     candidates = [
@@ -4484,6 +4571,7 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
         ('West Virginia (WV511)', fetch_wv511),
         ('Puerto Rico (ACT/ITS)', fetch_pr_act),
         ('Guam (GNTF/IPCamLive)', fetch_guam_gntf),
+        ('American Samoa (Clipper Oil/IPCamLive)', fetch_american_samoa_clipper),
         ('Smithsonian National Zoo', fetch_smithsonian_national_zoo),
         ('Arkansas (Cobblestone/RTSP.me)', fetch_arkansas_cobblestone),
         ('Florida (ArcGIS)', fetch_fl_arcgis),

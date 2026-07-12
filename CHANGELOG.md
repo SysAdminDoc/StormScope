@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.57.0 - 2026-07-12
+
+- Added the first accepted American Samoa camera: Clipper Oil's fixed Pago Pago Harbor view. The first-party page identifies the southern-harbor office/warehouse location, and the independently mapped point was cross-checked against Fagatogo, Maoputasi County, the operator description, and the visible harbor geometry.
+- Added a fail-closed Clipper Oil/IPCamLive provider contract that resolves the operator-published, domain-unlocked player but stores only IPCamLive's public two-minute snapshot endpoint. Acceptance requires a real current JPEG, a fresh provider timestamp, and advancing content across repeated probes; dead rotating HLS URLs are never persisted, and the existing last-known-good row survives any later verification failure.
+- Searched American Samoa, Guam, and Northern Mariana Islands official, operator, destination, public-land, transportation, science, weather, and YouTube families. Held the exact-location Saipan EarthCam and Guam GCIC South IPCamLive cameras as retryable `confirmed_not_live`; rejected archived, mobile, composite, wrong-location, and unrelated live results. Direct YouTube continuation searches eventually returned HTTP 403 and remain retryable rather than being treated as exhaustion.
+- Corpus **36,319 -> 36,320**; American Samoa **0 -> 1**; IPCamLive **14 -> 15**; deterministic shards remain **49**; service-worker cache v33.
+
 ## v0.56.0 - 2026-07-12
 
 - Expanded Hawaii from **13 to 37** accurately located cameras. Added **14** current, manually reviewed, public-domain USGS Hawaiian Volcano Observatory/NIMS images across Kilauea and Mauna Loa. Each curated camera uses official provider coordinates, a direct HTTPS JPEG, an explicit cadence, a fresh provider timestamp, and a fail-closed refresh contract that retains the complete last-known-good set on any partial verification failure.
