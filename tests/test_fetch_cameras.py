@@ -1326,6 +1326,186 @@ class FetchMergeTests(unittest.TestCase):
         self.assertEqual([], result.cameras)
         self.assertIn("truncated_verified_inventory", result.error)
 
+    def test_mississippi_state_university_requires_advancing_hls(self):
+        hls_url = (
+            "https://gameday-camera.its.msstate.edu/stream/"
+            "daviswade_skydeck_east/channel/0/hls/live/index.m3u8"
+        )
+        with (
+            mock.patch.object(
+                fetch_cameras, "verify_live_hls", return_value=({hls_url}, {})
+            ) as verifier,
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Mississippi State University",
+                fetch_cameras.fetch_mississippi_state_university,
+            )
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual(1, len(result.cameras))
+        self.assertEqual("university", result.cameras[0]["source"])
+        self.assertEqual("Mississippi", result.cameras[0]["state"])
+        self.assertEqual("campus", result.cameras[0]["category"])
+        verifier.assert_called_once_with(
+            [hls_url],
+            probe_interval=6.0,
+            workers=1,
+            referer="https://www.utc.msstate.edu/live-cameras",
+        )
+
+    def test_mississippi_state_university_fails_closed(self):
+        with (
+            mock.patch.object(
+                fetch_cameras,
+                "verify_live_hls",
+                return_value=(set(), {"unused": "transient_network:timeout"}),
+            ),
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Mississippi State University",
+                fetch_cameras.fetch_mississippi_state_university,
+            )
+
+        self.assertFalse(result.succeeded)
+        self.assertEqual([], result.cameras)
+        self.assertIn("MSU HLS unavailable", result.error)
+
+    def test_west_virginia_canaan_requires_every_advancing_player(self):
+        aliases = [item["alias"] for item in fetch_cameras.WEST_VIRGINIA_CANAAN_CAMS]
+        hls_by_alias = {
+            alias: f"https://streams.test/{alias}/stream.m3u8" for alias in aliases
+        }
+
+        def resolve(_source_page, alias):
+            return (
+                f"https://g1.ipcamlive.com/player/player.php?alias={alias}",
+                hls_by_alias[alias],
+            )
+
+        with (
+            mock.patch.object(
+                fetch_cameras, "_resolve_ipcamlive_player", side_effect=resolve
+            ),
+            mock.patch.object(
+                fetch_cameras,
+                "verify_live_hls",
+                return_value=(set(hls_by_alias.values()), {}),
+            ),
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "West Virginia Canaan IPCamLive",
+                fetch_cameras.fetch_west_virginia_canaan,
+            )
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual(3, len(result.cameras))
+        self.assertTrue(all(row["state"] == "West Virginia" for row in result.cameras))
+        self.assertTrue(all(row["source"] == "ipcamlive" for row in result.cameras))
+
+    def test_west_virginia_canaan_partial_hls_fails_closed(self):
+        aliases = [item["alias"] for item in fetch_cameras.WEST_VIRGINIA_CANAAN_CAMS]
+        hls_by_alias = {
+            alias: f"https://streams.test/{alias}/stream.m3u8" for alias in aliases
+        }
+
+        def resolve(_source_page, alias):
+            return (
+                f"https://g1.ipcamlive.com/player/player.php?alias={alias}",
+                hls_by_alias[alias],
+            )
+
+        verified = set(hls_by_alias.values()) - {hls_by_alias[aliases[-1]]}
+        with (
+            mock.patch.object(
+                fetch_cameras, "_resolve_ipcamlive_player", side_effect=resolve
+            ),
+            mock.patch.object(
+                fetch_cameras,
+                "verify_live_hls",
+                return_value=(verified, {hls_by_alias[aliases[-1]]: "transient_network"}),
+            ),
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "West Virginia Canaan IPCamLive",
+                fetch_cameras.fetch_west_virginia_canaan,
+            )
+
+        self.assertFalse(result.succeeded)
+        self.assertEqual([], result.cameras)
+        self.assertIn("truncated_verified_inventory", result.error)
+
+    def test_west_virginia_and_maine_verified_images_preserve_metadata(self):
+        snapshots = {
+            "03D5B344-9A69-16BC-F00004463B3C22F8": (
+                "hash", 120000, "2026-07-12T14:00:00+00:00"
+            ),
+            "wvsp-babcock-glade-creek-grist-mill": (
+                "hash", 120000, "2026-07-12T14:00:01+00:00"
+            ),
+            "ACA416": ("hash", 120000, "2026-07-12T14:00:02+00:00"),
+            "RocklandFerry": ("hash", 120000, "2026-07-12T14:00:03+00:00"),
+        }
+
+        def verify(candidates, **_kwargs):
+            camera_id = candidates[0]["provider_camera_id"]
+            return {camera_id}, {}, {camera_id: snapshots[camera_id]}
+
+        fetchers = (
+            (fetch_cameras.fetch_west_virginia_nps_verified, "nps"),
+            (fetch_cameras.fetch_west_virginia_state_park, "state_park"),
+            (fetch_cameras.fetch_maine_nps_verified, "nps"),
+            (fetch_cameras.fetch_maine_ferry_verified, "dot"),
+        )
+        with (
+            mock.patch.object(
+                fetch_cameras, "verify_current_jpeg_images", side_effect=verify
+            ),
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            results = [
+                fetch_cameras.run_fetcher(fetcher.__name__, fetcher)
+                for fetcher, _source in fetchers
+            ]
+
+        self.assertTrue(all(result.succeeded for result in results))
+        self.assertEqual(
+            [source for _fetcher, source in fetchers],
+            [result.cameras[0]["source"] for result in results],
+        )
+        self.assertTrue(results[0].cameras[0]["_replace_source_page"])
+        self.assertEqual("public_land", results[1].cameras[0]["category"])
+        self.assertEqual("weather_scenic", results[2].cameras[0]["category"])
+        self.assertEqual("ferry_harbor", results[3].cameras[0]["category"])
+
+    def test_maine_ferry_requires_advancing_current_image(self):
+        with (
+            mock.patch.object(
+                fetch_cameras,
+                "verify_current_jpeg_images",
+                return_value=(
+                    set(),
+                    {"RocklandFerry": "placeholder:non_advancing_content"},
+                    {},
+                ),
+            ) as verifier,
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Maine Ferry verified", fetch_cameras.fetch_maine_ferry_verified
+            )
+
+        self.assertFalse(result.succeeded)
+        self.assertEqual([], result.cameras)
+        self.assertIn("Rockland Ferry image unavailable", result.error)
+        candidate = verifier.call_args.args[0][0]
+        self.assertTrue(candidate["require_content_change"])
+        self.assertTrue(candidate["cache_bust"])
+        self.assertEqual(65.0, verifier.call_args.kwargs["probe_interval"])
+
     def test_smithsonian_accepts_only_advancing_first_party_zoo_hls(self):
         urls = [
             "https://nzp-wowza02.si.edu/live_edge_nmr/nmr_1080_all.smil/playlist.m3u8",

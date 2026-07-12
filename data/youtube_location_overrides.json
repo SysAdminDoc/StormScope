@@ -2415,5 +2415,50 @@
     "county": "Washington County",
     "source_url": "https://www.sugarbush.com/mountain/webcams",
     "refresh_cadence_seconds": 300
+  },
+  "-i_tbaOR0-s": {
+    "name": "Corinth Crossroads Museum RailCam",
+    "lat": 34.933212,
+    "lon": -88.521145,
+    "state": "Mississippi",
+    "county": "Alcorn County",
+    "direction": "W",
+    "source_url": "https://www.youtube.com/watch?v=-i_tbaOR0-s",
+    "refresh_cadence_seconds": 300,
+    "provider": "Iron Rail Cams / Crossroads Museum",
+    "category": "rail"
+  },
+  "BXIlwGtLPTc": {
+    "name": "South Dakota Mines Quad Cam",
+    "lat": 44.073953,
+    "lon": -103.205662,
+    "state": "South Dakota",
+    "county": "Pennington County",
+    "source_url": "https://www.sdsmt.edu/student-life/campus-points-of-interest/webcams.html",
+    "refresh_cadence_seconds": 300,
+    "provider": "South Dakota Mines",
+    "category": "campus"
+  },
+  "0so_l_Vhtb4": {
+    "name": "South Dakota Mines Campus Overview Camera",
+    "lat": 44.073953,
+    "lon": -103.205662,
+    "state": "South Dakota",
+    "county": "Pennington County",
+    "source_url": "https://www.sdsmt.edu/student-life/campus-points-of-interest/webcams.html",
+    "refresh_cadence_seconds": 300,
+    "provider": "South Dakota Mines",
+    "category": "campus"
+  },
+  "O6Ir_sMsTtc": {
+    "name": "Audubon Osprey Nest - Hog Island",
+    "lat": 43.96874,
+    "lon": -69.42324,
+    "state": "Maine",
+    "county": "Lincoln County",
+    "source_url": "https://explore.org/livecams/ospreys/audubon-boat-house-osprey-nest",
+    "refresh_cadence_seconds": 30,
+    "provider": "National Audubon Society / Explore.org",
+    "category": "wildlife"
   }
 }

@@ -43,8 +43,14 @@ data/minnesota_usgs_discovery_report*.json
 data/hawaii_usgs_discovery_report*.json
 data/american_samoa_clipper_discovery_report*.json
 data/montana_nps_discovery_report*.json
+data/mississippi_university_discovery_report*.json
 data/new_jersey_njta_discovery_report*.json
 data/rhode_island_uri_discovery_report*.json
+data/west_virginia_canaan_discovery_report*.json
+data/west_virginia_nps_discovery_report*.json
+data/west_virginia_state_park_discovery_report*.json
+data/maine_nps_discovery_report*.json
+data/maine_ferry_discovery_report*.json
 ROADMAP.md
 Roadmap_Blocked.md
 RESEARCH.md

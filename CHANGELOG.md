@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.59.0 - 2026-07-12
+
+- Expanded Maine from **146 to 149** with the current Acadia McFarland Hill NPS air-quality image, an independently advancing MaineDOT Rockland Ferry Terminal image, and the public/embeddable Audubon/Explore Hog Island osprey stream. Official station, terminal, and operator evidence fixes all three locations; Burnt Coat Harbor and other restricted, archived, unsupported, ambiguous, or rate-limited candidates remain rejected or retryable.
+- Expanded Mississippi from **160 to 162** with Mississippi State University's first-party advancing campus HLS feed and the fixed west-facing Corinth Crossroads Museum railcam. Added a truthful `university` source/filter/CSP contract instead of mislabeling the campus feed. Twenty-four current live search results were manually rejected as wrong-state matches, while nine YouTube query families that returned HTTP 403 remain retryable.
+- Expanded South Dakota from **184 to 186** with two first-party South Dakota Mines campus streams. Both canonical IDs were rechecked current-live, public, embed-enabled, fixed to the operator-published campus, and backed by advancing HLS media immediately before import; the unavailable Dino/M Hill feeds and stale SDPB host were not accepted.
+- Expanded West Virginia from **120 to 124** by adding three domain-unlocked, first-party Canaan Valley Resort IPCamLive views and replacing the unlocated Canyon Rim NPS page embed with its current direct image and exact Fayette County metadata. The Babcock State Park image advanced during discovery but failed its immediate precommit freshness recheck, so it remains a fail-closed retry instead of entering the corpus; ResortCams is licensing-restricted and Winterplace retains a TLS blocker.
+- YouTube overrides now preserve operator/category/provider identity through the transactional discovery writer. New provider integrations retain last-known-good data on partial or stale verification, direct media origins are explicitly CSP-approved, and all accepted YouTube/HLS feeds passed final current-live, embedding, manifest, segment-availability, and advancement probes.
+- Corpus **36,467 -> 36,477**; Maine **146 -> 149**; Mississippi **160 -> 162**; South Dakota **184 -> 186**; West Virginia **120 -> 124** after one blank-state correction; DOT **35,371 -> 35,372**; NPS **195 -> 196**; IPCamLive **19 -> 22**; YouTube **563 -> 567**; University **0 -> 1**; deterministic shards remain **49**; service-worker cache v35.
+
 ## v0.58.0 - 2026-07-12
 
 - Expanded New Jersey from **14 to 144** accurately located cameras. Added **129** New Jersey Turnpike Authority Turnpike/Parkway HLS views from the first-party embedded inventory with official coordinates and FCC-cross-checked counties. All 129 advanced across repeated manifest/segment probes; **132** active frames were manually reviewed, with three mispointed views rejected and five repeatable HLS 404s retained as confirmed dead.

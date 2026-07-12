@@ -711,7 +711,7 @@ def fetch_txdot():
 def fetch_nps():
     try:
         url = 'https://developer.nps.gov/api/v1/webcams?api_key=DEMO_KEY&limit=500'
-        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.58.0'})
+        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.59.0'})
         count = 0
         for cam in data.get('data', []):
             if str(cam.get('status') or '').lower() == 'inactive':
@@ -841,7 +841,7 @@ def _current_jpeg_snapshot(
     request = urllib.request.Request(
         url,
         headers={
-            'User-Agent': 'StormScope/0.58.0',
+            'User-Agent': 'StormScope/0.59.0',
             'Accept': 'image/jpeg,image/*,*/*',
             'Cache-Control': 'no-cache',
         },
@@ -4390,6 +4390,411 @@ def fetch_rhode_island_uri_quadcams():
     return count
 
 
+def fetch_mississippi_state_university():
+    source_page = 'https://www.utc.msstate.edu/live-cameras'
+    hls_url = (
+        'https://gameday-camera.its.msstate.edu/stream/'
+        'daviswade_skydeck_east/channel/0/hls/live/index.m3u8'
+    )
+    verified, errors = verify_live_hls(
+        [hls_url], probe_interval=6.0, workers=1, referer=source_page
+    )
+    if hls_url not in verified:
+        reason = errors.get(hls_url, 'transient_network:verification_incomplete')
+        atomic_write_json(
+            DATA_DIR / 'mississippi_university_discovery_report.json',
+            {
+                'generated_at': utc_now_iso(),
+                'provider': 'Mississippi State University Television Center',
+                'source_url': source_page,
+                'verified_live': 0,
+                'rejected': [{
+                    'provider_camera_id': 'msstate-daviswade-skydeck-east',
+                    'failure_class': reason,
+                }],
+            },
+            indent=2,
+        )
+        raise IncompleteProviderError(f'MSU HLS unavailable: {reason}')
+
+    add_camera(
+        'Mississippi State University Main Campus South Cam',
+        33.456539317712,
+        -88.794470722226,
+        hls_url,
+        'hls',
+        'Mississippi',
+        'Oktibbeha County',
+        'S',
+        'university',
+        source_page,
+        4,
+    )
+    cameras[-1]['provider_camera_id'] = 'msstate-daviswade-skydeck-east'
+    cameras[-1]['category'] = 'campus'
+    atomic_write_json(
+        DATA_DIR / 'mississippi_university_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'Mississippi State University Television Center',
+            'source_url': source_page,
+            'geographic_scope': (
+                'Davis Wade Stadium, Mississippi State University, '
+                'Starkville, Oktibbeha County, Mississippi'
+            ),
+            'location_evidence': (
+                'The first-party live-camera page labels Main Campus - South; '
+                'the manifest identifies Davis Wade Skydeck East, and the '
+                'official stadium address fixes the accepted point.'
+            ),
+            'attribution': 'Mississippi State University Television Center',
+            'license_or_usage_terms': (
+                'The university publishes this HLS stream for public viewing. '
+                'StormScope links the original feed and does not proxy or archive it.'
+            ),
+            'verified_live': 1,
+            'rejected': [],
+            'refresh_cadence_seconds': 4,
+        },
+        indent=2,
+    )
+    print('  Mississippi State University HLS verification: 1/1 advancing')
+    return 1
+
+
+WEST_VIRGINIA_CANAAN_CAMS = (
+    {
+        'alias': '6911368c776d3',
+        'name': 'Canaan Valley Resort Ski Area Overlook',
+        'category': 'ski',
+    },
+    {
+        'alias': '6788f7b7d0365',
+        'name': 'Canaan Valley Resort Golf Course',
+        'category': 'golf',
+    },
+    {
+        'alias': '67588ef2adde5',
+        'name': 'Canaan Valley Resort Tubing Hill Base',
+        'category': 'ski',
+    },
+)
+
+
+def fetch_west_virginia_canaan():
+    source_page = 'https://www.canaanresort.com/resort-webcam'
+    resolved = {}
+    rejected = [{
+        'provider_camera_id': '689fab99423ec',
+        'failure_class': 'confirmed_not_live:player_available_0',
+    }]
+    for item in WEST_VIRGINIA_CANAAN_CAMS:
+        try:
+            resolved[item['alias']] = _resolve_ipcamlive_player(
+                source_page, item['alias']
+            )
+        except ValueError as exc:
+            rejected.append({
+                'provider_camera_id': item['alias'],
+                'failure_class': f'unsupported_embed:{exc}',
+            })
+    if len(resolved) != len(WEST_VIRGINIA_CANAAN_CAMS):
+        raise IncompleteProviderError(
+            f'truncated_player_inventory:{len(resolved)}<{len(WEST_VIRGINIA_CANAAN_CAMS)}'
+        )
+
+    hls_by_alias = {alias: value[1] for alias, value in resolved.items()}
+    verified_hls, hls_errors = verify_live_hls(
+        list(hls_by_alias.values()), probe_interval=6.0, workers=3, referer=source_page
+    )
+    for item in WEST_VIRGINIA_CANAAN_CAMS:
+        alias = item['alias']
+        hls_url = hls_by_alias[alias]
+        if hls_url not in verified_hls:
+            rejected.append({
+                'provider_camera_id': alias,
+                'failure_class': hls_errors.get(
+                    hls_url, 'transient_network:verification_incomplete'
+                ),
+            })
+            continue
+        add_camera(
+            item['name'], 39.0242855, -79.4650593, resolved[alias][0], 'embed',
+            'West Virginia', 'Tucker County', '', 'ipcamlive', source_page, 10,
+        )
+        cameras[-1]['provider_camera_id'] = alias
+        cameras[-1]['category'] = item['category']
+
+    count = len(verified_hls)
+    atomic_write_json(
+        DATA_DIR / 'west_virginia_canaan_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'Canaan Valley Resort State Park / IPCamLive',
+            'source_url': source_page,
+            'geographic_scope': (
+                'Canaan Valley Resort State Park, 230 Main Lodge Road, '
+                'Davis, Tucker County, West Virginia'
+            ),
+            'location_evidence': (
+                'The first-party directions link publishes the accepted venue '
+                'point; FCC Census Area metadata confirms Tucker County.'
+            ),
+            'attribution': 'Canaan Valley Resort State Park; IPCamLive',
+            'license_or_usage_terms': (
+                'The resort publishes each domain-unlocked player. StormScope '
+                'stores the original player URLs and does not proxy media.'
+            ),
+            'verified_live': count,
+            'rejected': rejected,
+            'refresh_cadence_seconds': 10,
+        },
+        indent=2,
+    )
+    if count != len(WEST_VIRGINIA_CANAAN_CAMS):
+        raise IncompleteProviderError(
+            f'truncated_verified_inventory:{count}<{len(WEST_VIRGINIA_CANAAN_CAMS)}'
+        )
+    print(f'  Canaan Valley HLS verification: {count}/{len(WEST_VIRGINIA_CANAAN_CAMS)} advancing')
+    return count
+
+
+def fetch_west_virginia_nps_verified():
+    source_page = (
+        'https://www.nps.gov/media/webcam/view.htm?'
+        'id=03D5B344-9A69-16BC-F00004463B3C22F8'
+    )
+    camera_id = '03D5B344-9A69-16BC-F00004463B3C22F8'
+    image_url = 'https://www.nps.gov/webcams-neri/image.jpg'
+    candidate = {
+        'provider_camera_id': camera_id,
+        'url': image_url,
+        'max_age_seconds': 600,
+        'cache_bust': True,
+    }
+    verified, errors, snapshots = verify_current_jpeg_images(
+        [candidate], probe_interval=2.0, workers=1
+    )
+    if camera_id not in verified:
+        reason = errors.get(camera_id, 'transient_network:verification_incomplete')
+        raise IncompleteProviderError(f'Canyon Rim image unavailable: {reason}')
+
+    add_camera(
+        'Canyon Rim Webcam', 38.067253920980896, -81.07805251441228,
+        image_url, 'image', 'West Virginia', 'Fayette County', '', 'nps',
+        source_page, 300,
+    )
+    cameras[-1]['provider_camera_id'] = camera_id
+    cameras[-1]['provider_timestamp'] = snapshots[camera_id][2]
+    cameras[-1]['category'] = 'scenic'
+    cameras[-1]['_replace_source_page'] = True
+    atomic_write_json(
+        DATA_DIR / 'west_virginia_nps_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'National Park Service - New River Gorge',
+            'source_url': source_page,
+            'attribution': 'National Park Service',
+            'license_or_usage_terms': 'NPS-created website material is generally public domain',
+            'verified_live': 1,
+            'provider_timestamp': snapshots[camera_id][2],
+            'rejected': [],
+            'refresh_cadence_seconds': 300,
+        },
+        indent=2,
+    )
+    print('  West Virginia NPS image verification: 1/1 current')
+    return 1
+
+
+def fetch_west_virginia_state_park():
+    source_page = (
+        'https://wvstateparks.com/parks/babcock-state-park/additional-information/'
+    )
+    camera_id = 'wvsp-babcock-glade-creek-grist-mill'
+    image_url = 'https://wvdnr.gov/babcock%5Cbabcock.jpg'
+    candidate = {
+        'provider_camera_id': camera_id,
+        'url': image_url,
+        'max_age_seconds': 600,
+    }
+    verified, errors, snapshots = verify_current_jpeg_images(
+        [candidate], probe_interval=2.0, workers=1
+    )
+    if camera_id not in verified:
+        reason = errors.get(camera_id, 'transient_network:verification_incomplete')
+        raise IncompleteProviderError(f'Babcock State Park image unavailable: {reason}')
+
+    add_camera(
+        'Babcock State Park - Glade Creek Grist Mill',
+        37.9794612,
+        -80.94681,
+        image_url,
+        'image',
+        'West Virginia',
+        'Fayette County',
+        '',
+        'state_park',
+        source_page,
+        5,
+    )
+    cameras[-1]['provider_camera_id'] = camera_id
+    cameras[-1]['provider_timestamp'] = snapshots[camera_id][2]
+    cameras[-1]['category'] = 'public_land'
+    atomic_write_json(
+        DATA_DIR / 'west_virginia_state_park_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'West Virginia State Parks / WVDNR',
+            'source_url': source_page,
+            'geographic_scope': (
+                'Glade Creek Grist Mill, Babcock State Park, '
+                'Fayette County, West Virginia'
+            ),
+            'location_evidence': (
+                'The first-party page and park map identify the exact named mill; '
+                'the public mill point is used rather than inferring the camera mount.'
+            ),
+            'attribution': 'West Virginia State Parks / WVDNR',
+            'license_or_usage_terms': (
+                'The state park publishes this public current image. StormScope '
+                'links the original endpoint and does not proxy or archive it.'
+            ),
+            'verified_live': 1,
+            'provider_timestamp': snapshots[camera_id][2],
+            'rejected': [],
+            'refresh_cadence_seconds': 5,
+        },
+        indent=2,
+    )
+    print('  West Virginia State Park image verification: 1/1 current')
+    return 1
+
+
+def fetch_maine_nps_verified():
+    source_page = 'https://www.nps.gov/AirWebCams/acad'
+    camera_id = 'ACA416'
+    image_url = (
+        'https://www.nps.gov/featurecontent/ard/webcams/images/acadlarge.jpg'
+    )
+    candidate = {
+        'provider_camera_id': camera_id,
+        'url': image_url,
+        'max_age_seconds': 1800,
+    }
+    verified, errors, snapshots = verify_current_jpeg_images(
+        [candidate], probe_interval=2.0, workers=1
+    )
+    if camera_id not in verified:
+        reason = errors.get(camera_id, 'transient_network:verification_incomplete')
+        raise IncompleteProviderError(f'Acadia air-quality image unavailable: {reason}')
+
+    add_camera(
+        'Acadia National Park - McFarland Hill Air Quality',
+        44.377086,
+        -68.2608,
+        image_url,
+        'image',
+        'Maine',
+        'Hancock County',
+        'NE',
+        'nps',
+        source_page,
+        900,
+    )
+    cameras[-1]['provider_camera_id'] = camera_id
+    cameras[-1]['provider_timestamp'] = snapshots[camera_id][2]
+    cameras[-1]['category'] = 'weather_scenic'
+    atomic_write_json(
+        DATA_DIR / 'maine_nps_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'National Park Service - Acadia National Park',
+            'source_url': source_page,
+            'geographic_scope': (
+                'McFarland Hill air-quality monitoring station, Acadia National Park, '
+                'Hancock County, Maine'
+            ),
+            'location_evidence': (
+                'The first-party NPS/EPA webcam inventory supplies station ACA416 '
+                'and its exact published coordinates.'
+            ),
+            'attribution': 'National Park Service Air Resources Division',
+            'license_or_usage_terms': (
+                'NPS-created website material is generally public domain'
+            ),
+            'verified_live': 1,
+            'provider_timestamp': snapshots[camera_id][2],
+            'rejected': [],
+            'refresh_cadence_seconds': 900,
+        },
+        indent=2,
+    )
+    print('  Maine NPS image verification: 1/1 current')
+    return 1
+
+
+def fetch_maine_ferry_verified():
+    source_page = 'https://www.maine.gov/dot/programs-services/ferry/rockland-ferry'
+    camera_id = 'RocklandFerry'
+    image_url = 'https://www.maine.gov/mdot/maps/cameras/RocklandFerry.jpg'
+    candidate = {
+        'provider_camera_id': camera_id,
+        'url': image_url,
+        'max_age_seconds': 180,
+        'require_content_change': True,
+        'cache_bust': True,
+    }
+    verified, errors, snapshots = verify_current_jpeg_images(
+        [candidate], probe_interval=65.0, workers=1
+    )
+    if camera_id not in verified:
+        reason = errors.get(camera_id, 'transient_network:verification_incomplete')
+        raise IncompleteProviderError(f'Rockland Ferry image unavailable: {reason}')
+
+    add_camera(
+        'Rockland Ferry Terminal',
+        44.107223,
+        -69.1080293,
+        image_url,
+        'image',
+        'Maine',
+        'Knox County',
+        'E',
+        'dot',
+        source_page,
+        60,
+    )
+    cameras[-1]['provider_camera_id'] = camera_id
+    cameras[-1]['provider_timestamp'] = snapshots[camera_id][2]
+    cameras[-1]['category'] = 'ferry_harbor'
+    atomic_write_json(
+        DATA_DIR / 'maine_ferry_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'Maine State Ferry Service / MaineDOT',
+            'source_url': source_page,
+            'geographic_scope': 'Rockland Ferry Terminal, Knox County, Maine',
+            'location_evidence': (
+                'The first-party ferry page names the terminal and camera; the '
+                'accepted point is the mapped Maine State Ferry Service terminal.'
+            ),
+            'attribution': 'Maine State Ferry Service / MaineDOT',
+            'license_or_usage_terms': (
+                'MaineDOT publishes the current image for public traveler information; '
+                'StormScope links the original endpoint without proxying or archiving it.'
+            ),
+            'verified_live': 1,
+            'provider_timestamp': snapshots[camera_id][2],
+            'rejected': [],
+            'refresh_cadence_seconds': 60,
+        },
+        indent=2,
+    )
+    print('  Maine ferry image verification: 1/1 advancing')
+    return 1
+
+
 def fetch_smithsonian_national_zoo():
     source_root = 'https://nationalzoo.si.edu/webcams'
     candidates = [
@@ -5103,6 +5508,12 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
         ('Guam (GNTF/IPCamLive)', fetch_guam_gntf),
         ('American Samoa (Clipper Oil/IPCamLive)', fetch_american_samoa_clipper),
         ('Rhode Island URI Quadcams', fetch_rhode_island_uri_quadcams),
+        ('Mississippi State University', fetch_mississippi_state_university),
+        ('West Virginia Canaan IPCamLive', fetch_west_virginia_canaan),
+        ('West Virginia NPS verified', fetch_west_virginia_nps_verified),
+        ('West Virginia State Park', fetch_west_virginia_state_park),
+        ('Maine NPS verified', fetch_maine_nps_verified),
+        ('Maine Ferry verified', fetch_maine_ferry_verified),
         ('Smithsonian National Zoo', fetch_smithsonian_national_zoo),
         ('Arkansas (Cobblestone/RTSP.me)', fetch_arkansas_cobblestone),
         ('Florida (ArcGIS)', fetch_fl_arcgis),

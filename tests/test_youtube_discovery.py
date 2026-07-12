@@ -81,6 +81,8 @@ class YouTubeLocationExtractionTests(unittest.TestCase):
             reasons=["location_override"],
             source_url="https://explore.org/livecams/bats/carlsbad-caverns",
             replace_source_url=old_source,
+            provider="Explore.org / National Park Service",
+            category="wildlife",
         )
         with tempfile.TemporaryDirectory() as directory:
             data_file = Path(directory) / "cameras.json"
@@ -93,6 +95,9 @@ class YouTubeLocationExtractionTests(unittest.TestCase):
         self.assertEqual("youtube", rows[0]["source"])
         self.assertEqual("BwiIsjXt3KI", rows[0]["url"])
         self.assertEqual(30, rows[0]["refresh_cadence_seconds"])
+        self.assertEqual("Explore.org / National Park Service", rows[0]["provider"])
+        self.assertEqual("wildlife", rows[0]["category"])
+        self.assertEqual("BwiIsjXt3KI", rows[0]["provider_camera_id"])
 
 
 if __name__ == "__main__":

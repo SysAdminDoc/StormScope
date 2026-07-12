@@ -72,7 +72,7 @@ NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 "
-    "StormScope/0.58.0"
+    "StormScope/0.59.0"
 )
 
 US_STATES = {
@@ -518,6 +518,8 @@ class LocatedCamera:
     source_url: str = ""
     refresh_cadence_seconds: int = 30
     replace_source_url: str = ""
+    provider: str = ""
+    category: str = ""
 
 
 def run_curl(args: list[str], *, data: bytes | None = None, timeout: int = 30) -> bytes:
@@ -1042,6 +1044,8 @@ def located_from_override(candidate: Candidate, override: dict[str, Any]) -> Loc
         source_url=str(override.get("source_url") or ""),
         refresh_cadence_seconds=int(override.get("refresh_cadence_seconds") or 30),
         replace_source_url=str(override.get("replace_source_url") or ""),
+        provider=str(override.get("provider") or ""),
+        category=str(override.get("category") or ""),
     )
 
 
@@ -1142,6 +1146,11 @@ def append_cameras(data_file: Path, located: list[LocatedCamera], limit_add: int
                 healthy_metadata(source_url, verified_at=verified_at)
             )
             record["refresh_cadence_seconds"] = camera.refresh_cadence_seconds
+            if camera.provider:
+                record["provider"] = camera.provider
+            if camera.category:
+                record["category"] = camera.category
+            record["provider_camera_id"] = camera.video_id
             if replacement_index is None:
                 max_id += 1
                 cameras.append(record)
@@ -1172,6 +1181,8 @@ def camera_to_report(camera: LocatedCamera) -> dict[str, Any]:
         "source_url": camera.source_url,
         "refresh_cadence_seconds": camera.refresh_cadence_seconds,
         "replace_source_url": camera.replace_source_url,
+        "provider": camera.provider,
+        "category": camera.category,
     }
 
 
