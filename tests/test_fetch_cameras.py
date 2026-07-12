@@ -98,6 +98,23 @@ class FetchMergeTests(unittest.TestCase):
         self.assertEqual(fresh["url"], merged[0]["url"])
         self.assertNotIn("_replace_source_page", merged[0])
 
+    def test_verified_provider_can_replace_a_legacy_feed_url(self):
+        legacy = camera(1, "https://provider.test/legacy.jpg")
+        fresh = camera(
+            99,
+            "https://provider.test/current.jpg",
+            provider="Verified Provider",
+        )
+        fresh["_replace_feed_urls"] = [legacy["url"]]
+
+        merged = merge_provider_results(
+            [legacy], [ProviderResult("Verified Provider", [fresh])]
+        )
+
+        self.assertEqual(1, len(merged))
+        self.assertEqual(fresh["url"], merged[0]["url"])
+        self.assertNotIn("_replace_feed_urls", merged[0])
+
     def test_truncated_provider_snapshot_retains_previous_rows(self):
         existing = [
             camera(index, f"https://dot.test/{index}.jpg", provider="Provider A")
@@ -1448,6 +1465,10 @@ class FetchMergeTests(unittest.TestCase):
             ),
             "ACA416": ("hash", 120000, "2026-07-12T14:00:02+00:00"),
             "RocklandFerry": ("hash", 120000, "2026-07-12T14:00:03+00:00"),
+            "nps:maca-green-river-bluffs": (
+                "hash", 120000, "2026-07-12T14:00:04+00:00"
+            ),
+            "THR422": ("hash", 120000, "2026-07-12T14:00:05+00:00"),
         }
 
         def verify(candidates, **_kwargs):
@@ -1459,6 +1480,8 @@ class FetchMergeTests(unittest.TestCase):
             (fetch_cameras.fetch_west_virginia_state_park, "state_park"),
             (fetch_cameras.fetch_maine_nps_verified, "nps"),
             (fetch_cameras.fetch_maine_ferry_verified, "dot"),
+            (fetch_cameras.fetch_kentucky_nps_verified, "nps"),
+            (fetch_cameras.fetch_north_dakota_nps_verified, "nps"),
         )
         with (
             mock.patch.object(
@@ -1480,6 +1503,8 @@ class FetchMergeTests(unittest.TestCase):
         self.assertEqual("public_land", results[1].cameras[0]["category"])
         self.assertEqual("weather_scenic", results[2].cameras[0]["category"])
         self.assertEqual("ferry_harbor", results[3].cameras[0]["category"])
+        self.assertEqual("scenic", results[4].cameras[0]["category"])
+        self.assertEqual("weather_scenic", results[5].cameras[0]["category"])
 
     def test_maine_ferry_requires_advancing_current_image(self):
         with (
@@ -1505,6 +1530,332 @@ class FetchMergeTests(unittest.TestCase):
         self.assertTrue(candidate["require_content_change"])
         self.assertTrue(candidate["cache_bust"])
         self.assertEqual(65.0, verifier.call_args.kwargs["probe_interval"])
+
+    def test_alaska_avo_requires_exact_public_current_provider_metadata(self):
+        now_timestamp = int(fetch_cameras.datetime.now(fetch_cameras.timezone.utc).timestamp())
+
+        def metadata(url):
+            code = url.rsplit("/", 1)[-1]
+            item = next(
+                value for value in fetch_cameras.ALASKA_AVO_CAMS
+                if value["code"] == code
+            )
+            return {
+                "webcam": {
+                    "webcamCode": code,
+                    "latitude": item["lat"],
+                    "longitude": item["lon"],
+                    "isPublic": "Y",
+                    "hasImages": "Y",
+                    "currentImageUrl": (
+                        f"https://avo.alaska.edu/ashcam-api/images/{code}/current.jpg"
+                    ),
+                    "newestImage": {
+                        "imageTimestamp": now_timestamp,
+                        "md5": "a" * 32,
+                    },
+                }
+            }
+
+        ids = {item["code"] for item in fetch_cameras.ALASKA_AVO_CAMS}
+        snapshots = {
+            camera_id: ("hash", 120000, "2026-07-12T15:00:00+00:00")
+            for camera_id in ids
+        }
+        with (
+            mock.patch.object(fetch_cameras, "fetch_json", side_effect=metadata),
+            mock.patch.object(
+                fetch_cameras,
+                "verify_current_jpeg_images",
+                return_value=(ids, {}, snapshots),
+            ) as verifier,
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Alaska Volcano Observatory / U.S. Geological Survey",
+                fetch_cameras.fetch_alaska_avo_verified,
+            )
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual(3, len(result.cameras))
+        self.assertTrue(all(row["state"] == "Alaska" for row in result.cameras))
+        self.assertTrue(all(row["source"] == "usgs" for row in result.cameras))
+        self.assertTrue(all(row["category"] == "volcano" for row in result.cameras))
+        self.assertEqual(3, len(verifier.call_args.args[0]))
+        self.assertTrue(all(
+            candidate["minimum_bytes"] == 8192
+            for candidate in verifier.call_args.args[0]
+        ))
+
+    def test_alaska_avo_metadata_location_change_fails_closed(self):
+        now_timestamp = int(fetch_cameras.datetime.now(fetch_cameras.timezone.utc).timestamp())
+
+        def metadata(url):
+            code = url.rsplit("/", 1)[-1]
+            item = next(
+                value for value in fetch_cameras.ALASKA_AVO_CAMS
+                if value["code"] == code
+            )
+            return {
+                "webcam": {
+                    "webcamCode": code,
+                    "latitude": item["lat"] + (1 if code == "redoubt" else 0),
+                    "longitude": item["lon"],
+                    "isPublic": "Y",
+                    "hasImages": "Y",
+                    "currentImageUrl": (
+                        f"https://avo.alaska.edu/ashcam-api/images/{code}/current.jpg"
+                    ),
+                    "newestImage": {
+                        "imageTimestamp": now_timestamp,
+                        "md5": "a" * 32,
+                    },
+                }
+            }
+
+        with (
+            mock.patch.object(fetch_cameras, "fetch_json", side_effect=metadata),
+            mock.patch.object(fetch_cameras, "verify_current_jpeg_images") as verifier,
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Alaska Volcano Observatory / U.S. Geological Survey",
+                fetch_cameras.fetch_alaska_avo_verified,
+            )
+
+        self.assertFalse(result.succeeded)
+        self.assertEqual([], result.cameras)
+        self.assertIn("truncated_metadata_inventory", result.error)
+        verifier.assert_not_called()
+
+    def test_kentucky_kytc_requires_every_curated_current_image(self):
+        features = []
+        for camera_id in sorted(fetch_cameras.KENTUCKY_KYTC_CURATED_IDS):
+            features.append({
+                "attributes": {
+                    "id": camera_id,
+                    "description": f"Camera {camera_id}",
+                    "status": "Online",
+                    "state": "Kentucky",
+                    "county": "Test",
+                    "direction": "East",
+                    "snapshot": (
+                        "https://www.trimarc.org/images/milestone/"
+                        f"CCTV_{camera_id}.jpg"
+                    ),
+                    "latitude": 37.0 + camera_id / 10000,
+                    "longitude": -85.0,
+                },
+                "geometry": {
+                    "x": -85.0,
+                    "y": 37.0 + camera_id / 10000,
+                },
+            })
+        for index in range(212):
+            features.append({
+                "attributes": {"id": 10_000 + index, "state": "Kentucky"},
+                "geometry": {},
+            })
+        for index in range(9):
+            features.append({
+                "attributes": {"id": 20_000 + index, "state": "Indiana"},
+                "geometry": {},
+            })
+        provider_ids = {
+            f"kytc:{camera_id}" for camera_id in fetch_cameras.KENTUCKY_KYTC_CURATED_IDS
+        }
+        snapshots = {
+            provider_id: ("hash", 120000, "2026-07-12T15:00:00+00:00")
+            for provider_id in provider_ids
+        }
+        with (
+            mock.patch.object(
+                fetch_cameras, "fetch_json", return_value={"features": features}
+            ),
+            mock.patch.object(
+                fetch_cameras,
+                "verify_current_jpeg_images",
+                return_value=(provider_ids, {}, snapshots),
+            ),
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Kentucky Transportation Cabinet (KYTC)",
+                fetch_cameras.fetch_kentucky_kytc_verified,
+            )
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual(29, len(result.cameras))
+        self.assertTrue(all(row["state"] == "Kentucky" for row in result.cameras))
+        self.assertEqual(6, sum("_replace_feed_urls" in row for row in result.cameras))
+
+    def test_kentucky_kytc_truncated_inventory_fails_closed(self):
+        with mock.patch.object(
+            fetch_cameras, "fetch_json", return_value={"features": []}
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Kentucky Transportation Cabinet (KYTC)",
+                fetch_cameras.fetch_kentucky_kytc_verified,
+            )
+
+        self.assertFalse(result.succeeded)
+        self.assertEqual([], result.cameras)
+        self.assertIn("truncated_inventory", result.error)
+
+    def test_north_dakota_faa_requires_current_public_inventory_and_images(self):
+        accepted_by_site = {
+            802: [12931, 12932],
+            837: [13061],
+            842: [13077, 13078],
+            852: [13113, 13114],
+            865: [13166, 13167],
+            970: [13593, 13594, 13596],
+            974: [13609, 13612],
+            977: [13623],
+            989: [13667],
+            1021: [13787],
+            1098: [14060],
+        }
+        now = fetch_cameras.datetime.now(fetch_cameras.timezone.utc).isoformat().replace(
+            "+00:00", "Z"
+        )
+        sites = []
+        for site_id, camera_ids in accepted_by_site.items():
+            lat = 46.0 + site_id / 10000
+            lon = -100.0
+            sites.append({
+                "siteId": site_id,
+                "siteName": f"Airport {site_id}",
+                "state": "ND",
+                "latitude": lat,
+                "longitude": lon,
+                "siteActive": True,
+                "siteInMaintenance": False,
+                "validated": True,
+                "operatedBy": f"Airport {site_id}",
+                "cameras": [
+                    {
+                        "cameraId": camera_id,
+                        "cameraDirection": "East",
+                        "cameraLastSuccess": now,
+                        "cameraInMaintenance": False,
+                        "cameraOutOfOrder": False,
+                        "latitude": lat,
+                        "longitude": lon,
+                    }
+                    for camera_id in camera_ids
+                ],
+            })
+        for offset in range(10):
+            sites.append({
+                "siteId": 2000 + offset,
+                "siteName": f"Filler {offset}",
+                "state": "ND",
+                "latitude": 47.0,
+                "longitude": -101.0,
+                "siteActive": True,
+                "siteInMaintenance": False,
+                "validated": True,
+                "cameras": [
+                    {"cameraId": 30_000 + offset * 10 + index}
+                    for index in range(7)
+                ],
+            })
+
+        class Response:
+            def __init__(self, body, content_type="application/json"):
+                self.body = body
+                self.headers = {"Content-Type": content_type}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read(self, *_args):
+                return self.body
+
+        class Opener:
+            def open(self, request, timeout=30):
+                del timeout
+                url = request.full_url
+                if url.endswith("/cameras/state/ND"):
+                    return Response(b"<html></html>", "text/html")
+                if url.endswith("/api/sites"):
+                    return Response(json.dumps({
+                        "success": True,
+                        "count": 958,
+                        "payload": sites,
+                    }).encode())
+                if "/api/cameras/" in url:
+                    camera_id = int(url.split("/api/cameras/", 1)[1].split("/", 1)[0])
+                    return Response(json.dumps({
+                        "success": True,
+                        "count": 1,
+                        "payload": [{
+                            "cameraId": camera_id,
+                            "imageDatetime": now,
+                            "imageUri": (
+                                "https://images.wcams-static.faa.gov/webimages/"
+                                f"test/{camera_id}.jpg"
+                            ),
+                        }],
+                    }).encode())
+                if url.startswith("https://images.wcams-static.faa.gov/webimages/"):
+                    return Response(b"\xff\xd8\xff" + b"x" * 6000, "image/jpeg")
+                raise AssertionError(url)
+
+        with (
+            mock.patch.object(fetch_cameras.urllib.request, "build_opener", return_value=Opener()),
+            mock.patch.object(fetch_cameras.time, "sleep"),
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "FAA WeatherCams / North Dakota airports",
+                fetch_cameras.fetch_faa_weathercams_north_dakota,
+            )
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual(18, len(result.cameras))
+        self.assertTrue(all(row["source"] == "faa" for row in result.cameras))
+        self.assertTrue(all(row["type"] == "embed" for row in result.cameras))
+
+    def test_north_dakota_faa_truncated_inventory_fails_closed(self):
+        class Response:
+            headers = {"Content-Type": "application/json"}
+
+            def __init__(self, body):
+                self.body = body
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read(self, *_args):
+                return self.body
+
+        class Opener:
+            def open(self, request, timeout=30):
+                del timeout
+                if request.full_url.endswith("/cameras/state/ND"):
+                    return Response(b"<html></html>")
+                return Response(json.dumps({
+                    "success": True, "count": 0, "payload": []
+                }).encode())
+
+        with mock.patch.object(
+            fetch_cameras.urllib.request, "build_opener", return_value=Opener()
+        ):
+            result = fetch_cameras.run_fetcher(
+                "FAA WeatherCams / North Dakota airports",
+                fetch_cameras.fetch_faa_weathercams_north_dakota,
+            )
+
+        self.assertFalse(result.succeeded)
+        self.assertEqual([], result.cameras)
+        self.assertIn("truncated_inventory", result.error)
 
     def test_smithsonian_accepts_only_advancing_first_party_zoo_hls(self):
         urls = [

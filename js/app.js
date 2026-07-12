@@ -13,6 +13,7 @@
     'brownrice.com',
     'abbeyroad.com',
     'esbnyc.com',
+    'weathercams.faa.gov',
     'ipcamlive.com',
     'rtsp.me'
   ]);

@@ -23,7 +23,7 @@ from urllib.parse import urlsplit, urlunsplit
 CAMERA_SCHEMA_VERSION = 2
 ALLOWED_TYPES = frozenset({"embed", "hls", "image", "mjpeg", "youtube"})
 ALLOWED_SOURCES = frozenset(
-    {"dot", "earthcam", "ipcamlive", "livebeaches", "mwra", "noaa", "nps", "nrao", "rtspme", "smithsonian", "state_park", "university", "usgs", "youtube"}
+    {"dot", "earthcam", "faa", "ipcamlive", "livebeaches", "mwra", "noaa", "nps", "nrao", "rtspme", "smithsonian", "state_park", "university", "usgs", "youtube"}
 )
 ALLOWED_STATUSES = frozenset({"Active", "Offline", "Unknown"})
 ALLOWED_HEALTH = frozenset({"unknown", "healthy", "degraded", "offline"})
@@ -40,6 +40,7 @@ EMBED_HOST_SUFFIXES = frozenset(
         "nps.gov",
         "player.brownrice.com",
         "rtsp.me",
+        "weathercams.faa.gov",
     }
 )
 VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")

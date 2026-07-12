@@ -51,6 +51,11 @@ data/west_virginia_nps_discovery_report*.json
 data/west_virginia_state_park_discovery_report*.json
 data/maine_nps_discovery_report*.json
 data/maine_ferry_discovery_report*.json
+data/alaska_avo_discovery_report*.json
+data/kentucky_kytc_discovery_report*.json
+data/north_dakota_faa_discovery_report*.json
+data/kentucky_nps_discovery_report*.json
+data/north_dakota_nps_discovery_report*.json
 ROADMAP.md
 Roadmap_Blocked.md
 RESEARCH.md

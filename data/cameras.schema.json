@@ -17,7 +17,7 @@
       "lon": {"type": "number", "minimum": -180, "maximum": 180},
       "url": {"type": "string", "minLength": 1},
       "type": {"enum": ["embed", "hls", "image", "mjpeg", "youtube"]},
-      "source": {"enum": ["dot", "earthcam", "ipcamlive", "livebeaches", "mwra", "noaa", "nps", "nrao", "rtspme", "smithsonian", "state_park", "university", "usgs", "youtube"]},
+      "source": {"enum": ["dot", "earthcam", "faa", "ipcamlive", "livebeaches", "mwra", "noaa", "nps", "nrao", "rtspme", "smithsonian", "state_park", "university", "usgs", "youtube"]},
       "state": {"type": "string"},
       "county": {"type": "string"},
       "direction": {"type": "string"},

@@ -2460,5 +2460,118 @@
     "refresh_cadence_seconds": 30,
     "provider": "National Audubon Society / Explore.org",
     "category": "wildlife"
+  },
+  "7OFQQuyryTo": {
+    "name": "NCTC Eagle Nest Camera 2",
+    "lat": 39.487231,
+    "lon": -77.805374,
+    "state": "West Virginia",
+    "county": "Jefferson County",
+    "source_url": "https://www.fws.gov/nctc/eagle-cam",
+    "refresh_cadence_seconds": 30,
+    "provider": "U.S. Fish and Wildlife Service",
+    "category": "wildlife"
+  },
+  "fQTa-jTvdA0": {
+    "name": "NCTC Eagle Nest Camera 3",
+    "lat": 39.487231,
+    "lon": -77.805374,
+    "state": "West Virginia",
+    "county": "Jefferson County",
+    "source_url": "https://www.fws.gov/nctc/eagle-cam",
+    "refresh_cadence_seconds": 30,
+    "provider": "U.S. Fish and Wildlife Service",
+    "category": "wildlife"
+  },
+  "3ieUramhCCI": {
+    "name": "NCTC Eagle Nest Camera 1",
+    "lat": 39.487231,
+    "lon": -77.805374,
+    "state": "West Virginia",
+    "county": "Jefferson County",
+    "source_url": "https://www.fws.gov/nctc/eagle-cam",
+    "refresh_cadence_seconds": 30,
+    "provider": "U.S. Fish and Wildlife Service",
+    "category": "wildlife"
+  },
+  "zVsCxyi47Kk": {
+    "name": "Round Island First Beach Walrus Cam",
+    "lat": 58.60528,
+    "lon": -159.97639,
+    "state": "Alaska",
+    "county": "Dillingham Census Area",
+    "source_url": "https://www.youtube.com/watch?v=zVsCxyi47Kk",
+    "refresh_cadence_seconds": 300,
+    "provider": "Explore.org / Alaska Department of Fish and Game",
+    "category": "wildlife"
+  },
+  "2t3hVTdetkA": {
+    "name": "UAF Large Animal Research Station Muskox Cam",
+    "lat": 64.878346,
+    "lon": -147.866572,
+    "state": "Alaska",
+    "county": "Fairbanks North Star Borough",
+    "source_url": "https://www.youtube.com/watch?v=2t3hVTdetkA",
+    "refresh_cadence_seconds": 300,
+    "provider": "Explore.org / University of Alaska Fairbanks",
+    "category": "wildlife"
+  },
+  "JGymcnKTmT4": {
+    "name": "Mill Creek Falcon Cam - 2026 Season",
+    "lat": 38.052378,
+    "lon": -85.909811,
+    "state": "Kentucky",
+    "county": "Jefferson County",
+    "source_url": "https://lge-ku.com/environment/plants-and-wildlife/peregrine-falcons/cam",
+    "refresh_cadence_seconds": 30,
+    "provider": "LG&E and KU",
+    "category": "wildlife"
+  },
+  "LA0eX1GXnx0": {
+    "name": "Kentucky Equine Adoption Center",
+    "lat": 37.943765,
+    "lon": -84.574001,
+    "state": "Kentucky",
+    "county": "Jessamine County",
+    "source_url": "https://explore.org/livecams/kentucky-equine-horses/kentucky-equine-horses",
+    "refresh_cadence_seconds": 30,
+    "provider": "Explore.org / Kentucky Equine Adoption Center",
+    "category": "wildlife"
+  },
+  "Jq6C162vNkg": {
+    "name": "UND Atmospheric Sciences Skycam - East",
+    "lat": 47.921732,
+    "lon": -97.086897,
+    "state": "North Dakota",
+    "county": "Grand Forks County",
+    "direction": "E",
+    "source_url": "https://aero.und.edu/atmos/index.html",
+    "refresh_cadence_seconds": 30,
+    "provider": "University of North Dakota Atmospheric Sciences",
+    "category": "university_weather"
+  },
+  "mpcvRHLGBRw": {
+    "name": "UND Atmospheric Sciences Skycam - West",
+    "lat": 47.921732,
+    "lon": -97.086897,
+    "state": "North Dakota",
+    "county": "Grand Forks County",
+    "direction": "W",
+    "source_url": "https://aero.und.edu/atmos/index.html",
+    "refresh_cadence_seconds": 30,
+    "provider": "University of North Dakota Atmospheric Sciences",
+    "category": "university_weather"
+  },
+  "Rzu1itDtL_k": {
+    "name": "UND Atmospheric Sciences Skycam - Southwest",
+    "lat": 47.921732,
+    "lon": -97.086897,
+    "state": "North Dakota",
+    "county": "Grand Forks County",
+    "direction": "SW",
+    "source_url": "https://aero.und.edu/atmos/index.html",
+    "refresh_cadence_seconds": 30,
+    "provider": "University of North Dakota Atmospheric Sciences",
+    "category": "university_weather"
   }
 }

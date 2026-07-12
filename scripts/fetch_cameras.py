@@ -12,6 +12,7 @@ import json
 import gzip
 import html
 import itertools
+import http.cookiejar
 import re
 import ssl
 import sys
@@ -711,7 +712,7 @@ def fetch_txdot():
 def fetch_nps():
     try:
         url = 'https://developer.nps.gov/api/v1/webcams?api_key=DEMO_KEY&limit=500'
-        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.59.0'})
+        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.60.0'})
         count = 0
         for cam in data.get('data', []):
             if str(cam.get('status') or '').lower() == 'inactive':
@@ -836,12 +837,12 @@ WYOMING_OLD_FAITHFUL = {
 
 
 def _current_jpeg_snapshot(
-    url, require_provider_timestamp=True, max_age_seconds=1200
+    url, require_provider_timestamp=True, max_age_seconds=1200, minimum_bytes=10_000
 ):
     request = urllib.request.Request(
         url,
         headers={
-            'User-Agent': 'StormScope/0.59.0',
+            'User-Agent': 'StormScope/0.60.0',
             'Accept': 'image/jpeg,image/*,*/*',
             'Cache-Control': 'no-cache',
         },
@@ -850,7 +851,11 @@ def _current_jpeg_snapshot(
         content_type = (response.headers.get('Content-Type') or '').lower()
         last_modified = response.headers.get('Last-Modified')
         body = response.read()
-    if 'image' not in content_type or len(body) < 10_000 or not body.startswith(b'\xff\xd8\xff'):
+    if (
+        'image' not in content_type
+        or len(body) < minimum_bytes
+        or not body.startswith(b'\xff\xd8\xff')
+    ):
         raise ValueError('placeholder:not_a_current_jpeg')
     if not last_modified and require_provider_timestamp:
         raise ValueError('placeholder:missing_provider_timestamp')
@@ -889,6 +894,7 @@ def verify_current_jpeg_images(candidates, probe_interval=2.0, workers=7):
                     url,
                     require_provider_timestamp=not item.get('require_content_change'),
                     max_age_seconds=item.get('max_age_seconds', 1200),
+                    minimum_bytes=item.get('minimum_bytes', 10_000),
                 ),
                 None,
             )
@@ -4795,6 +4801,607 @@ def fetch_maine_ferry_verified():
     return 1
 
 
+ALASKA_AVO_CAMS = (
+    {
+        'code': 'katmai_kabu',
+        'name': 'Katmai Volcano KABU Cam',
+        'lat': 58.2702,
+        'lon': -155.2843,
+        'county': 'Lake and Peninsula Borough',
+        'direction': 'E',
+    },
+    {
+        'code': 'redoubt',
+        'name': 'Redoubt Volcano RDJH Cam',
+        'lat': 60.5905,
+        'lon': -152.8058,
+        'county': 'Kenai Peninsula Borough',
+        'direction': 'S',
+    },
+    {
+        'code': 'shishaldin_wtug2',
+        'name': 'Shishaldin Volcano WTUG2 Cam',
+        'lat': 54.8466,
+        'lon': -164.3873,
+        'county': 'Aleutians East Borough',
+        'direction': 'ESE',
+    },
+)
+
+
+KENTUCKY_KYTC_CURATED_IDS = frozenset({
+    220, 336, 337, 349, 355, 382, 486, 494, 498, 499, 500, 502, 503, 504,
+    505, 507, 508, 509, 510, 511, 515, 516, 517, 519, 520, 521, 522, 523, 524,
+})
+KENTUCKY_KYTC_REPLACED_URLS = {
+    337: 'https://www.trimarc.org/images/milestone/CCTV_05_ADMS112_KY22-EB.jpg',
+    382: 'https://www.trimarc.org/images/milestone/CCTV_06_471_0027.jpg',
+    336: 'https://www.trimarc.org/images/milestone/CCTV_05_ADMS111_KY22-WB.jpg',
+    349: 'https://www.trimarc.org/images/milestone/CCTV_05_64_0054-1.jpg',
+    486: 'https://www.trimarc.org/images/milestone/CCTV_08_KY80_0290.jpg',
+    220: 'https://www.trimarc.org/images/milestone/CCTV_04_65_0738.jpg',
+}
+KENTUCKY_KYTC_DIRECTIONS = {
+    'East': 'E',
+    'West': 'W',
+    'North': 'N',
+    'South': 'S',
+    'North-South': 'N/S',
+    'East-West': 'E/W',
+}
+
+NORTH_DAKOTA_FAA_CAMERA_IDS = frozenset({
+    12931, 12932, 13061, 13077, 13078, 13113, 13114, 13166, 13167,
+    13593, 13594, 13596, 13609, 13612, 13623, 13667, 13787, 14060,
+})
+NORTH_DAKOTA_FAA_COUNTIES = {
+    802: 'Stark County',
+    837: 'Bowman County',
+    842: 'Barnes County',
+    852: 'Williams County',
+    865: 'McLean County',
+    970: 'Dunn County',
+    974: 'Cass County',
+    977: 'Cass County',
+    989: 'Traill County',
+    1021: 'Benson County',
+    1098: 'McKenzie County',
+}
+FAA_DIRECTIONS = {
+    'North': 'N',
+    'NorthEast': 'NE',
+    'East': 'E',
+    'SouthEast': 'SE',
+    'South': 'S',
+    'SouthWest': 'SW',
+    'West': 'W',
+    'NorthWest': 'NW',
+}
+
+
+def fetch_kentucky_kytc_verified():
+    endpoint = (
+        'https://services2.arcgis.com/CcI36Pduqd0OR4W9/arcgis/rest/services/'
+        'trafficCamerasCur_Prd/FeatureServer/0/query?'
+        + urllib.parse.urlencode({
+            'where': '1=1',
+            'outFields': '*',
+            'returnGeometry': 'true',
+            'f': 'json',
+        })
+    )
+    source_page = (
+        'https://www.arcgis.com/home/item.html?'
+        'id=0666efd2054343b080b5c2f0924ef2ae'
+    )
+    payload = fetch_json(endpoint)
+    features = payload.get('features') or []
+    kentucky = [
+        feature for feature in features
+        if (feature.get('attributes') or {}).get('state') == 'Kentucky'
+    ]
+    if len(features) < 250 or len(kentucky) < 241:
+        raise IncompleteProviderError(
+            f'truncated_inventory:{len(features)} total,{len(kentucky)} Kentucky'
+        )
+
+    selected = {}
+    rejected = []
+    for feature in kentucky:
+        attributes = feature.get('attributes') or {}
+        try:
+            camera_id = int(attributes.get('id'))
+        except (TypeError, ValueError):
+            continue
+        if camera_id not in KENTUCKY_KYTC_CURATED_IDS:
+            continue
+        geometry = feature.get('geometry') or {}
+        snapshot = str(attributes.get('snapshot') or '')
+        try:
+            lat = float(attributes['latitude'])
+            lon = float(attributes['longitude'])
+        except (KeyError, TypeError, ValueError):
+            rejected.append({
+                'provider_camera_id': f'kytc:{camera_id}',
+                'failure_class': 'location_ambiguous:missing_coordinates',
+            })
+            continue
+        if (
+            attributes.get('status') != 'Online'
+            or not snapshot.startswith('https://www.trimarc.org/images/milestone/')
+            or not snapshot.lower().endswith('.jpg')
+            or abs(float(geometry.get('y', lat)) - lat) > 0.000001
+            or abs(float(geometry.get('x', lon)) - lon) > 0.000001
+            or not str(attributes.get('description') or '').strip()
+            or not str(attributes.get('county') or '').strip()
+        ):
+            rejected.append({
+                'provider_camera_id': f'kytc:{camera_id}',
+                'failure_class': 'transient_network:provider_metadata_incomplete',
+            })
+            continue
+        selected[camera_id] = {
+            'attributes': attributes,
+            'lat': lat,
+            'lon': lon,
+            'url': snapshot,
+        }
+
+    if set(selected) != KENTUCKY_KYTC_CURATED_IDS:
+        raise IncompleteProviderError(
+            f'truncated_curated_inventory:{len(selected)}<{len(KENTUCKY_KYTC_CURATED_IDS)}'
+        )
+    candidates = [
+        {
+            'provider_camera_id': f'kytc:{camera_id}',
+            'url': selected[camera_id]['url'],
+            'max_age_seconds': 600,
+        }
+        for camera_id in sorted(selected)
+    ]
+    verified, errors, snapshots = verify_current_jpeg_images(
+        candidates, probe_interval=3.0, workers=8
+    )
+    for camera_id in sorted(selected):
+        provider_id = f'kytc:{camera_id}'
+        if provider_id not in verified:
+            rejected.append({
+                'provider_camera_id': provider_id,
+                'failure_class': errors.get(
+                    provider_id, 'transient_network:verification_incomplete'
+                ),
+            })
+            continue
+        item = selected[camera_id]
+        attributes = item['attributes']
+        add_camera(
+            str(attributes['description']).strip(), item['lat'], item['lon'],
+            item['url'], 'image', 'Kentucky',
+            f"{str(attributes['county']).strip()} County",
+            KENTUCKY_KYTC_DIRECTIONS.get(
+                str(attributes.get('direction') or '').strip(), ''
+            ),
+            'dot', source_page, 120,
+        )
+        cameras[-1]['provider_camera_id'] = provider_id
+        cameras[-1]['provider_timestamp'] = snapshots[provider_id][2]
+        cameras[-1]['category'] = 'traffic'
+        if camera_id in KENTUCKY_KYTC_REPLACED_URLS:
+            cameras[-1]['_replace_feed_urls'] = [
+                KENTUCKY_KYTC_REPLACED_URLS[camera_id]
+            ]
+
+    count = len(verified)
+    atomic_write_json(
+        DATA_DIR / 'kentucky_kytc_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'Kentucky Transportation Cabinet (KYTC)',
+            'source_url': source_page,
+            'inventory_total': len(features),
+            'kentucky_inventory': len(kentucky),
+            'curated_verified': count,
+            'attribution': 'Kentucky Transportation Cabinet',
+            'license_or_usage_terms': 'CC0 1.0 Universal public-domain dedication',
+            'rejected': rejected,
+            'refresh_cadence_seconds': 120,
+        },
+        indent=2,
+    )
+    if count != len(KENTUCKY_KYTC_CURATED_IDS):
+        raise IncompleteProviderError(
+            f'truncated_verified_inventory:{count}<{len(KENTUCKY_KYTC_CURATED_IDS)}'
+        )
+    print(f'  Kentucky KYTC image verification: {count}/{len(KENTUCKY_KYTC_CURATED_IDS)} current')
+    return count
+
+
+def fetch_faa_weathercams_north_dakota():
+    base_url = 'https://weathercams.faa.gov'
+    state_page = f'{base_url}/cameras/state/ND'
+    headers = {
+        'User-Agent': (
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+            'AppleWebKit/537.36 Chrome/130.0 StormScope/0.60.0'
+        ),
+        'Accept': 'application/json, image/*, */*',
+        'Referer': state_page,
+    }
+    cookie_jar = http.cookiejar.CookieJar()
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookie_jar))
+
+    def request(url, *, accept='application/json, */*'):
+        request_headers = {**headers, 'Accept': accept}
+        return opener.open(
+            urllib.request.Request(url, headers=request_headers),
+            timeout=30,
+        )
+
+    with request(state_page, accept='text/html,*/*') as response:
+        response.read(1024)
+    with request(f'{base_url}/api/sites') as response:
+        inventory = json.loads(response.read().decode('utf-8'))
+    sites = [
+        site for site in (inventory.get('payload') or [])
+        if site.get('state') == 'ND'
+    ]
+    inventory_camera_count = sum(len(site.get('cameras') or []) for site in sites)
+    if (
+        inventory.get('success') is not True
+        or int(inventory.get('count') or 0) < 900
+        or len(sites) < 21
+        or inventory_camera_count < 84
+    ):
+        raise IncompleteProviderError(
+            f'truncated_inventory:{len(sites)} sites,{inventory_camera_count} cameras'
+        )
+
+    selected = {}
+    rejected = []
+    now = datetime.now(timezone.utc)
+    for site in sites:
+        site_id = int(site.get('siteId') or 0)
+        for camera in site.get('cameras') or []:
+            camera_id = int(camera.get('cameraId') or 0)
+            if camera_id not in NORTH_DAKOTA_FAA_CAMERA_IDS:
+                continue
+            try:
+                last_success = datetime.fromisoformat(
+                    str(camera['cameraLastSuccess']).replace('Z', '+00:00')
+                )
+                lat = float(camera['latitude'])
+                lon = float(camera['longitude'])
+            except (KeyError, TypeError, ValueError) as exc:
+                rejected.append({
+                    'provider_camera_id': f'FAA-{camera_id}',
+                    'failure_class': f'transient_network:invalid_metadata:{exc}',
+                })
+                continue
+            age = (now - last_success.astimezone(timezone.utc)).total_seconds()
+            direction = str(camera.get('cameraDirection') or '')
+            if (
+                site_id not in NORTH_DAKOTA_FAA_COUNTIES
+                or not site.get('siteActive')
+                or site.get('siteInMaintenance')
+                or not site.get('validated')
+                or camera.get('cameraInMaintenance')
+                or camera.get('cameraOutOfOrder')
+                or direction not in FAA_DIRECTIONS
+                or age < -300
+                or age > 1200
+                or abs(float(site['latitude']) - lat) > 0.000001
+                or abs(float(site['longitude']) - lon) > 0.000001
+            ):
+                rejected.append({
+                    'provider_camera_id': f'FAA-{camera_id}',
+                    'failure_class': 'placeholder:stale_or_inconsistent_inventory',
+                })
+                continue
+            selected[camera_id] = {
+                'site': site,
+                'camera': camera,
+                'lat': lat,
+                'lon': lon,
+            }
+    if set(selected) != NORTH_DAKOTA_FAA_CAMERA_IDS:
+        raise IncompleteProviderError(
+            f'truncated_curated_inventory:{len(selected)}<{len(NORTH_DAKOTA_FAA_CAMERA_IDS)}'
+        )
+
+    def snapshot(camera_id):
+        metadata_url = f'{base_url}/api/cameras/{camera_id}/images/last/1'
+        with request(metadata_url) as response:
+            metadata = json.loads(response.read().decode('utf-8'))
+        records = metadata.get('payload') or []
+        if metadata.get('success') is not True or len(records) != 1:
+            raise ValueError('transient_network:image_metadata_unavailable')
+        record = records[0]
+        if int(record.get('cameraId') or 0) != camera_id:
+            raise ValueError('transient_network:image_camera_id_mismatch')
+        provider_time = datetime.fromisoformat(
+            str(record['imageDatetime']).replace('Z', '+00:00')
+        )
+        age = (datetime.now(timezone.utc) - provider_time.astimezone(timezone.utc)).total_seconds()
+        image_url = str(record.get('imageUri') or '')
+        if age < -300 or age > 1200:
+            raise ValueError(f'placeholder:stale_provider_timestamp:{int(age)}')
+        if not image_url.startswith('https://images.wcams-static.faa.gov/webimages/'):
+            raise ValueError('unsupported_embed:unexpected_image_host')
+        with request(image_url, accept='image/jpeg,image/*,*/*') as response:
+            content_type = str(response.headers.get('Content-Type') or '').lower()
+            body = response.read()
+        if (
+            'image' not in content_type
+            or len(body) < 5000
+            or not body.startswith(b'\xff\xd8\xff')
+        ):
+            raise ValueError('placeholder:not_a_current_jpeg')
+        return hashlib.sha256(body).hexdigest(), len(body), provider_time.isoformat()
+
+    first = {}
+    second = {}
+    errors = {}
+    for camera_id in sorted(selected):
+        try:
+            first[camera_id] = snapshot(camera_id)
+        except Exception as exc:
+            errors.setdefault(camera_id, []).append(str(exc))
+    time.sleep(3.0)
+    for camera_id in sorted(selected):
+        try:
+            second[camera_id] = snapshot(camera_id)
+        except Exception as exc:
+            errors.setdefault(camera_id, []).append(str(exc))
+    verified = set(first) & set(second)
+
+    for camera_id in sorted(selected):
+        if camera_id not in verified:
+            details = errors.get(camera_id) or ['transient_network:incomplete']
+            rejected.append({
+                'provider_camera_id': f'FAA-{camera_id}',
+                'failure_class': details[-1],
+            })
+            continue
+        item = selected[camera_id]
+        site = item['site']
+        camera = item['camera']
+        site_id = int(site['siteId'])
+        detail_page = (
+            f'{base_url}/cameras/state/ND/cameraSite/{site_id}/details/'
+            f'camera/{camera_id}'
+        )
+        site_name = str(site.get('siteName') or site.get('siteArea') or site_id).strip()
+        direction = FAA_DIRECTIONS[str(camera['cameraDirection'])]
+        add_camera(
+            f'FAA WeatherCam: {site_name} - {camera["cameraDirection"]}',
+            item['lat'], item['lon'], detail_page, 'embed', 'North Dakota',
+            NORTH_DAKOTA_FAA_COUNTIES[site_id], direction, 'faa', detail_page, 600,
+        )
+        operated_by = str(site.get('operatedBy') or site_name).strip()
+        cameras[-1]['provider'] = f'FAA WeatherCams / {operated_by}'
+        cameras[-1]['provider_camera_id'] = f'FAA-{camera_id}'
+        cameras[-1]['provider_timestamp'] = second[camera_id][2]
+        cameras[-1]['category'] = 'airport_weather'
+
+    count = len(verified)
+    atomic_write_json(
+        DATA_DIR / 'north_dakota_faa_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'FAA WeatherCams / North Dakota airports',
+            'source_url': state_page,
+            'inventory_sites': len(sites),
+            'inventory_cameras': inventory_camera_count,
+            'verified_live': count,
+            'attribution': 'Federal Aviation Administration and operating airports',
+            'license_or_usage_terms': (
+                'FAA Order 1370.79A permits distribution/copying of public FAA '
+                'website information; attribution is preserved and media is not proxied.'
+            ),
+            'rejected': rejected,
+            'refresh_cadence_seconds': 600,
+        },
+        indent=2,
+    )
+    if count != len(NORTH_DAKOTA_FAA_CAMERA_IDS):
+        raise IncompleteProviderError(
+            f'truncated_verified_inventory:{count}<{len(NORTH_DAKOTA_FAA_CAMERA_IDS)}'
+        )
+    print(f'  North Dakota FAA image verification: {count}/{len(NORTH_DAKOTA_FAA_CAMERA_IDS)} current')
+    return count
+
+
+def fetch_kentucky_nps_verified():
+    source_page = 'https://www.nps.gov/maca/learn/photosmultimedia/webcams.htm'
+    camera_id = 'nps:maca-green-river-bluffs'
+    image_url = 'https://www.nps.gov/featurecontent/ard/webcams/images/macalarge.jpg'
+    candidate = {
+        'provider_camera_id': camera_id,
+        'url': image_url,
+        'max_age_seconds': 1800,
+    }
+    verified, errors, snapshots = verify_current_jpeg_images(
+        [candidate], probe_interval=2.0, workers=1
+    )
+    if camera_id not in verified:
+        reason = errors.get(camera_id, 'transient_network:verification_incomplete')
+        raise IncompleteProviderError(f'Mammoth Cave image unavailable: {reason}')
+    add_camera(
+        'Green River Bluffs & Air Quality', 37.193166, -86.103329,
+        image_url, 'image', 'Kentucky', 'Edmonson County', '', 'nps',
+        source_page, 300,
+    )
+    cameras[-1]['provider_camera_id'] = camera_id
+    cameras[-1]['provider_timestamp'] = snapshots[camera_id][2]
+    cameras[-1]['category'] = 'scenic'
+    cameras[-1]['_replace_feed_urls'] = [
+        'https://www.nps.gov/subjects/air/webcams.htm?site=maca'
+    ]
+    atomic_write_json(
+        DATA_DIR / 'kentucky_nps_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'National Park Service - Mammoth Cave National Park',
+            'source_url': source_page,
+            'verified_live': 1,
+            'provider_timestamp': snapshots[camera_id][2],
+            'attribution': 'National Park Service',
+            'license_or_usage_terms': 'NPS-created website material is generally public domain',
+            'rejected': [],
+            'refresh_cadence_seconds': 300,
+        },
+        indent=2,
+    )
+    print('  Kentucky NPS image verification: 1/1 current')
+    return 1
+
+
+def fetch_north_dakota_nps_verified():
+    source_page = 'https://www.nps.gov/AirWebCams/THRO'
+    camera_id = 'THR422'
+    image_url = 'https://www.nps.gov/featurecontent/ard/webcams/images/throlarge.jpg'
+    candidate = {
+        'provider_camera_id': camera_id,
+        'url': image_url,
+        'max_age_seconds': 1800,
+    }
+    verified, errors, snapshots = verify_current_jpeg_images(
+        [candidate], probe_interval=2.0, workers=1
+    )
+    if camera_id not in verified:
+        reason = errors.get(camera_id, 'transient_network:verification_incomplete')
+        raise IncompleteProviderError(f'Painted Canyon image unavailable: {reason}')
+    add_camera(
+        'Theodore Roosevelt National Park - Painted Canyon Air Quality',
+        46.894844, -103.377719, image_url, 'image', 'North Dakota',
+        'Billings County', '', 'nps', source_page, 900,
+    )
+    cameras[-1]['provider_camera_id'] = camera_id
+    cameras[-1]['provider_timestamp'] = snapshots[camera_id][2]
+    cameras[-1]['category'] = 'weather_scenic'
+    atomic_write_json(
+        DATA_DIR / 'north_dakota_nps_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'National Park Service - Theodore Roosevelt National Park',
+            'source_url': source_page,
+            'verified_live': 1,
+            'provider_timestamp': snapshots[camera_id][2],
+            'attribution': 'National Park Service',
+            'license_or_usage_terms': 'NPS-created website material is generally public domain',
+            'rejected': [],
+            'refresh_cadence_seconds': 900,
+        },
+        indent=2,
+    )
+    print('  North Dakota NPS image verification: 1/1 current')
+    return 1
+
+
+def fetch_alaska_avo_verified():
+    provider_root = 'https://avo.alaska.edu/ashcam-api'
+    candidates = []
+    metadata_by_code = {}
+    rejected = []
+    now_timestamp = datetime.now(timezone.utc).timestamp()
+    for item in ALASKA_AVO_CAMS:
+        code = item['code']
+        source_page = f'{provider_root}/webcamApi/webcam/{code}'
+        try:
+            metadata = fetch_json(source_page)['webcam']
+            newest = metadata['newestImage']
+            provider_timestamp = int(newest['imageTimestamp'])
+            image_url = str(metadata['currentImageUrl'])
+            if metadata.get('webcamCode') != code:
+                raise ValueError('provider_camera_id_mismatch')
+            if metadata.get('isPublic') != 'Y' or metadata.get('hasImages') != 'Y':
+                raise ValueError('confirmed_not_live:not_public_or_no_images')
+            if abs(float(metadata['latitude']) - item['lat']) > 0.000001:
+                raise ValueError('location_ambiguous:latitude_changed')
+            if abs(float(metadata['longitude']) - item['lon']) > 0.000001:
+                raise ValueError('location_ambiguous:longitude_changed')
+            if image_url != f'{provider_root}/images/{code}/current.jpg':
+                raise ValueError('unsupported_embed:unexpected_current_image_url')
+            age_seconds = now_timestamp - provider_timestamp
+            if age_seconds < -300 or age_seconds > 7200:
+                raise ValueError(f'placeholder:stale_provider_timestamp:{int(age_seconds)}')
+            if not re.fullmatch(r'[0-9a-f]{32}', str(newest.get('md5') or '')):
+                raise ValueError('placeholder:missing_provider_hash')
+        except Exception as exc:
+            rejected.append({
+                'provider_camera_id': code,
+                'failure_class': str(exc),
+            })
+            continue
+        metadata_by_code[code] = metadata
+        candidates.append({
+            'provider_camera_id': code,
+            'url': image_url,
+            'max_age_seconds': 7200,
+            'minimum_bytes': 8192,
+        })
+
+    if len(candidates) != len(ALASKA_AVO_CAMS):
+        raise IncompleteProviderError(
+            f'truncated_metadata_inventory:{len(candidates)}<{len(ALASKA_AVO_CAMS)}'
+        )
+    verified, errors, snapshots = verify_current_jpeg_images(
+        candidates, probe_interval=2.0, workers=3
+    )
+    for item in ALASKA_AVO_CAMS:
+        code = item['code']
+        if code not in verified:
+            rejected.append({
+                'provider_camera_id': code,
+                'failure_class': errors.get(
+                    code, 'transient_network:verification_incomplete'
+                ),
+            })
+            continue
+        metadata = metadata_by_code[code]
+        add_camera(
+            item['name'], item['lat'], item['lon'], metadata['currentImageUrl'],
+            'image', 'Alaska', item['county'], item['direction'], 'usgs',
+            f'{provider_root}/webcamApi/webcam/{code}', 3600,
+        )
+        cameras[-1]['provider_camera_id'] = code
+        cameras[-1]['provider_timestamp'] = datetime.fromtimestamp(
+            int(metadata['newestImage']['imageTimestamp']), timezone.utc
+        ).isoformat()
+        cameras[-1]['provider_hash'] = metadata['newestImage']['md5']
+        cameras[-1]['category'] = 'volcano'
+
+    count = len(verified)
+    atomic_write_json(
+        DATA_DIR / 'alaska_avo_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'Alaska Volcano Observatory / U.S. Geological Survey',
+            'source_url': provider_root,
+            'geographic_scope': 'Katmai, Redoubt, and Shishaldin volcano cameras',
+            'location_evidence': (
+                'The first-party AVO API supplies each exact camera coordinate, '
+                'bearing, current-image URL, provider timestamp, and content hash.'
+            ),
+            'attribution': 'Alaska Volcano Observatory / U.S. Geological Survey',
+            'license_or_usage_terms': (
+                'AVO staff imagery is generally reusable with displayed credit and '
+                'restrictions checked; StormScope links the original current images.'
+            ),
+            'verified_live': count,
+            'rejected': rejected,
+            'refresh_cadence_seconds': 3600,
+        },
+        indent=2,
+    )
+    if count != len(ALASKA_AVO_CAMS):
+        raise IncompleteProviderError(
+            f'truncated_verified_inventory:{count}<{len(ALASKA_AVO_CAMS)}'
+        )
+    print(f'  Alaska AVO image verification: {count}/{len(ALASKA_AVO_CAMS)} current')
+    return count
+
+
 def fetch_smithsonian_national_zoo():
     source_root = 'https://nationalzoo.si.edu/webcams'
     candidates = [
@@ -5514,6 +6121,11 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
         ('West Virginia State Park', fetch_west_virginia_state_park),
         ('Maine NPS verified', fetch_maine_nps_verified),
         ('Maine Ferry verified', fetch_maine_ferry_verified),
+        ('Kentucky Transportation Cabinet (KYTC)', fetch_kentucky_kytc_verified),
+        ('FAA WeatherCams / North Dakota airports', fetch_faa_weathercams_north_dakota),
+        ('Kentucky NPS verified', fetch_kentucky_nps_verified),
+        ('North Dakota NPS verified', fetch_north_dakota_nps_verified),
+        ('Alaska Volcano Observatory / U.S. Geological Survey', fetch_alaska_avo_verified),
         ('Smithsonian National Zoo', fetch_smithsonian_national_zoo),
         ('Arkansas (Cobblestone/RTSP.me)', fetch_arkansas_cobblestone),
         ('Florida (ArcGIS)', fetch_fl_arcgis),
@@ -5570,10 +6182,20 @@ def merge_provider_results(
         for camera in result.cameras
         if camera.pop('_replace_source_page', False) and camera.get('source_url')
     }
+    replacement_feed_urls = {
+        url
+        for result in accepted_results
+        for camera in result.cameras
+        for url in camera.pop('_replace_feed_urls', [])
+        if url
+    }
     inserted_providers = set()
     ordered = []
     for camera in existing:
-        if camera.get('source_url') in replacement_source_pages:
+        if (
+            camera.get('source_url') in replacement_source_pages
+            or camera.get('url') in replacement_feed_urls
+        ):
             continue
         provider = camera.get('provider')
         if provider in successful:

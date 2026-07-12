@@ -8,6 +8,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -48,6 +49,42 @@ class YouTubeLocationExtractionTests(unittest.TestCase):
         self.assertTrue(youtube.ytdlp_confirms_live_playback({
             **base, "playable_in_embed": True, "availability": "public"
         }))
+
+    def test_live_verification_retries_transient_extractor_failures(self) -> None:
+        candidate = youtube.Candidate(video_id="3ieUramhCCI", title="NCTC Eagle Cam")
+        playback = {
+            "is_live": True,
+            "live_status": "is_live",
+            "playable_in_embed": True,
+            "availability": "public",
+            "url": "https://example.com/live.m3u8",
+            "title": "NCTC Eagle Nest: Camera 1",
+            "channel": "U.S. Fish & Wildlife Service",
+        }
+        with (
+            mock.patch.object(youtube, "time") as time_mock,
+            mock.patch.object(
+                youtube,
+                "curl_json_post",
+                return_value={
+                    "playabilityStatus": {"status": "OK"},
+                    "videoDetails": {
+                        "title": playback["title"],
+                        "author": playback["channel"],
+                    },
+                },
+            ),
+            mock.patch.object(
+                youtube,
+                "run_ytdlp_metadata",
+                side_effect=[RuntimeError("no formats"), RuntimeError("timeout"), playback],
+            ) as extractor,
+        ):
+            verified = youtube.verify_live(candidate, 0.2)
+
+        self.assertIs(candidate, verified)
+        self.assertEqual(3, extractor.call_count)
+        self.assertEqual([mock.call(0.2), mock.call(1.0), mock.call(2.0)], time_mock.sleep.call_args_list)
 
     def test_curated_live_stream_can_replace_a_legacy_embed_in_place(self) -> None:
         old_source = "https://www.nps.gov/media/webcam/view.htm?id=legacy"

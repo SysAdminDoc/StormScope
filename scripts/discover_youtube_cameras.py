@@ -72,7 +72,7 @@ NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 "
-    "StormScope/0.59.0"
+    "StormScope/0.60.0"
 )
 
 US_STATES = {
@@ -811,10 +811,18 @@ def verify_live(candidate: Candidate, sleep_seconds: float) -> Candidate | None:
     details = data.get("videoDetails") or {}
     status = (data.get("playabilityStatus") or {}).get("status", "")
     candidate.playability_status = status
-    try:
-        playback = run_ytdlp_metadata(candidate.video_id)
-    except Exception as exc:
-        candidate.reasons.append(f"playback_error:{exc}")
+    playback: dict[str, Any] | None = None
+    playback_error: Exception | None = None
+    for attempt in range(3):
+        try:
+            playback = run_ytdlp_metadata(candidate.video_id)
+            break
+        except Exception as exc:
+            playback_error = exc
+            if attempt < 2:
+                time.sleep(max(1.0, sleep_seconds) * (2 ** attempt))
+    if playback is None:
+        candidate.reasons.append(f"playback_error:{playback_error}")
         return None
     if not ytdlp_confirms_live_playback(playback):
         candidate.reasons.append(f"not_playable_live:{playback.get('live_status') or playback.get('is_live')}")
