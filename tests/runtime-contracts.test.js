@@ -9,6 +9,7 @@ const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'css', 'style.css'), 'utf8');
 const contextLayers = fs.readFileSync(path.join(root, 'js', 'context-layers.js'), 'utf8');
 const serviceWorker = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
+const spatialQuery = fs.readFileSync(path.join(root, 'js', 'spatial-query.js'), 'utf8');
 const cameraData = JSON.parse(fs.readFileSync(path.join(root, 'data', 'cameras.json'), 'utf8'));
 const i18n = require('../js/i18n.js');
 
@@ -157,6 +158,16 @@ test('versioned scene links load before the app and remain available offline', (
   assert.match(app, /navigator\.share/);
   assert.match(app, /navigator\.clipboard\.writeText/);
   assert.match(serviceWorker, /\.\/js\/scene-codec\.js/);
+});
+
+test('incident camera proximity loads before the app and remains available offline', () => {
+  const spatialPosition = html.indexOf('js/spatial-query.js');
+  const appPosition = html.indexOf('js/app.js');
+  assert.ok(spatialPosition >= 0 && appPosition > spatialPosition);
+  assert.match(serviceWorker, /\.\/js\/spatial-query\.js/);
+  assert.match(spatialQuery, /function queryCameras/);
+  assert.match(app, /appendNearbyCameraSection/);
+  assert.match(app, /StormScopeSpatialQuery\.monitorCandidates/);
 });
 
 test('fatal recovery keeps shell cache and exports redacted diagnostics', () => {

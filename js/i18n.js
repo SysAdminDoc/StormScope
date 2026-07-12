@@ -210,7 +210,17 @@
       'context.lightningStatus': '15 min density • {freshness} • {time}',
       'context.wildfireStatus': '{count} wildfire perimeters • {freshness} • {time}',
       'context.wildfireName': 'Unnamed wildfire', 'context.acres': '{count} acres',
-      'context.contained': '{count}% contained', 'context.nifcSource': 'Open official NIFC record'
+      'context.contained': '{count}% contained', 'context.nifcSource': 'Open official NIFC record',
+      'incident.camerasNearAlert': 'Cameras near this alert', 'incident.camerasNearFire': 'Cameras near this wildfire',
+      'incident.noGeometry': 'No mapped incident area; nearby cameras cannot be determined.',
+      'incident.camerasLoading': 'Camera index still loading; nearby results will appear when complete.',
+      'incident.noCameras': 'No non-offline cameras found inside or within 31 mi of this area.',
+      'incident.cameraCountOne': '{count} nearby camera', 'incident.cameraCountMany': '{count} nearby cameras',
+      'incident.insideArea': 'Inside area', 'incident.nearbyRelation': '{distance} {bearing} of area',
+      'incident.viewDirection': 'View {direction}', 'incident.verified': 'Verified {time}',
+      'incident.showOnMap': 'Show on map', 'incident.openCamera': 'Open camera',
+      'incident.addMonitor': 'Add to monitor', 'incident.removeMonitor': 'Remove from monitor',
+      'incident.openMonitor': 'Open {count}-camera monitor'
     },
     es: {
       'app.title': 'StormScope — Radar meteorológico y cámaras web en vivo',
@@ -413,7 +423,17 @@
       'context.lightningStatus': 'Densidad de 15 min • {freshness} • {time}',
       'context.wildfireStatus': '{count} perímetros de incendios • {freshness} • {time}',
       'context.wildfireName': 'Incendio sin nombre', 'context.acres': '{count} acres',
-      'context.contained': '{count}% contenido', 'context.nifcSource': 'Abrir registro oficial del NIFC'
+      'context.contained': '{count}% contenido', 'context.nifcSource': 'Abrir registro oficial del NIFC',
+      'incident.camerasNearAlert': 'Cámaras cerca de esta alerta', 'incident.camerasNearFire': 'Cámaras cerca de este incendio',
+      'incident.noGeometry': 'No hay un área de incidente cartografiada; no se pueden determinar cámaras cercanas.',
+      'incident.camerasLoading': 'El índice de cámaras sigue cargando; los resultados cercanos aparecerán al terminar.',
+      'incident.noCameras': 'No se encontraron cámaras activas dentro o a menos de 50 km de esta área.',
+      'incident.cameraCountOne': '{count} cámara cercana', 'incident.cameraCountMany': '{count} cámaras cercanas',
+      'incident.insideArea': 'Dentro del área', 'incident.nearbyRelation': 'a {distance} al {bearing} del área',
+      'incident.viewDirection': 'Vista {direction}', 'incident.verified': 'Verificada {time}',
+      'incident.showOnMap': 'Mostrar en el mapa', 'incident.openCamera': 'Abrir cámara',
+      'incident.addMonitor': 'Añadir al monitor', 'incident.removeMonitor': 'Quitar del monitor',
+      'incident.openMonitor': 'Abrir monitor de {count} cámaras'
     }
   };
 

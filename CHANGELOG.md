@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.81.0 - 2026-07-12
+
+- Added bounded incident-to-camera spatial queries for alerts and wildfire polygons, including holes, MultiPolygons, antimeridian geometry, boundary distance, relative bearing, authoritative health ranking, offline exclusion, and a 50 km/8-result ceiling with bounding-box prefiltering.
+- Alert details and bounded wildfire popups now show truthful loading/no-geometry/no-result states plus camera distance/bearing/health/verification/view direction and map/open/monitor actions. Incident monitor launch atomically replaces prior selection with the top 2–4 playable cameras. Added geometry, monitor rollback, runtime, and rendered workflow coverage. Service-worker cache bumped to v54.
+
 ## v0.80.0 - 2026-07-12
 
 - Added a distinct current-observation section for US cameras using the nearest usable NWS station, including station identity/distance, observed timestamp and localized age, conditions, temperature, humidity, wind, selected units, and explicit source.

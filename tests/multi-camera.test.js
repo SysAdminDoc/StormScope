@@ -19,6 +19,17 @@ test('selection is bounded to two through four unique cameras', () => {
   assert.deepEqual(selection.list().map((camera) => camera.id), [2, 3, 4]);
 });
 
+test('incident replacement is atomic, bounded, and deduplicated by durable ID', () => {
+  const selection = new multi.Selection({ minimum: 2, maximum: 4 });
+  selection.add({ id: 9, type: 'image' });
+  const replacement = [{ id: 1, type: 'image' }, { id: 2, type: 'hls' }, { id: 2, type: 'hls' }];
+  assert.deepEqual(selection.replace(replacement).map(camera => camera.id), [1, 2]);
+  assert.deepEqual(selection.list().map(camera => camera.id), [1, 2]);
+  assert.throws(() => selection.replace([{ id: 3 }]), /outside bounds/);
+  assert.deepEqual(selection.list().map(camera => camera.id), [1, 2], 'failed replacement must preserve the last good set');
+  assert.throws(() => selection.replace([{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }, { id: 5 }]), /outside bounds/);
+});
+
 test('supported direct feeds are playable and embeds degrade to links', () => {
   for (const type of ['hls', 'image', 'mjpeg', 'youtube']) {
     assert.equal(multi.capability({ type }).playable, true);

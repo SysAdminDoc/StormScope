@@ -448,6 +448,82 @@ button:focus-visible {
 .context-popup strong, .context-popup span, .context-popup a { display: block; }
 .context-popup a { margin-top: 5px; }
 
+.incident-cameras {
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--border);
+}
+
+.context-popup .incident-cameras {
+  min-width: 280px;
+  max-width: 360px;
+  border-color: rgba(29, 29, 37, 0.2);
+}
+
+.incident-cameras h4 {
+  margin: 0 0 5px;
+  font-size: 13px;
+}
+
+.incident-camera-status {
+  margin: 0 0 6px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.context-popup .incident-camera-status { color: #555565; }
+
+.incident-cameras ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.incident-cameras li {
+  display: grid;
+  gap: 3px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+.context-popup .incident-cameras li { border-color: rgba(29, 29, 37, 0.2); }
+.incident-cameras li > span { color: var(--text-dim); font-size: 11px; }
+.context-popup .incident-cameras li > span { color: #555565; }
+
+.incident-camera-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.incident-camera-actions button,
+.incident-monitor-open {
+  min-height: 28px;
+  padding: 4px 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel-hover);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.context-popup .incident-camera-actions button,
+.context-popup .incident-monitor-open {
+  border-color: rgba(29, 29, 37, 0.25);
+  background: #f2f2f6;
+  color: #1d1d25;
+}
+
+.incident-monitor-open {
+  width: 100%;
+  margin-top: 7px;
+  border-color: var(--accent);
+}
+
 .radar-palette-colorblind {
   filter: hue-rotate(35deg) saturate(0.8) brightness(1.1);
 }

@@ -391,6 +391,9 @@ async function main() {
     assert.match(await hostilePopup.textContent(), /<img src=x onerror=window\.__wildfireInjected=true>/);
     assert.equal(await hostilePopup.locator('img').count(), 0);
     assert.equal(await page.evaluate(() => window.__wildfireInjected), false);
+    await hostilePopup.locator('.incident-cameras li').first().waitFor({ state: 'visible' });
+    assert.match(await hostilePopup.locator('.incident-camera-status').textContent(), /nearby camera/);
+    assert.ok(await hostilePopup.locator('.incident-camera-map').count() > 0);
     assert.deepEqual(await page.evaluate(() => window._stormscope.getContextState()), {
       lightning: true, wildfires: true, lightningStatus: 'ready', wildfireStatus: 'ready',
       rasterZ: '325', vectorZ: '390', warningZ: '400', cameraZ: '600'
@@ -469,6 +472,24 @@ async function main() {
     const alertButton = page.getByRole('button', { name: /Severe Thunderstorm Warning/ });
     await alertButton.click();
     await page.locator('#alert-detail').waitFor({ state: 'visible' });
+    const alertCameras = page.locator('#alert-detail .incident-cameras');
+    await alertCameras.locator('li').first().waitFor({ state: 'visible' });
+    assert.match(await alertCameras.locator('.incident-camera-status').textContent(), /nearby camera/);
+    assert.match(await alertCameras.locator('li').first().textContent(), /Verified healthy|Degraded|Unverified/);
+    await alertCameras.locator('.incident-camera-map').first().click();
+    assert.ok(await page.evaluate(() => window._stormscope.getMap().getZoom()) >= 12);
+    await alertCameras.locator('.incident-camera-open').first().click();
+    await page.locator('#camera-modal').waitFor({ state: 'visible' });
+    await page.getByRole('button', { name: 'Close camera viewer' }).click();
+    await alertCameras.locator('.incident-monitor-open').click();
+    await page.locator('#monitor-modal').waitFor({ state: 'visible' });
+    const incidentMonitorCount = await page.locator('.monitor-cell').count();
+    assert.ok(incidentMonitorCount >= 2 && incidentMonitorCount <= 4);
+    await page.getByRole('button', { name: 'Close multi-camera monitor' }).click();
+    while (await alertCameras.getByRole('button', { name: 'Remove from monitor' }).count()) {
+      await alertCameras.getByRole('button', { name: 'Remove from monitor' }).first().click();
+    }
+    assert.equal((await page.evaluate(() => window._stormscope.getMonitorState())).selected, 0);
     await page.getByRole('button', { name: 'Hide alert details' }).click();
     await page.locator('#alert-detail').waitFor({ state: 'hidden' });
     await page.getByRole('button', { name: 'Toggle layers panel' }).click();

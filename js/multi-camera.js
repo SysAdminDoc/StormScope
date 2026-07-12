@@ -59,6 +59,23 @@
   };
 
   Selection.prototype.clear = function () { this._cameras = []; };
+  Selection.prototype.replace = function (cameras) {
+    if (!Array.isArray(cameras)) throw new TypeError('camera selection must be an array');
+    var unique = [];
+    var ids = Object.create(null);
+    cameras.forEach(function (camera) {
+      var id = cameraId(camera);
+      if (!ids[id]) {
+        ids[id] = true;
+        unique.push(camera);
+      }
+    });
+    if (unique.length < this.minimum || unique.length > this.maximum) {
+      throw new RangeError('replacement camera selection is outside bounds');
+    }
+    this._cameras = unique;
+    return this.list();
+  };
   Selection.prototype.list = function () { return this._cameras.slice(); };
   Selection.prototype.count = function () { return this._cameras.length; };
   Selection.prototype.canStart = function () {

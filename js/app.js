@@ -2,7 +2,7 @@
   'use strict';
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.80.0';
+  var APP_VERSION = '0.81.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -111,6 +111,7 @@
   var wildfireCount = 0;
   var wildfireStatusState = 'off';
   var wildfireAttributionAdded = false;
+  var incidentCameraSections = [];
 
   function tr(key, variables) {
     return StormScopeI18n.t(key, variables, appLocale);
@@ -756,7 +757,124 @@
     link.rel = 'noopener noreferrer';
     link.textContent = tr('context.nifcSource');
     container.appendChild(link);
+    appendNearbyCameraSection(container, feature.geometry, tr('incident.camerasNearFire'));
     return container;
+  }
+
+  function incidentCameraRelation(result) {
+    if (result.inside) return tr('incident.insideArea');
+    return tr('incident.nearbyRelation', {
+      distance: StormScopeWeather.distanceFromKm(result.distanceKm, weatherUnits),
+      bearing: localizedWindDirection(result.bearing)
+    });
+  }
+
+  function incidentCameraMetadata(result) {
+    var camera = result.camera;
+    var parts = [incidentCameraRelation(result), tr('camera.health.' + (camera.health || 'unknown'))];
+    if (camera.direction && !/^(unknown|any)$/i.test(camera.direction)) {
+      parts.push(tr('incident.viewDirection', { direction: localizedWindDirection(camera.direction) }));
+    }
+    if (camera.last_verified) parts.push(tr('incident.verified', { time: localTime(camera.last_verified) }));
+    return parts.join(' • ');
+  }
+
+  function refreshIncidentCameraSections() {
+    incidentCameraSections = incidentCameraSections.filter(function (entry) {
+      if (!entry.element.isConnected) return false;
+      renderIncidentCameraSection(entry.element, entry.geometry, entry.heading);
+      return true;
+    });
+  }
+
+  function appendNearbyCameraSection(container, geometry, heading) {
+    var section = document.createElement('section');
+    section.className = 'incident-cameras';
+    section.dataset.incidentCameras = 'true';
+    container.appendChild(section);
+    incidentCameraSections.push({ element: section, geometry: geometry, heading: heading });
+    renderIncidentCameraSection(section, geometry, heading);
+  }
+
+  function incidentCameraButton(label, className, action) {
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = className;
+    button.textContent = label;
+    button.addEventListener('click', action);
+    return button;
+  }
+
+  function renderIncidentCameraSection(section, geometry, headingText) {
+    section.replaceChildren();
+    var heading = document.createElement('h4');
+    heading.textContent = headingText;
+    section.appendChild(heading);
+    var status = document.createElement('p');
+    status.className = 'incident-camera-status';
+    if (!geometry) {
+      status.textContent = tr('incident.noGeometry');
+      section.appendChild(status);
+      return;
+    }
+    if (cameraLoadMetrics.completeMs == null) {
+      status.textContent = tr('incident.camerasLoading');
+      section.appendChild(status);
+      return;
+    }
+    var results = StormScopeSpatialQuery.queryCameras(allCameras, geometry, { maxDistanceKm: 50, limit: 8 });
+    if (!results.length) {
+      status.textContent = tr('incident.noCameras');
+      section.appendChild(status);
+      return;
+    }
+    status.textContent = tr(results.length === 1 ? 'incident.cameraCountOne' : 'incident.cameraCountMany', {
+      count: localNumber(results.length)
+    });
+    section.appendChild(status);
+    var list = document.createElement('ul');
+    results.forEach(function (result) {
+      var camera = result.camera;
+      var item = document.createElement('li');
+      item.dataset.cameraId = String(camera.id);
+      var name = document.createElement('strong');
+      name.textContent = camera.name;
+      var metadata = document.createElement('span');
+      metadata.textContent = incidentCameraMetadata(result);
+      var actions = document.createElement('div');
+      actions.className = 'incident-camera-actions';
+      actions.appendChild(incidentCameraButton(tr('incident.showOnMap'), 'incident-camera-map', function () {
+        map.setView([camera.lat, camera.lon], Math.max(12, map.getZoom()));
+      }));
+      actions.appendChild(incidentCameraButton(tr('incident.openCamera'), 'incident-camera-open', function () {
+        openCameraModal(camera);
+      }));
+      actions.appendChild(incidentCameraButton(
+        tr(monitorSelection.has(camera) ? 'incident.removeMonitor' : 'incident.addMonitor'),
+        'incident-camera-select',
+        function () {
+          toggleMonitorCamera(camera);
+          refreshIncidentCameraSections();
+        }
+      ));
+      item.appendChild(name);
+      item.appendChild(metadata);
+      item.appendChild(actions);
+      list.appendChild(item);
+    });
+    section.appendChild(list);
+    var monitorCameras = StormScopeSpatialQuery.monitorCandidates(results, 2, 4);
+    if (monitorCameras.length >= 2) {
+      section.appendChild(incidentCameraButton(tr('incident.openMonitor', {
+        count: localNumber(monitorCameras.length)
+      }), 'incident-monitor-open', function () {
+        monitorSelection.replace(monitorCameras);
+        updateMonitorSelectionUi();
+        renderCameraResultWindow();
+        refreshIncidentCameraSections();
+        openMonitor();
+      }));
+    }
   }
 
   function scheduleWildfireRefresh() {
@@ -799,7 +917,9 @@
       var nextLayer = L.geoJSON(collection, {
         pane: 'contextVectorPane',
         style: { color: '#ff6b35', weight: 2, opacity: 0.9, fillColor: '#ff6b35', fillOpacity: 0.09 },
-        onEachFeature: function (feature, layer) { layer.bindPopup(wildfirePopup(feature)); }
+        onEachFeature: function (feature, layer) {
+          layer.bindPopup(function () { return wildfirePopup(feature); }, { autoPan: false, maxWidth: 380, maxHeight: 360 });
+        }
       }).addTo(map);
       if (wildfireLayer) map.removeLayer(wildfireLayer);
       wildfireLayer = nextLayer;
@@ -1077,6 +1197,7 @@
       });
       updateDataFreshness();
       scheduleSearchRender();
+      refreshIncidentCameraSections();
       if (pendingSceneCameraId != null) {
         var sharedCamera = allCameras.find(function (camera) { return String(camera.id) === pendingSceneCameraId; });
         if (sharedCamera) openCameraModal(sharedCamera);
@@ -2775,6 +2896,7 @@
     source.rel = 'noopener noreferrer';
     source.textContent = tr('alerts.officialSource');
     detail.appendChild(source);
+    appendNearbyCameraSection(detail, alert.geometry, tr('incident.camerasNearAlert'));
     detail.classList.remove('hidden');
     if (focus) detail.focus();
     if (focus && alertLayersById[alert.id]) {
