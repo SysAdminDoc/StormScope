@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.40.0 - 2026-07-12
+
+### +27 playback-verified fixed-location YouTube live cameras (369 → 396)
+- Ran a bounded, high-precision YouTube live-discovery pass over 12 specific-place queries (Florida Keys/Key West, Oahu & Kauai beach resorts, Myrtle Beach boardwalk, Ocean City NJ, Jackson Hole WY, Galveston seawall, Griffith/Olympia-Lacey railcams, St. George UT, USVI). Each candidate was verified live via the YouTube player + yt-dlp `live_status=is_live` gate — **126 streams confirmed live** across the queries.
+- **Manually vetted every candidate before acceptance.** The automatic geocoder produced numerous false placements that were rejected: "Lime Out … Coral Bay, St John USVI" → Coral Bay, **Australia**; "Napili Kai … Maui" → Mojácar, **Spain**; "Key West Harbor at the Marker Hotel" → the Marker, **Dublin**; "CSX Chattanooga Sub" → **Massachusetts**; "Midway Atoll NWR" → Oahu; plus city/county-centroid-only placements and non-fixed "webcam tour"/"4K VIDEO UHD" montage uploads. **36 candidates rejected in total.**
+- Accepted only the **27** streams whose title named a specific venue/landmark that geocoded to the correct point in the correct state; wrote a hand-checked coordinate override for each, then re-verified all 27 live immediately before writing. Corpus 33,427 → **33,454**; rebuilt 45 shards; added the SkyVDN-style CSP already covers YouTube (video IDs only). Service-worker cache bumped to v17.
+
 ## v0.39.0 - 2026-07-11
 
 ### Closed four low-coverage state gaps with verified keyless DOT feeds (+1,639 cameras)
