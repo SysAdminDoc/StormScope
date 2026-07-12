@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.64.0 - 2026-07-12
+
+- Added an optional light theme. A new **Appearance** control in the layers panel offers **Match system** (follows `prefers-color-scheme` and updates live when the OS setting changes), **Always dark**, and **Always light**; the choice persists in `localStorage`. Light mode swaps the CartoDB basemap to `light_all` and overrides the semantic color tokens (`--bg-*`, `--border*`, `--accent`, `--text*`, plus new `--on-accent`/`--bg-elevated`) — layout, spacing, and component rules are shared with dark. Verified in-browser: primary text 16.98:1 and secondary text 6.36:1 contrast on light panels (both pass WCAG AA). English/Spanish labels added.
+- Raised the two smallest UI type sizes (`.alerts-disclaimer`, `.radar-legend`) from 10px to an 11px floor for more comfortable reading; contrast unchanged.
+- Service-worker cache bumped to v39 (shell assets changed).
+
 ## v0.63.0 - 2026-07-12
 
 - EarthCam Network feeds now render live in the viewer instead of loading a non-playing page embed. EarthCam's HTML5 player gates live video to authorized domains and signs its HLS with a per-session token minted in the page HTML, so off-site `type: embed` rows never played. Their public network API, however, exposes a per-camera `image.php` snapshot URL that hotlinks from any origin as a real refreshing JPEG. New `scripts/convert_earthcam_snapshots.py` matches EarthCam rows to that API by page URL and rewrites the matched rows to refreshing `type: image` feeds — the same mechanism the DOT image cameras use — so the actual camera view shows in the modal.

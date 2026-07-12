@@ -12,6 +12,7 @@
     en: {
       'app.title': 'StormScope — Live Weather Radar & Webcams',
       'language.label': 'Language', 'language.en': 'English', 'language.es': 'Spanish',
+      'theme.label': 'Appearance', 'theme.auto': 'Match system', 'theme.dark': 'Always dark', 'theme.light': 'Always light',
       'map.label': 'Weather radar and camera map', 'header.search': 'Find cameras', 'header.layers': 'Toggle layers panel',
       'connection.online': 'Online', 'connection.offline': 'Offline',
       'update.ready': 'A StormScope update is ready.', 'update.apply': 'Apply update', 'update.updating': 'Updating…',
@@ -142,6 +143,7 @@
     es: {
       'app.title': 'StormScope — Radar meteorológico y cámaras web en vivo',
       'language.label': 'Idioma', 'language.en': 'Inglés', 'language.es': 'Español',
+      'theme.label': 'Apariencia', 'theme.auto': 'Según el sistema', 'theme.dark': 'Siempre oscuro', 'theme.light': 'Siempre claro',
       'map.label': 'Mapa de radar meteorológico y cámaras', 'header.search': 'Buscar cámaras', 'header.layers': 'Mostrar panel de capas',
       'connection.online': 'En línea', 'connection.offline': 'Sin conexión',
       'update.ready': 'Hay una actualización de StormScope disponible.', 'update.apply': 'Aplicar actualización', 'update.updating': 'Actualizando…',

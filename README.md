@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.63.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.64.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
 [![Cameras](https://img.shields.io/badge/cameras-36%2C592-cyan)]()
@@ -26,7 +26,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 - **253 Provider Embed Feeds** — 20 EarthCam embed pages, 162 active NPS embed pages, 18 FAA WeatherCam pages, 17 Hazcams weather players, 6 DRBA ferry players, 4 AngelCam players, 4 direct LiveBeaches/Brownrice players, 21 first-party IPCamLive embeds, and 1 first-party RTSP.me lake feed
 - **Click-to-View** — YouTube embeds, EarthCam live snapshots, HLS video streams, and auto-refreshing image feeds in a modal viewer
 - **Current Weather** — Country-aware NWS forecasts with Open-Meteo fallback, metric/US units, and explicit issue/observation times
-- **Dark Theme** — CartoDB dark matter tiles with glassmorphism UI
+- **Light and Dark Themes** — Glassmorphism UI with a matching CartoDB dark/light basemap; the Appearance control offers Match system (respects `prefers-color-scheme`), Always dark, and Always light, and the choice persists locally
 - **No API Keys** — Runs entirely client-side with free, keyless APIs
 - **Installable PWA** — Offline camera/radar fallback, visible cache/freshness state, safe cache recovery, and deterministic update activation
 - **Mobile Responsive** — Works on desktop and mobile browsers

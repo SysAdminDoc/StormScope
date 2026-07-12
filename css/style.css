@@ -5,14 +5,17 @@
 }
 
 :root {
+  color-scheme: dark;
   --bg-dark: #0a0a14;
   --bg-panel: rgba(12, 12, 22, 0.88);
   --bg-panel-hover: rgba(20, 20, 35, 0.92);
+  --bg-elevated: rgba(12, 12, 22, 0.96);
   --bg-surface: #000;
   --border: rgba(255, 255, 255, 0.08);
   --border-hover: rgba(255, 255, 255, 0.15);
   --accent: #00b4d8;
   --accent-glow: rgba(0, 180, 216, 0.25);
+  --on-accent: #00151a;
   --youtube: rgba(255, 0, 0, 0.85);
   --youtube-glow: rgba(255, 0, 0, 0.4);
   --success: #2ecc71;
@@ -21,6 +24,27 @@
   --danger: #ff4757;
   --radius: 10px;
   --blur: 16px;
+}
+
+/* Light theme — activated when the appearance control resolves to "light"
+   (explicit choice or system preference). Overrides only the semantic color
+   tokens; the layout, spacing, and component rules are shared with dark. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg-dark: #e8ecf2;
+  --bg-panel: rgba(255, 255, 255, 0.92);
+  --bg-panel-hover: rgba(236, 240, 246, 0.96);
+  --bg-elevated: rgba(255, 255, 255, 0.97);
+  --bg-surface: #0b0b12;
+  --border: rgba(18, 22, 38, 0.14);
+  --border-hover: rgba(18, 22, 38, 0.28);
+  --accent: #0077a3;
+  --accent-glow: rgba(0, 119, 163, 0.16);
+  --on-accent: #ffffff;
+  --success: #1e874b;
+  --text: #14161d;
+  --text-dim: #565b6b;
+  --danger: #c62b3b;
 }
 
 html, body {
@@ -123,9 +147,9 @@ button:focus-visible {
   gap: 12px;
   padding: 10px 12px;
   transform: translateX(-50%);
-  border: 1px solid rgba(0, 180, 216, 0.4);
+  border: 1px solid var(--border-hover);
   border-radius: var(--radius);
-  background: rgba(12, 12, 22, 0.96);
+  background: var(--bg-elevated);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
   font-size: 13px;
 }
@@ -135,7 +159,7 @@ button:focus-visible {
   border: 1px solid var(--accent);
   border-radius: 7px;
   background: var(--accent);
-  color: #00151a;
+  color: var(--on-accent);
   font: inherit;
   font-weight: 700;
   cursor: pointer;
@@ -290,7 +314,7 @@ button:focus-visible {
 .alerts-disclaimer {
   margin-top: 10px;
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.4;
 }
 
@@ -364,7 +388,7 @@ button:focus-visible {
 .radar-legend {
   margin-top: 8px;
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .radar-legend i {

@@ -24,7 +24,8 @@
   var RAINVIEWER_COLOR_SCHEME = 2;
   var RAINVIEWER_MAX_NATIVE_ZOOM = 7;
 
-  var map, radarLayer, radarLayerNext, cameraCluster;
+  var map, radarLayer, radarLayerNext, cameraCluster, basemapLayer;
+  var themePreference = 'auto';
   var radarFrames = [];
   var radarHost = '';
   var radarIndex = 0;
@@ -129,12 +130,50 @@
     map.createPane('contextVectorPane');
     map.getPane('contextVectorPane').style.zIndex = '390';
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
+    basemapLayer = L.tileLayer(basemapTileUrl(resolveTheme(themePreference)), {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
       subdomains: 'abcd',
       crossOrigin: 'anonymous',
       maxZoom: 19
     }).addTo(map);
+  }
+
+  // ── Appearance / Theme ──
+
+  function systemPrefersLight() {
+    return typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-color-scheme: light)').matches;
+  }
+
+  function resolveTheme(preference) {
+    if (preference === 'light' || preference === 'dark') return preference;
+    return systemPrefersLight() ? 'light' : 'dark';
+  }
+
+  function basemapTileUrl(theme) {
+    return 'https://{s}.basemaps.cartocdn.com/' +
+      (theme === 'light' ? 'light_all' : 'dark_all') + '/{z}/{x}/{y}.png';
+  }
+
+  function applyTheme(preference) {
+    themePreference = ['auto', 'dark', 'light'].indexOf(preference) === -1 ? 'auto' : preference;
+    var theme = resolveTheme(themePreference);
+    document.documentElement.setAttribute('data-theme', theme);
+    if (basemapLayer) basemapLayer.setUrl(basemapTileUrl(theme));
+  }
+
+  function initTheme() {
+    var saved = null;
+    try { saved = localStorage.getItem('stormscope-theme'); } catch (error) { /* optional */ }
+    themePreference = ['auto', 'dark', 'light'].indexOf(saved) === -1 ? 'auto' : saved;
+    document.getElementById('app-theme').value = themePreference;
+    document.documentElement.setAttribute('data-theme', resolveTheme(themePreference));
+    if (typeof window.matchMedia === 'function') {
+      var query = window.matchMedia('(prefers-color-scheme: light)');
+      var onChange = function () { if (themePreference === 'auto') applyTheme('auto'); };
+      if (query.addEventListener) query.addEventListener('change', onChange);
+      else if (query.addListener) query.addListener(onChange);
+    }
   }
 
   // ── RainViewer Radar ──
@@ -2350,6 +2389,10 @@
       try { localStorage.setItem('stormscope-weather-units', weatherUnits); } catch (error) { /* optional */ }
       if (activeCamera) fetchWeather(activeCamera.lat, activeCamera.lon, activeCamera);
     });
+    document.getElementById('app-theme').addEventListener('change', function () {
+      applyTheme(this.value);
+      try { localStorage.setItem('stormscope-theme', themePreference); } catch (error) { /* optional */ }
+    });
     document.getElementById('app-locale').addEventListener('change', function () {
       appLocale = StormScopeI18n.setLocale(this.value);
       try { localStorage.setItem(StormScopeI18n.STORAGE_KEY, appLocale); } catch (error) { /* optional */ }
@@ -2728,6 +2771,7 @@
   // ── Boot ──
 
   initLocale();
+  initTheme();
   initMap();
   initWeatherUnits();
   initRadarPreferences();
