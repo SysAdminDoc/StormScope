@@ -54,21 +54,23 @@
     return converted.replace(/\s*mph\b/i, units === 'metric' ? ' km/h' : ' mph').trim();
   }
 
-  function formatTime(value, locale) {
-    if (!value) return 'Unknown';
+  function formatTime(value, locale, unknownValue) {
+    var unknown = unknownValue || 'Unknown';
+    if (!value) return unknown;
     var date = new Date(value);
-    if (Number.isNaN(date.getTime())) return 'Unknown';
+    if (Number.isNaN(date.getTime())) return unknown;
     return new Intl.DateTimeFormat(locale || undefined, {
       month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
     }).format(date);
   }
 
-  function formatOpenMeteoTime(localTime, utcOffsetSeconds, locale) {
-    if (!localTime) return 'Unknown';
+  function formatOpenMeteoTime(localTime, utcOffsetSeconds, locale, unknownValue) {
+    var unknown = unknownValue || 'Unknown';
+    if (!localTime) return unknown;
     var wallClock = Date.parse(String(localTime) + (/[zZ]|[+-]\d\d:\d\d$/.test(String(localTime)) ? '' : 'Z'));
     var offset = Number(utcOffsetSeconds);
-    if (!Number.isFinite(wallClock) || !Number.isFinite(offset)) return 'Unknown';
-    return formatTime(new Date(wallClock - offset * 1000).toISOString(), locale);
+    if (!Number.isFinite(wallClock) || !Number.isFinite(offset)) return unknown;
+    return formatTime(new Date(wallClock - offset * 1000).toISOString(), locale, unknown);
   }
 
   return {

@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.75.0 - 2026-07-12
+
+- Completed deterministic Spanish runtime localization for all 16 compass directions, CAP severity/urgency/certainty vocabulary, camera source taxonomy, radar degradation reasons, unavailable timestamps, and service-worker cache/recovery failures.
+- NWS-authored forecast and alert prose is now visibly identified as provider text instead of appearing to be an untranslated application string. NWS weather also shows its source, camera marker titles use localized health copy, missing alert titles use a localized fallback, and deterministic Leaflet attribution prefixes no longer remain English after a locale switch. Service-worker cache bumped to v48.
+
 ## v0.74.0 - 2026-07-12
 
 - Added an accessible, always-visible camera feed-details panel for provider frame time, StormScope verification time, device-local playback observation, source/provider, feed type, refresh cadence, and degraded reason. Missing provider evidence is stated explicitly instead of being inferred.

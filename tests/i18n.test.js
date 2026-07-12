@@ -29,6 +29,18 @@ test('number, date, and frame-age formatting follow the selected locale', () => 
   assert.equal(i18n.formatAge(5, 'es'), 'hace 5 minutos');
 });
 
+test('Spanish deterministic weather, CAP, source, radar, and recovery vocabulary is complete', () => {
+  const compass = ['n', 'nne', 'ne', 'ene', 'e', 'ese', 'se', 'sse', 's', 'ssw', 'sw', 'wsw', 'w', 'wnw', 'nw', 'nnw'];
+  compass.forEach((direction) => assert.notEqual(i18n.t(`direction.${direction}`, null, 'es'), `direction.${direction}`));
+  assert.equal(i18n.t('direction.w', null, 'es'), 'O');
+  assert.equal(i18n.t('direction.sw', null, 'es'), 'SO');
+  assert.equal(i18n.t('urgency.immediate', null, 'es'), 'Inmediata');
+  assert.equal(i18n.t('certainty.observed', null, 'es'), 'Observada');
+  assert.equal(i18n.t('source.dot', null, 'es'), 'Departamento de transporte');
+  assert.match(i18n.t('cache.noResponse', null, 'es'), /no respondió/);
+  assert.match(i18n.t('radar.reason.cached-offline', null, 'es'), /caché/);
+});
+
 test('application control logic routes user-facing copy through the locale catalog', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8');
   const forbidden = [

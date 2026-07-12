@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.74.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.75.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
 [![Cameras](https://img.shields.io/badge/cameras-36%2C592-cyan)]()
@@ -21,7 +21,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 - **Visible Feed Provenance** — Every camera viewer distinguishes provider frame time, StormScope verification, expiring device-local playback evidence, provider/source, feed type, cadence, and degraded reason without relying on hover text
 - **Local Favorites and Views** — Favorite cameras, restore the last map/layer/opacity state, save named views, and validate portable JSON imports/exports without an account
 - **Recoverable Diagnostics** — Runtime failures enter a bounded local ring buffer and show reload/cache-reset actions; a redacted export includes versions, provider state, cache totals, corpus generation, and errors without feed URLs, coordinates, favorites, or saved views
-- **English and Spanish UI** — Live language switching covers controls, recovery states, weather/radar labels, WMO conditions, alerts, dates, numbers, and units with deterministic English fallback
+- **English and Spanish UI** — Live language switching covers controls, cache recovery, compass/CAP vocabulary, source taxonomy, radar/provider states, weather labels, WMO conditions, dates, numbers, and units; source-authored NWS prose is explicitly identified when it remains in English
 - **Bounded Multi-Camera Monitor** — Select 2–4 search results after a bandwidth warning; offscreen/hidden direct feeds pause, one close destroys all players, and unsupported provider embeds become safe source links
 - **599 YouTube Live Streams** — Playback-verified streams including beaches, airports, railcams, harbors, city skylines, landmarks, campuses, indoor/outdoor feeds, wildlife cams, volcano cams, and city-list discoveries (red markers)
 - **256 EarthCam Live Snapshot Feeds** — EarthCam Network cameras render their official refreshing `image.php` snapshot frame directly in the viewer (EarthCam's player gates live video to authorized domains, so 256 of 276 rows now use the hotlinkable public snapshot instead of a non-playing page embed); 20 partner-hosted EarthCam rows remain page embeds

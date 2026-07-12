@@ -338,6 +338,15 @@ async function main() {
     );
     assert.match(await page.locator('#radar-frame-position').textContent(), /^Fotograma /);
     assert.match(await page.locator('#radar-time').textContent(), /hace|ahora mismo/);
+    await page.locator('#alerts-status').filter({ hasText: '1 alerta' }).waitFor({ state: 'visible' });
+    assert.equal(
+      (await page.locator('.alerts-provider-note').textContent()).trim(),
+      'Texto del proveedor NWS (puede permanecer en inglés)'
+    );
+    await page.getByRole('button', { name: /Severe Thunderstorm Warning/ }).click();
+    await page.locator('#alert-detail').waitFor({ state: 'visible' });
+    assert.match(await page.locator('#alert-detail').textContent(), /Severa • Inmediata • Observada/);
+    await page.locator('#alert-detail .alert-detail-dismiss').click();
     await page.locator('#app-locale').selectOption('en');
     assert.equal(await page.locator('html').getAttribute('lang'), 'en');
     await page.getByRole('button', { name: 'Toggle layers panel' }).click();

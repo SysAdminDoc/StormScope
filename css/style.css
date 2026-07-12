@@ -319,6 +319,20 @@ button:focus-visible {
 .alert-detail p { margin: 5px 0; white-space: pre-line; }
 .alert-detail a { color: var(--accent); }
 
+.alert-detail .provider-content-label {
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.alerts-provider-note {
+  margin: 6px 0 8px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
 .alerts-disclaimer {
   margin-top: 10px;
   color: var(--text-dim);

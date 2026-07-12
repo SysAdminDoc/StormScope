@@ -136,6 +136,14 @@ test('PWA update and page lifecycle work are explicit and recoverable', () => {
   assert.match(i18n.catalogs.en['camera.paused'], /Feed paused/);
 });
 
+test('deterministic runtime status copy never exposes raw localization bypasses', () => {
+  assert.doesNotMatch(app, /\.degradationReason\.replace\(/);
+  assert.doesNotMatch(app, /Offline cache (?:is not active yet|did not respond)/);
+  assert.doesNotMatch(app, /\(cam\.health \|\| 'unknown'\) \+ ' feed'/);
+  assert.match(app, /radarReasonLabel\(radarProviderSelection\.degradationReason\)/);
+  assert.match(app, /sourceLabel\(camera\.source \|\| camera\.type\)/);
+});
+
 test('fatal recovery keeps shell cache and exports redacted diagnostics', () => {
   assert.match(app, /StormScopeDiagnostics\.create/);
   assert.match(app, /diagnostics\.install\(window/);

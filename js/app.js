@@ -2,7 +2,7 @@
   'use strict';
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.74.0';
+  var APP_VERSION = '0.75.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -117,13 +117,27 @@
   }
 
   function localTime(value) {
-    return StormScopeWeather.formatTime(value, appLocale);
+    return StormScopeWeather.formatTime(value, appLocale, tr('weather.unknown'));
   }
 
   function escapeHtml(str) {
     var div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+  }
+
+  function sourceLabel(value) {
+    var source = String(value || '').trim().toLowerCase();
+    var known = ['angelcam', 'dot', 'earthcam', 'faa', 'hazcams', 'ipcamlive', 'livebeaches',
+      'mwra', 'noaa', 'nps', 'nrao', 'rtspme', 'smithsonian', 'state_park', 'university', 'usgs', 'youtube'];
+    return known.indexOf(source) === -1 ? (value || tr('source.camera')) : tr('source.' + source);
+  }
+
+  function radarReasonLabel(reason) {
+    var known = ['rate-limited', 'request-failed', 'frame-expired', 'no-successful-frame', 'stale-frame',
+      'partial-coverage', 'using-last-success', 'all-providers-unavailable', 'outside-provider-coverage',
+      'primary-unavailable', 'cached-offline'];
+    return known.indexOf(reason) === -1 ? tr('radar.reason.unknown') : tr('radar.reason.' + reason);
   }
 
   // ── Map Init ──
@@ -258,7 +272,7 @@
     } catch (error) {
       if (error.name !== 'AbortError') {
         clearRadarDisplay();
-        document.getElementById('radar-meta').textContent = tr('radar.providersUnavailable', { error: error.message });
+        document.getElementById('radar-meta').textContent = tr('radar.providersUnavailable');
         setRadarStatus(tr('radar.unavailable'), true, true);
       }
     }
@@ -400,7 +414,7 @@
         maxNativeZoom: RAINVIEWER_MAX_NATIVE_ZOOM,
         maxZoom: 18,
         crossOrigin: 'anonymous',
-        attribution: 'Radar: <a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>'
+        attribution: '<a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>'
       });
       guardRainViewerTileLayer(layer);
     } else if (radarProviderId === 'noaa-mrms') {
@@ -415,7 +429,7 @@
         zIndex: 400,
         maxZoom: 18,
         crossOrigin: 'anonymous',
-        attribution: 'Radar: <a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>'
+        attribution: '<a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>'
       };
       if (params.time) wmsOptions.time = params.time;
       layer = L.tileLayer.wms(provider.tile.endpoint, wmsOptions);
@@ -556,7 +570,7 @@
     var provider = StormScopeRadarProviders.providers[radarProviderId];
     var age = StormScopeRadarProviders.getFrameAge(radarFrames[radarIndex], radarProviderId);
     var reason = radarProviderSelection.degradationReason
-      ? ' • ' + tr('radar.degraded', { reason: radarProviderSelection.degradationReason.replace(/-/g, ' ') })
+      ? ' • ' + tr('radar.degraded', { reason: radarReasonLabel(radarProviderSelection.degradationReason) })
       : '';
     document.getElementById('radar-meta').textContent = provider.label +
       (radarProviderSelection.isFallback ? tr('radar.fallbackSuffix') : '') + ' • ' +
@@ -583,7 +597,7 @@
         maxNativeZoom: RAINVIEWER_MAX_NATIVE_ZOOM,
         maxZoom: 18,
         crossOrigin: 'anonymous',
-        attribution: 'Coverage: RainViewer'
+        attribution: 'RainViewer'
       }
     );
     guardRainViewerTileLayer(radarCoverageLayer).addTo(map);
@@ -666,7 +680,7 @@
         layers: provider.layer, styles: provider.style, format: 'image/png', transparent: true,
         version: '1.3.0', time: new Date(discovery.latestTime).toISOString(), opacity: 0.62,
         pane: 'contextRasterPane', crossOrigin: 'anonymous',
-        attribution: 'Lightning: <a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>'
+        attribution: '<a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>'
       });
       var tileErrors = 0;
       nextLayer.on('tileerror', function () {
@@ -1060,7 +1074,7 @@
       cam.local_observation = cameraObservations[cameraHealthKey(cam)] || null;
       var marker = L.marker([cam.lat, cam.lon], {
         icon: cameraIconFor(cam),
-        title: cam.name + ' — ' + (cam.health || 'unknown') + ' feed'
+        title: tr('camera.feedLabel', { name: cam.name, health: tr('camera.health.' + (cam.health || 'unknown')) })
       });
       marker._camData = cam;
       cam._marker = marker;
@@ -1125,7 +1139,7 @@
     if (camera.road && camera.road !== camera.name) parts.push(camera.road);
     if (camera.county) parts.push(camera.county);
     if (camera.state) parts.push(camera.state);
-    parts.push(tr('camera.health.' + (camera.health || 'unknown')) + ' • ' + (camera.source || camera.type || 'camera'));
+    parts.push(tr('camera.health.' + (camera.health || 'unknown')) + ' • ' + sourceLabel(camera.source || camera.type));
     return parts.join(' • ');
   }
 
@@ -1141,7 +1155,7 @@
       if (document.getElementById('camera-favorites').checked) renderCameraResults();
       else renderCameraResultWindow();
     } catch (error) {
-      document.getElementById('camera-results-status').textContent = tr('search.favoriteError', { error: error.message });
+      document.getElementById('camera-results-status').textContent = tr('search.favoriteError');
     }
   }
 
@@ -1437,7 +1451,7 @@
     clearTimeout(saveLastViewTimer);
     saveLastViewTimer = setTimeout(function () {
       try { savedStore.setLastView(captureViewSnapshot()); } catch (error) {
-        setSavedStateStatus(tr('views.lastSaveError', { error: error.message }), true);
+        setSavedStateStatus(tr('views.lastSaveError'), true);
       }
     }, 400);
   }
@@ -1491,6 +1505,22 @@
     document.getElementById('camera-count').textContent = cameraCountLabel();
     document.getElementById('search-progress').textContent = tr('camera.firstBatch', {
       count: localNumber(allCameras.length), milliseconds: localNumber(Math.round(cameraLoadMetrics.firstBatchMs || 0))
+    });
+  }
+
+  function refreshCameraMarkerLabels() {
+    allCameras.forEach(function (camera) {
+      if (!camera._marker) return;
+      var label = tr('camera.feedLabel', {
+        name: camera.name,
+        health: tr('camera.health.' + (camera.health || 'unknown'))
+      });
+      camera._marker.options.title = label;
+      var element = camera._marker.getElement();
+      if (element) {
+        element.setAttribute('title', label);
+        element.setAttribute('aria-label', label);
+      }
     });
   }
 
@@ -1612,7 +1642,7 @@
       ? 'camera.failure.' + cam.failure_class
       : 'camera.provenance.notApplicable';
     var feedTypeKey = 'camera.feedType.' + (cam.type || 'unknown');
-    var providerName = cam.provider || cam.source || tr('camera.provenance.unavailable');
+    var providerName = cam.provider || sourceLabel(cam.source);
     var cadence = Number(cam.refresh_cadence_seconds);
 
     document.getElementById('modal-provider-frame-time').textContent = providerFrameTime
@@ -2193,10 +2223,13 @@
     95: 'weather.code.thunderstorm', 96: 'weather.code.slightHail', 99: 'weather.code.heavyHail'
   };
 
-  function windDirectionFromDegrees(deg) {
-    var dirs = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
-                'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
-    return dirs[Math.round(deg / 22.5) % 16];
+  function localizedWindDirection(value) {
+    var dirs = ['n', 'nne', 'ne', 'ene', 'e', 'ese', 'se', 'sse',
+                's', 'ssw', 'sw', 'wsw', 'w', 'wnw', 'nw', 'nnw'];
+    var key = typeof value === 'number'
+      ? dirs[(Math.round(value / 22.5) % 16 + 16) % 16]
+      : String(value || '').trim().toLowerCase();
+    return dirs.indexOf(key) === -1 ? tr('weather.unknown') : tr('direction.' + key);
   }
 
   async function fetchWeather(lat, lon, cam) {
@@ -2246,11 +2279,12 @@
       : Math.round(current.temperature) + '°' + current.temperatureUnit;
     showWeatherItems(weatherLoading, weatherData, [
       [tr('weather.temperature'), temperature],
-      [tr('weather.conditions'), current.shortForecast],
-      [tr('weather.wind'), StormScopeWeather.windFromMph(current.windSpeed, weatherUnits) + ' ' + current.windDirection],
+      [tr('weather.conditionsProvider'), current.shortForecast],
+      [tr('weather.wind'), StormScopeWeather.windFromMph(current.windSpeed, weatherUnits) + ' ' + localizedWindDirection(current.windDirection)],
       [tr('weather.humidity'), current.relativeHumidity ? localNumber(current.relativeHumidity.value) + '%' : tr('weather.notAvailable')],
       [tr('weather.forecastIssued'), localTime(fcData.properties.updateTime)],
-      [tr('weather.forecastValid'), localTime(current.startTime)]
+      [tr('weather.forecastValid'), localTime(current.startTime)],
+      [tr('weather.source'), tr('weather.nwsForecast')]
     ]);
   }
 
@@ -2272,14 +2306,14 @@
       if (activeCamera !== cam) return;
 
       var condition = tr(WMO_CODES[c.weather_code] || 'weather.code.unknown');
-      var windDir = windDirectionFromDegrees(c.wind_direction_10m || 0);
+      var windDir = localizedWindDirection(c.wind_direction_10m || 0);
 
       showWeatherItems(weatherLoading, weatherData, [
         [tr('weather.temperature'), localNumber(Math.round(c.temperature_2m)) + (metric ? '°C' : '°F')],
         [tr('weather.conditions'), condition],
         [tr('weather.wind'), localNumber(Math.round(c.wind_speed_10m)) + (metric ? ' km/h ' : ' mph ') + windDir],
         [tr('weather.humidity'), c.relative_humidity_2m != null ? localNumber(c.relative_humidity_2m) + '%' : tr('weather.notAvailable')],
-        [tr('weather.observed'), StormScopeWeather.formatOpenMeteoTime(c.time, data.utc_offset_seconds, appLocale)],
+        [tr('weather.observed'), StormScopeWeather.formatOpenMeteoTime(c.time, data.utc_offset_seconds, appLocale, tr('weather.unknown'))],
         [tr('weather.source'), tr(isFallback ? 'weather.openMeteoFallback' : 'weather.openMeteo')]
       ]);
     } catch (e) {
@@ -2409,7 +2443,7 @@
       button.className = 'alert-list-button';
       button.dataset.severity = alert.severity;
       var title = document.createElement('strong');
-      title.textContent = alert.event;
+      title.textContent = alert.event || tr('alerts.weatherAlert');
       var summary = document.createElement('span');
       summary.textContent = tr('alerts.expiresSummary', {
         severity: tr('severity.' + String(alert.severity || 'unknown').toLowerCase()),
@@ -2465,13 +2499,19 @@
     dismiss.addEventListener('click', hideAlertDetail);
     detail.appendChild(dismiss);
     var heading = document.createElement('h3');
-    heading.textContent = alert.headline;
+    heading.textContent = alert.headline || tr('alerts.weatherAlert');
     detail.appendChild(heading);
+    var providerLabel = document.createElement('p');
+    providerLabel.className = 'provider-content-label';
+    providerLabel.textContent = tr('alerts.providerContent');
+    detail.appendChild(providerLabel);
     [
       [tr('alerts.area'), alert.areaDescription],
       [tr('alerts.effective'), localTime(alert.effective)],
       [tr('alerts.expires'), localTime(alert.expires)],
-      [tr('alerts.severity'), tr('severity.' + String(alert.severity || 'unknown').toLowerCase()) + ' • ' + alert.urgency + ' • ' + alert.certainty],
+      [tr('alerts.severity'), tr('severity.' + String(alert.severity || 'unknown').toLowerCase()) + ' • ' +
+        tr('urgency.' + String(alert.urgency || 'unknown').toLowerCase()) + ' • ' +
+        tr('certainty.' + String(alert.certainty || 'unknown').toLowerCase())],
       [tr('alerts.details'), alert.description],
       [tr('alerts.instructions'), alert.instruction]
     ].forEach(function (row) {
@@ -2611,6 +2651,7 @@
       if (radarFrames.length) updateRadarTimeDisplay();
       if (cameraDataTimestamp) updateDataFreshness();
       refreshCameraLoadLabels();
+      refreshCameraMarkerLabels();
       refreshSavedViews(document.getElementById('saved-views').value);
       updateMonitorSelectionUi();
       scheduleSearchRender();
@@ -2688,7 +2729,7 @@
         refreshSavedViews(saved && saved.id);
         setSavedStateStatus(tr('views.savedStatus'));
       } catch (error) {
-        setSavedStateStatus(tr('views.saveError', { error: error.message }), true);
+        setSavedStateStatus(tr('views.saveError'), true);
       }
     });
     document.getElementById('load-view').addEventListener('click', function () {
@@ -2734,7 +2775,7 @@
           scheduleSearchRender();
           setSavedStateStatus(tr('views.imported'));
         } catch (error) {
-          setSavedStateStatus(tr('views.importRejected', { error: error.message }), true);
+          setSavedStateStatus(tr('views.importRejected'), true);
         } finally {
           input.value = '';
         }
@@ -2780,6 +2821,20 @@
     var clearButton = document.getElementById('clear-cache');
     var updateNotice = document.getElementById('update-notice');
     var applyUpdate = document.getElementById('apply-update');
+
+    function cacheOperationError(code) {
+      if (code === 'not-active') return tr('cache.notActive');
+      if (code === 'no-response') return tr('cache.noResponse');
+      if (code === 'quota-exceeded') return tr('cache.full');
+      if (code === 'write-failed') return tr('cache.writeFailed');
+      return tr('cache.operationFailed');
+    }
+
+    function cacheError(code) {
+      var error = new Error(code);
+      error.code = code;
+      return error;
+    }
     if (!('serviceWorker' in navigator) || location.protocol.indexOf('http') !== 0) {
       status.textContent = tr('cache.requiresHttp');
       return;
@@ -2801,10 +2856,10 @@
 
     function requestWorker(registration, type) {
       var worker = navigator.serviceWorker.controller || registration.active;
-      if (!worker) return Promise.reject(new Error('Offline cache is not active yet.'));
+      if (!worker) return Promise.reject(cacheError('not-active'));
       return new Promise(function (resolve, reject) {
         var channel = new MessageChannel();
-        var timeout = setTimeout(function () { reject(new Error('Offline cache did not respond.')); }, 4000);
+        var timeout = setTimeout(function () { reject(cacheError('no-response')); }, 4000);
         channel.port1.onmessage = function (event) {
           clearTimeout(timeout);
           resolve(event.data || {});
@@ -2867,14 +2922,14 @@
             requestWorker(registration, 'STORMSCOPE_CLEAR_CACHES').then(function () {
               return refreshUsage(registration);
             }).catch(function (error) {
-              setCacheError(error.message);
+              setCacheError(cacheOperationError(error.code));
               clearButton.disabled = false;
             });
           });
           return refreshUsage(registration);
         });
       }).catch(function (error) {
-        setCacheError(tr('cache.unavailable', { error: error.message }));
+        setCacheError(tr('cache.unavailableGeneric'));
       });
     });
   }

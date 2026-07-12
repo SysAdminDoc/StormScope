@@ -98,6 +98,12 @@ test('normalizes CAP fields, times, VTEC series, and trusted source URLs', () =>
   assert.equal(hostile.weatherUrl, 'https://www.weather.gov/');
 });
 
+test('missing provider prose stays empty for the localized UI fallback', () => {
+  const alert = alerts.normalizeAlert(feature({ event: '', headline: '' }));
+  assert.equal(alert.event, '');
+  assert.equal(alert.headline, '');
+});
+
 test('deduplicates an alert series to its latest update and removes expired alerts', () => {
   const first = alerts.normalizeAlert(feature());
   const update = alerts.normalizeAlert(feature({
