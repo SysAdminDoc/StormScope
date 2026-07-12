@@ -1174,6 +1174,211 @@ def fetch_fl_arcgis():
         return 0
 
 
+def _http_bytes(url, headers=None, data=None, method=None, timeout=30):
+    hdrs = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0',
+            'Accept': '*/*', 'Accept-Encoding': 'gzip, deflate'}
+    if headers:
+        hdrs.update(headers)
+    req = urllib.request.Request(url, data=data, headers=hdrs, method=method)
+    resp = urllib.request.urlopen(req, timeout=timeout, context=ctx)
+    raw = resp.read()
+    if raw[:2] == b'\x1f\x8b':
+        raw = gzip.decompress(raw)
+    return raw
+
+
+# ── Virginia (VDOT 511) — GeoJSON with absolute snapshot + HLS URLs ──
+def fetch_va_511():
+    try:
+        url = 'https://511.vdot.virginia.gov/services/map/layers/map/cams'
+        data = json.loads(_http_bytes(url, headers={'Accept': 'application/json'}, timeout=30))
+        count = 0
+        for feat in data.get('features', []):
+            props = feat.get('properties', {})
+            if not props.get('active') or props.get('problem_stream'):
+                continue
+            img_url = str(props.get('image_url', ''))
+            if not img_url.startswith('https://'):
+                continue
+            coords = (feat.get('geometry', {}) or {}).get('coordinates', [0, 0])
+            if not isinstance(coords, list) or len(coords) < 2:
+                continue
+            name = props.get('description', '') or props.get('route', '') or 'Virginia Camera'
+            add_camera(name, coords[1], coords[0], img_url, 'image', 'Virginia',
+                       props.get('jurisdiction', '') or '', props.get('direction', '') or '',
+                       'dot', 'https://511.vdot.virginia.gov/cameras', 60)
+            count += 1
+        return count
+    except Exception as e:
+        print(f'  Virginia 511: {e}')
+        return 0
+
+
+# ── Oregon (ODOT TripCheck) — cctvinventory served as .js JSON ──
+def fetch_or_tripcheck():
+    try:
+        data = json.loads(_http_bytes(
+            'https://www.tripcheck.com/Scripts/map/data/cctvinventory.js', timeout=30))
+        count = 0
+        for feat in data.get('features', []):
+            attrs = feat.get('attributes', {})
+            filename = str(attrs.get('filename', '')).strip()
+            if not filename:
+                continue
+            img_url = 'https://tripcheck.com/RoadCams/cams/' + urllib.parse.quote(filename)
+            name = str(attrs.get('title', '') or 'Oregon Camera').strip()
+            add_camera(name, attrs.get('latitude'), attrs.get('longitude'), img_url,
+                       'image', 'Oregon', '', '', 'dot', 'https://www.tripcheck.com/', 300)
+            count += 1
+        return count
+    except Exception as e:
+        print(f'  Oregon TripCheck: {e}')
+        return 0
+
+
+# ── Rhode Island (RIDOT Rhodeways) — keyless ArcGIS MapServer ──
+def fetch_ri_ridot():
+    try:
+        url = ('https://risegis.ri.gov/hosting/rest/services/RIDOT/Rhodeways/MapServer/6/query'
+               '?where=Enabled%3D1&outFields=Description,Direction,CCVEWebURL'
+               '&returnGeometry=true&outSR=4326&f=json')
+        data = json.loads(_http_bytes(url, headers={'Accept': 'application/json'}, timeout=30))
+        count = 0
+        for feat in data.get('features', []):
+            attrs = feat.get('attributes', {})
+            img_url = str(attrs.get('CCVEWebURL', '')).strip()
+            if img_url.startswith('http://'):
+                img_url = 'https://' + img_url[len('http://'):]
+            if not img_url.startswith('https://'):
+                continue
+            img_url = urllib.parse.quote(img_url, safe=':/?&=%')
+            geom = feat.get('geometry', {})
+            name = str(attrs.get('Description', '') or 'Rhode Island Camera').strip()
+            add_camera(name, geom.get('y'), geom.get('x'), img_url, 'image', 'Rhode Island',
+                       '', attrs.get('Direction', '') or '', 'dot',
+                       'https://www.dot.ri.gov/travel/cameras_metro.php', 60)
+            count += 1
+        return count
+    except Exception as e:
+        print(f'  Rhode Island RIDOT: {e}')
+        return 0
+
+
+# ── North Dakota (NDDOT rcrs) — keyless ArcGIS MapServer, still cameras ──
+def fetch_nd_dot():
+    try:
+        url = ('https://gis.dot.nd.gov/ArcGIS/rest/services/external/rcrs_dynamic/MapServer/5/query'
+               '?where=1%3D1&outFields=Description,FullPath,Active'
+               '&returnGeometry=true&outSR=4326&f=json')
+        data = json.loads(_http_bytes(url, headers={'Accept': 'application/json'}, timeout=30))
+        count = 0
+        for feat in data.get('features', []):
+            attrs = feat.get('attributes', {})
+            if str(attrs.get('Active', 'Y')).upper() != 'Y':
+                continue
+            img_url = str(attrs.get('FullPath', '')).strip()
+            if not img_url.startswith('https://'):
+                continue
+            img_url = urllib.parse.quote(img_url, safe=':/?&=%')
+            geom = feat.get('geometry', {})
+            name = str(attrs.get('Description', '') or 'North Dakota Camera').strip()
+            add_camera(name, geom.get('y'), geom.get('x'), img_url, 'image', 'North Dakota',
+                       '', '', 'dot', 'https://travel.dot.nd.gov/cameras/', 300)
+            count += 1
+        return count
+    except Exception as e:
+        print(f'  North Dakota DOT: {e}')
+        return 0
+
+
+# ── CARS / OneNetwork 511 GraphQL (Kansas, Nebraska) ──
+CARS_MAP_QUERY = (
+    'query MapFeatures($input: MapFeaturesArgs!){mapFeaturesQuery(input:$input)'
+    '{mapFeatures{__typename uri title features{id geometry properties type}'
+    ' ... on Camera{active views(limit:3){uri category ... on CameraView{url}}}}'
+    ' error{message type}}}'
+)
+
+
+def fetch_cars_graphql(base_url, state_name, bbox, source_page):
+    try:
+        body = json.dumps({
+            'query': CARS_MAP_QUERY,
+            'variables': {'input': {**bbox, 'zoom': 11, 'layerSlugs': ['normalCameras']}},
+        }).encode('utf-8')
+        payload = json.loads(_http_bytes(
+            base_url + '/api/graphql',
+            headers={'Accept': 'application/json', 'Content-Type': 'application/json',
+                     'Origin': base_url, 'Referer': base_url + '/'},
+            data=body, method='POST', timeout=40))
+        result = (payload.get('data') or {}).get('mapFeaturesQuery') or {}
+        feats = result.get('mapFeatures') or []
+        count = 0
+        seen = set()
+        for marker in feats:
+            if marker.get('__typename') != 'Camera' or not marker.get('active'):
+                continue
+            uri = marker.get('uri')
+            if uri in seen:
+                continue
+            views = marker.get('views') or []
+            img_url = str(views[0].get('url')) if views and views[0] else ''
+            img_url = img_url.split('?', 1)[0]
+            if not img_url.startswith('https://'):
+                continue
+            geom = ((marker.get('features') or [{}])[0].get('geometry') or {})
+            coords = geom.get('coordinates') or [0, 0]
+            if not isinstance(coords, list) or len(coords) < 2:
+                continue
+            seen.add(uri)
+            name = str(marker.get('title', '') or f'{state_name} Camera').strip()
+            add_camera(name, coords[1], coords[0], img_url, 'image', state_name,
+                       '', '', 'dot', source_page, 60)
+            count += 1
+        return count
+    except Exception as e:
+        print(f'  {state_name} CARS GraphQL: {e}')
+        return 0
+
+
+# ── Mississippi (MDOT Traffic) — ASP.NET PageMethod + per-site stream bubble ──
+def fetch_ms_mdot():
+    try:
+        markers = json.loads(_http_bytes(
+            'https://www.mdottraffic.com/default.aspx/LoadCameraData',
+            headers={'Accept': 'application/json',
+                     'Content-Type': 'application/json; charset=utf-8',
+                     'Origin': 'https://www.mdottraffic.com',
+                     'Referer': 'https://www.mdottraffic.com/'},
+            data=b'{}', method='POST', timeout=40)).get('d', [])
+        count = 0
+        for marker in markers:
+            marker_id = str(marker.get('markerid', ''))
+            if '_' not in marker_id:
+                continue
+            site = marker_id.split('_', 1)[1]
+            try:
+                html = _http_bytes(
+                    f'https://www.mdottraffic.com/mapbubbles/camerasite.aspx?site={site}',
+                    timeout=20).decode('utf-8', 'replace')
+            except Exception:
+                continue
+            stream = re.search(r'streamname=(\d+)\.stream', html)
+            host = re.search(r'(streamingjxn\d)', html)
+            if not stream or not host:
+                continue
+            img_url = (f'https://{host.group(1)}.mdottraffic.com/thumbnail?application=rtplive'
+                       f'&streamname={stream.group(1)}.stream&size=352x240&format=jpg&fitmode=stretch')
+            name = str(marker.get('tooltip', '') or 'Mississippi Camera').strip()
+            add_camera(name, marker.get('lat'), marker.get('lon'), img_url, 'image',
+                       'Mississippi', '', '', 'dot', 'https://www.mdottraffic.com/', 30)
+            count += 1
+        return count
+    except Exception as e:
+        print(f'  Mississippi MDOT: {e}')
+        return 0
+
+
 # ── OpenTrafficCamMap baseline (states not covered by live fetchers) ──
 def load_otcm_baseline(filepath):
     with open(filepath, 'r') as f:
@@ -1254,6 +1459,20 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
         ('Florida (ArcGIS)', fetch_fl_arcgis),
         ('Georgia DOT (DataTables)', lambda: fetch_511_datatables(
             'https://511ga.org', 'Georgia', 'https://511ga.org/cctv')),
+        ('Virginia (VDOT 511)', fetch_va_511),
+        ('North Carolina (DriveNC)', lambda: fetch_511_mapicons('https://drivenc.gov', 'North Carolina')),
+        ('Oregon (ODOT TripCheck)', fetch_or_tripcheck),
+        ('Rhode Island (RIDOT)', fetch_ri_ridot),
+        ('North Dakota (NDDOT)', fetch_nd_dot),
+        ('Kansas (KanDrive)', lambda: fetch_cars_graphql(
+            'https://www.kandrive.gov', 'Kansas',
+            {'north': 40.1, 'south': 36.9, 'east': -94.5, 'west': -102.1},
+            'https://www.kandrive.gov/')),
+        ('Nebraska (511 Nebraska)', lambda: fetch_cars_graphql(
+            'https://511.nebraska.gov', 'Nebraska',
+            {'north': 43.1, 'south': 39.9, 'east': -95.2, 'west': -104.2},
+            'https://www.511.nebraska.gov/')),
+        ('Mississippi (MDOT Traffic)', fetch_ms_mdot),
         ('NPS Webcams', fetch_nps),
     ])
     return providers

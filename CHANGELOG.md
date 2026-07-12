@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.36.0 - 2026-07-11
+
+### Eight new keyless official DOT providers (+5,259 cameras)
+- Closed near-zero state coverage gaps by adding eight first-party, keyless state DOT/511 camera providers, bringing the corpus from 24,892 to **30,151 cameras across 49 of 50 states plus Washington, D.C.** — West Virginia is now the only state-level gap.
+- **Virginia (VDOT 511)** — 1,672 cameras from the keyless GeoJSON layer, using the official absolute snapshot URL, jurisdiction as county, and provider direction; only `active` non-`problem_stream` feeds accepted.
+- **North Carolina (DriveNC)** — 1,114 cameras via the keyless `mapIcons/Cameras` + `/map/Cctv/{id}` JPEG proxy (the metadata-rich v2 API requires a developer key, so the keyless coordinate+image path was used).
+- **Oregon (ODOT TripCheck)** — 1,127 cameras from the `cctvinventory` feed with absolute RoadCams image URLs.
+- **Kansas (KanDrive, 518)** and **Nebraska (511 Nebraska, 352)** — CARS/OneNetwork GraphQL `MapFeatures` query at `normalCameras`/zoom 11, absolute JPEG views with the cache-buster stripped.
+- **North Dakota (NDDOT)** — 186 still cameras from the keyless `rcrs_dynamic` ArcGIS MapServer layer (active only).
+- **Mississippi (MDOT Traffic)** — 158 cameras via the ASP.NET `LoadCameraData` PageMethod plus a per-site stream-bubble scrape resolving the Wowza thumbnail JPEG.
+- **Rhode Island (RIDOT)** — 139 cameras from the keyless Rhodeways ArcGIS MapServer layer, upgrading `http`→`https` snapshot URLs and encoding spaces; closes the former Rhode Island gap.
+- Every accepted feed is an official first-party image endpoint verified to return a real JPEG/PNG; ArcGIS/field whitespace was stripped and non-HTTPS URLs upgraded or rejected. Blocked (documented, retryable): New Jersey (WAF 403 + broken server function), Arkansas (ARDOT API key + re-embed prohibition), Tennessee (SmartWay `ApiKey` header), West Virginia (fragile HTTP IP-literal host, deferred).
+- Rebuilt the 41 deterministic progressive shards and index (reconstruct exactly once, unique IDs), synced localized search totals and PWA cache version, and preserved the transactional rollback backup.
+
 ## v0.35.0 - 2026-07-11
 
 ### Delaware and Kansas coverage
