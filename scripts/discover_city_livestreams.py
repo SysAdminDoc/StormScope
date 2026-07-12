@@ -39,6 +39,7 @@ try:
         canonical_source_url,
         healthy_metadata,
         load_json,
+        reserve_camera_ids,
         update_camera_data,
         update_json,
         utc_now_iso,
@@ -49,6 +50,7 @@ except ModuleNotFoundError:  # pragma: no cover - package import during tests
         canonical_source_url,
         healthy_metadata,
         load_json,
+        reserve_camera_ids,
         update_camera_data,
         update_json,
         utc_now_iso,
@@ -77,7 +79,7 @@ CENSUS_GAZETTEER_URL = (
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 "
-    "StormScope/0.62.0"
+    "StormScope/0.65.0"
 )
 
 STATE_NAMES = {
@@ -673,16 +675,16 @@ def append_streams(data_file: Path, streams: list[CityLocatedStream], limit_add:
     def append(cameras: list[dict[str, Any]]) -> tuple[int, set[str]]:
         verified_at = utc_now_iso()
         existing_youtube = {str(cam.get("url") or "") for cam in cameras if cam.get("type") == "youtube"}
-        max_id = max(int(cam.get("id") or 0) for cam in cameras) if cameras else 0
         committed: set[str] = set()
         for stream in streams:
             if limit_add and len(committed) >= limit_add:
                 break
             if stream.video_id in existing_youtube:
                 continue
-            max_id += 1
             record = {
-                    "id": max_id,
+                    "id": reserve_camera_ids(
+                        data_file.with_name("camera-id-sequence.json"), cameras, 1
+                    )[0],
                     "name": stream.name,
                     "lat": stream.lat,
                     "lon": stream.lon,

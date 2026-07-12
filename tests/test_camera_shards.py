@@ -74,7 +74,8 @@ class CameraShardBuilderTests(unittest.TestCase):
             shard = json.loads((ROOT / "data" / descriptor["path"]).read_text(encoding="utf-8"))
             self.assertEqual(descriptor["count"], len(shard))
             ids.extend(camera["id"] for camera in shard)
-        self.assertEqual(list(range(1, 36_593)), ids)
+        monolith = json.loads((ROOT / "data" / "cameras.json").read_text(encoding="utf-8"))
+        self.assertEqual(sorted(camera["id"] for camera in monolith), ids)
 
 
 if __name__ == "__main__":

@@ -34,6 +34,7 @@ try:
         canonical_source_url,
         healthy_metadata,
         load_json as load_json_shared,
+        reserve_camera_ids,
         update_camera_data,
         utc_now_iso,
     )
@@ -43,6 +44,7 @@ except ModuleNotFoundError:  # pragma: no cover - package import during tests
         canonical_source_url,
         healthy_metadata,
         load_json as load_json_shared,
+        reserve_camera_ids,
         update_camera_data,
         utc_now_iso,
     )
@@ -65,7 +67,7 @@ NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 "
-    "StormScope/0.62.0"
+    "StormScope/0.65.0"
 )
 
 DEFAULT_CATEGORIES = [
@@ -457,16 +459,16 @@ def append_feeds(data_file: Path, feeds: list[LocatedFeed], limit_add: int) -> i
     def append(cameras: list[dict[str, Any]]) -> int:
         verified_at = utc_now_iso()
         existing_urls = {str(cam.get("url") or "") for cam in cameras}
-        max_id = max(int(cam.get("id") or 0) for cam in cameras) if cameras else 0
         added = 0
         for feed in feeds:
             if limit_add and added >= limit_add:
                 break
             if feed.url in existing_urls:
                 continue
-            max_id += 1
             record = {
-                    "id": max_id,
+                    "id": reserve_camera_ids(
+                        data_file.with_name("camera-id-sequence.json"), cameras, 1
+                    )[0],
                     "name": feed.name,
                     "lat": feed.lat,
                     "lon": feed.lon,

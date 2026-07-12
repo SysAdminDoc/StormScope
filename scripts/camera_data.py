@@ -171,6 +171,15 @@ def feed_identity(camera: dict[str, Any]) -> tuple[str, str]:
     return camera_type, _normalized_url(value)
 
 
+def provider_identity(camera: dict[str, Any]) -> tuple[str, str] | None:
+    """Return a provider-owned durable identity when the feed supplies one."""
+    provider = str(camera.get("provider") or "").strip()
+    provider_camera_id = str(camera.get("provider_camera_id") or "").strip()
+    if not provider or not provider_camera_id:
+        return None
+    return provider, provider_camera_id
+
+
 def is_allowed_embed_host(hostname: str | None) -> bool:
     host = (hostname or "").lower().rstrip(".")
     return any(host == suffix or host.endswith(f".{suffix}") for suffix in EMBED_HOST_SUFFIXES)
@@ -437,6 +446,26 @@ def _atomic_write_json_unlocked(path: Path, value: Any, *, indent: int | None) -
 def atomic_write_json(path: Path, value: Any, *, indent: int | None = 2) -> None:
     with dataset_lock(path):
         _atomic_write_json_unlocked(path, value, indent=indent)
+
+
+def reserve_camera_ids(sequence_path: Path, cameras: list[dict[str, Any]], count: int) -> list[int]:
+    """Atomically reserve never-reused camera IDs, allowing gaps after failed writes."""
+    if count < 0:
+        raise ValueError("camera ID reservation count cannot be negative")
+    if count == 0:
+        return []
+    current_max = max((int(camera.get("id") or 0) for camera in cameras), default=0)
+    with dataset_lock(sequence_path):
+        sequence = load_json(sequence_path, {"version": 1, "high_watermark": current_max})
+        if not isinstance(sequence, dict) or sequence.get("version") != 1:
+            raise CameraDataError(f"invalid camera ID sequence: {sequence_path}")
+        high_watermark = sequence.get("high_watermark")
+        if isinstance(high_watermark, bool) or not isinstance(high_watermark, int) or high_watermark < 0:
+            raise CameraDataError(f"invalid camera ID high-watermark: {sequence_path}")
+        start = max(current_max, high_watermark) + 1
+        sequence["high_watermark"] = start + count - 1
+        _atomic_write_json_unlocked(sequence_path, sequence, indent=2)
+    return list(range(start, start + count))
 
 
 def update_json(

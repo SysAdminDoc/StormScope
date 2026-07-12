@@ -69,8 +69,6 @@ def repair(cameras: list[dict]) -> tuple[list[dict], dict[str, int]]:
             continue
         seen.add(identity)
         repaired.append(camera)
-    for camera_id, camera in enumerate(repaired, 1):
-        camera["id"] = camera_id
     return repaired, counts
 
 

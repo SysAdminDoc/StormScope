@@ -38,6 +38,14 @@ def camera(camera_id: int = 1, **overrides):
 
 
 class CameraDataTests(unittest.TestCase):
+    def test_published_id_sequence_covers_the_current_corpus(self):
+        cameras = json.loads((ROOT / "data" / "cameras.json").read_text(encoding="utf-8"))
+        sequence = json.loads(
+            (ROOT / "data" / "camera-id-sequence.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(1, sequence["version"])
+        self.assertGreaterEqual(sequence["high_watermark"], max(row["id"] for row in cameras))
+
     def test_published_schema_version_matches_runtime_contract(self):
         schema = json.loads((ROOT / "data" / "cameras.schema.json").read_text(encoding="utf-8"))
         self.assertEqual(camera_data.CAMERA_SCHEMA_VERSION, schema["x-camera-schema-version"])
@@ -54,7 +62,7 @@ class CameraDataTests(unittest.TestCase):
             legacy.pop(field)
         repaired, _ = repair_camera_data.repair([legacy])
         self.assertEqual(1, len(repaired))
-        self.assertEqual(1, repaired[0]["id"])
+        self.assertEqual(7, repaired[0]["id"])
         self.assertIsNone(repaired[0]["last_verified"])
         self.assertEqual("unknown", repaired[0]["health"])
         self.assertIsNone(repaired[0]["failure_class"])
@@ -64,7 +72,7 @@ class CameraDataTests(unittest.TestCase):
     def test_repair_is_idempotent_and_does_not_treat_ids_as_broken(self):
         healthy = camera(4942)
         repaired, counts = repair_camera_data.repair([healthy])
-        self.assertEqual([{**healthy, "id": 1}], repaired)
+        self.assertEqual([healthy], repaired)
         self.assertEqual(0, counts["broken"])
 
         repaired_again, second_counts = repair_camera_data.repair(repaired)

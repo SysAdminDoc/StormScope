@@ -34,6 +34,7 @@ try:
         canonical_source_url,
         healthy_metadata,
         load_json,
+        reserve_camera_ids,
         update_camera_data,
         utc_now_iso,
     )
@@ -43,6 +44,7 @@ except ModuleNotFoundError:  # pragma: no cover - package import during tests
         canonical_source_url,
         healthy_metadata,
         load_json,
+        reserve_camera_ids,
         update_camera_data,
         utc_now_iso,
     )
@@ -66,7 +68,7 @@ EARTHCAM_REGION_URL = "https://www.earthcam.com/api/dotcom/network_search.php?r=
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 "
-    "StormScope/0.62.0"
+    "StormScope/0.65.0"
 )
 
 US_STATES = {
@@ -636,7 +638,6 @@ def append_feeds(data_file: Path, provider_feeds: list[ProviderFeed], youtube_fe
             for cam in cameras
             if cam.get("type") == "youtube"
         }
-        max_id = max(int(cam.get("id") or 0) for cam in cameras) if cameras else 0
         added_provider = 0
         added_youtube = 0
 
@@ -644,9 +645,10 @@ def append_feeds(data_file: Path, provider_feeds: list[ProviderFeed], youtube_fe
             key = compact_key(feed.url)
             if key in existing_embed_urls:
                 continue
-            max_id += 1
             record = {
-                    "id": max_id,
+                    "id": reserve_camera_ids(
+                        data_file.with_name("camera-id-sequence.json"), cameras, 1
+                    )[0],
                     "name": feed.name,
                     "lat": feed.lat,
                     "lon": feed.lon,
@@ -668,9 +670,10 @@ def append_feeds(data_file: Path, provider_feeds: list[ProviderFeed], youtube_fe
         for feed in youtube_feeds:
             if feed.video_id in existing_youtube_ids:
                 continue
-            max_id += 1
             record = {
-                    "id": max_id,
+                    "id": reserve_camera_ids(
+                        data_file.with_name("camera-id-sequence.json"), cameras, 1
+                    )[0],
                     "name": feed.name,
                     "lat": round(feed.lat, 6),
                     "lon": round(feed.lon, 6),

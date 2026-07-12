@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.65.0 - 2026-07-12
+
+- Camera IDs are now durable across provider refreshes. Explicit replacements, provider-owned camera IDs, and unchanged canonical feeds retain the existing numeric ID; ambiguous identity claims fail closed instead of silently retargeting saved favorites.
+- Added an atomic camera-ID sequence high-watermark shared by provider refresh and every discovery writer. Removed IDs are never reassigned, failed writes may leave safe gaps, and the repair utility no longer renumbers the corpus.
+- Updated regression coverage for URL rotation, explicit replacement, concurrent inserts, sparse IDs, and non-reuse after deletion or interrupted persistence.
+
 ## v0.64.1 - 2026-07-12
 
 - Fixed light-theme contrast on status surfaces. Status chips, camera health badges (healthy/degraded/offline), the alert-list inset buttons, and the camera-modal scrollbar previously used colors hardcoded for the dark theme — light-pink/light-green status text and a white scrollbar thumb — which were nearly invisible on light panels. Introduced four adaptive tokens (`--bg-inset`, `--scrollbar-thumb`, `--success-text`, `--danger-text`) with dark and light values; in light mode danger text now measures 5.51:1 and success text 4.54:1 on panels (both pass WCAG AA), while dark mode is pixel-identical to before.

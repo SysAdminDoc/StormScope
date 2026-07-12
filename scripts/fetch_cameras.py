@@ -28,10 +28,13 @@ from zoneinfo import ZoneInfo
 
 try:
     from camera_data import (
+        CameraDataError,
         atomic_write_json,
         canonical_source_url,
         feed_identity,
         healthy_metadata,
+        provider_identity,
+        reserve_camera_ids,
         restore_camera_data,
         unknown_metadata,
         update_camera_data,
@@ -40,10 +43,13 @@ try:
     )
 except ModuleNotFoundError:  # pragma: no cover - package import during tests
     from scripts.camera_data import (
+        CameraDataError,
         atomic_write_json,
         canonical_source_url,
         feed_identity,
         healthy_metadata,
+        provider_identity,
+        reserve_camera_ids,
         restore_camera_data,
         unknown_metadata,
         update_camera_data,
@@ -713,7 +719,7 @@ def fetch_txdot():
 def fetch_nps():
     try:
         url = 'https://developer.nps.gov/api/v1/webcams?api_key=DEMO_KEY&limit=500'
-        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.62.0'})
+        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.65.0'})
         count = 0
         for cam in data.get('data', []):
             if str(cam.get('status') or '').lower() == 'inactive':
@@ -843,7 +849,7 @@ def _current_jpeg_snapshot(
     request = urllib.request.Request(
         url,
         headers={
-            'User-Agent': 'StormScope/0.62.0',
+            'User-Agent': 'StormScope/0.65.0',
             'Accept': 'image/jpeg,image/*,*/*',
             'Cache-Control': 'no-cache',
         },
@@ -5433,7 +5439,7 @@ def fetch_faa_weathercams_north_dakota():
     headers = {
         'User-Agent': (
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-            'AppleWebKit/537.36 Chrome/130.0 StormScope/0.62.0'
+            'AppleWebKit/537.36 Chrome/130.0 StormScope/0.65.0'
         ),
         'Accept': 'application/json, image/*, */*',
         'Referer': state_page,
@@ -7009,7 +7015,8 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
 def merge_provider_results(
         existing: list[dict],
         results: list[ProviderResult],
-        retention_ratio: float = PROVIDER_RETENTION_RATIO) -> list[dict]:
+        retention_ratio: float = PROVIDER_RETENTION_RATIO,
+        id_allocator=None) -> list[dict]:
     accepted_results = []
     for result in results:
         if not result.succeeded:
@@ -7029,19 +7036,50 @@ def merge_provider_results(
         if result.name not in successful
     }
     fresh_by_provider = {result.name: result.cameras for result in accepted_results}
-    replacement_source_pages = {
-        camera.get('source_url')
-        for result in accepted_results
-        for camera in result.cameras
-        if camera.pop('_replace_source_page', False) and camera.get('source_url')
-    }
-    replacement_feed_urls = {
-        url
-        for result in accepted_results
-        for camera in result.cameras
-        for url in camera.pop('_replace_feed_urls', [])
-        if url
-    }
+    old_by_provider_identity = {}
+    old_by_feed_identity = {}
+    old_by_source_page = {}
+    old_by_url = {}
+    for camera in existing:
+        durable_identity = provider_identity(camera)
+        if durable_identity is not None:
+            old_by_provider_identity.setdefault(durable_identity, []).append(camera)
+        old_by_feed_identity.setdefault(feed_identity(camera), []).append(camera)
+        if camera.get('source_url'):
+            old_by_source_page.setdefault(camera['source_url'], []).append(camera)
+        if camera.get('url'):
+            old_by_url.setdefault(camera['url'], []).append(camera)
+
+    replacement_source_pages = set()
+    replacement_feed_urls = set()
+    claimed_ids = set()
+    for result in accepted_results:
+        for camera in result.cameras:
+            candidates = []
+            if camera.pop('_replace_source_page', False) and camera.get('source_url'):
+                replacement_source_pages.add(camera['source_url'])
+                candidates.extend(old_by_source_page.get(camera['source_url'], []))
+            for url in camera.pop('_replace_feed_urls', []):
+                if url:
+                    replacement_feed_urls.add(url)
+                    candidates.extend(old_by_url.get(url, []))
+            durable_identity = provider_identity(camera)
+            if durable_identity is not None:
+                candidates.extend(old_by_provider_identity.get(durable_identity, []))
+            candidates.extend(old_by_feed_identity.get(feed_identity(camera), []))
+            candidate_ids = {candidate['id'] for candidate in candidates}
+            if len(candidate_ids) > 1:
+                raise CameraDataError(
+                    f"ambiguous stable identity for {camera.get('name')!r}: {sorted(candidate_ids)}"
+                )
+            if candidate_ids:
+                camera_id = candidate_ids.pop()
+                if camera_id in claimed_ids:
+                    raise CameraDataError(f"camera ID {camera_id} was claimed by multiple refreshed feeds")
+                camera['id'] = camera_id
+                claimed_ids.add(camera_id)
+            else:
+                camera.pop('id', None)
     inserted_providers = set()
     ordered = []
     for camera in existing:
@@ -7072,9 +7110,20 @@ def merge_provider_results(
             continue
         seen.add(identity)
         merged.append(camera)
-    for index, camera in enumerate(merged, 1):
-        camera['id'] = index
-    return merged
+    new_cameras = [camera for camera in merged if 'id' not in camera]
+    if new_cameras:
+        allocator = id_allocator or (
+            lambda count: range(
+                max((int(camera.get('id') or 0) for camera in existing), default=0) + 1,
+                max((int(camera.get('id') or 0) for camera in existing), default=0) + count + 1,
+            )
+        )
+        reserved_ids = list(allocator(len(new_cameras)))
+        if len(reserved_ids) != len(new_cameras):
+            raise CameraDataError('camera ID allocator returned the wrong number of IDs')
+        for camera, camera_id in zip(new_cameras, reserved_ids):
+            camera['id'] = camera_id
+    return sorted(merged, key=lambda camera: camera['id'])
 
 
 def parse_args(argv=None):
@@ -7119,7 +7168,13 @@ def main(argv=None):
         raise RuntimeError('all providers failed; dataset was not changed')
 
     def commit(current):
-        merged = merge_provider_results(current, results)
+        merged = merge_provider_results(
+            current,
+            results,
+            id_allocator=lambda count: reserve_camera_ids(
+                OUTPUT.with_name('camera-id-sequence.json'), current, count
+            ),
+        )
         source_counts = {}
         for camera in current:
             source = camera['source']

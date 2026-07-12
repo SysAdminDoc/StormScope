@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.64.1-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.65.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
 [![Cameras](https://img.shields.io/badge/cameras-36%2C592-cyan)]()
@@ -144,7 +144,7 @@ Rebuild the checked-in state shards and compact index after any accepted camera-
 python scripts/build_camera_shards.py
 ```
 
-The app loads `data/cameras.index.json` and `data/camera-shards/` progressively, with the schema-v2 monolith retained as a tested migration fallback. All camera writers share the schema-v2 contract in `data/cameras.schema.json` and use an exclusive lock plus fsynced temporary file and atomic replacement. A dry-run city search may read `data/us_city_livestream_checkpoint.json` with `--resume`, but changes neither that checkpoint nor the camera dataset unless `--apply` is present.
+The app loads `data/cameras.index.json` and `data/camera-shards/` progressively, with the schema-v2 monolith retained as a tested migration fallback. All camera writers share the schema-v2 contract in `data/cameras.schema.json`, preserve stable camera IDs through refreshes, and reserve new IDs from an atomic never-reused sequence before using an exclusive lock plus fsynced temporary file and atomic replacement. A dry-run city search may read `data/us_city_livestream_checkpoint.json` with `--resume`, but changes neither that checkpoint nor the camera dataset unless `--apply` is present.
 
 Run the YouTube discovery automation to exhaust live-filtered search queries, verify live streams with extractor playback metadata, and append only fixed-location streams with curated coordinates:
 

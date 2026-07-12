@@ -17,7 +17,14 @@ import camera_data  # noqa: E402
 from fetch_cameras import ProviderResult, merge_provider_results  # noqa: E402
 
 
-def camera(camera_id: int, url: str, *, source: str = "dot", provider: str | None = None):
+def camera(
+    camera_id: int,
+    url: str,
+    *,
+    source: str = "dot",
+    provider: str | None = None,
+    provider_camera_id: str | None = None,
+):
     value = {
         "id": camera_id,
         "name": f"Camera {camera_id}",
@@ -32,6 +39,8 @@ def camera(camera_id: int, url: str, *, source: str = "dot", provider: str | Non
     }
     if provider:
         value["provider"] = provider
+    if provider_camera_id:
+        value["provider_camera_id"] = provider_camera_id
     value.update(camera_data.unknown_metadata(camera_data.canonical_source_url("image", url)))
     return value
 
@@ -61,10 +70,10 @@ class FetchMergeTests(unittest.TestCase):
         fresh = camera(99, "https://dot.test/new.jpg", provider="Provider A")
         merged = merge_provider_results(existing, [ProviderResult("Provider A", [fresh])])
         self.assertEqual(
-            ["https://dot.test/new.jpg", "https://dot.test/legacy.jpg"],
+            ["https://dot.test/legacy.jpg", "https://dot.test/new.jpg"],
             [row["url"] for row in merged],
         )
-        self.assertEqual([1, 2], [row["id"] for row in merged])
+        self.assertEqual([2, 3], [row["id"] for row in merged])
 
     def test_new_provider_is_appended_without_renumbering_existing_rows(self):
         existing = [camera(1, "https://dot.test/legacy.jpg")]
@@ -96,6 +105,7 @@ class FetchMergeTests(unittest.TestCase):
 
         self.assertEqual(1, len(merged))
         self.assertEqual(fresh["url"], merged[0]["url"])
+        self.assertEqual(1, merged[0]["id"])
         self.assertNotIn("_replace_source_page", merged[0])
 
     def test_verified_provider_can_replace_a_legacy_feed_url(self):
@@ -113,7 +123,113 @@ class FetchMergeTests(unittest.TestCase):
 
         self.assertEqual(1, len(merged))
         self.assertEqual(fresh["url"], merged[0]["url"])
+        self.assertEqual(1, merged[0]["id"])
         self.assertNotIn("_replace_feed_urls", merged[0])
+
+    def test_provider_identity_survives_feed_url_rotation(self):
+        existing = [
+            camera(
+                41,
+                "https://provider.test/old.jpg",
+                provider="Provider A",
+                provider_camera_id="camera-7",
+            )
+        ]
+        fresh = camera(
+            999,
+            "https://provider.test/new.jpg?token=rotated",
+            provider="Provider A",
+            provider_camera_id="camera-7",
+        )
+
+        merged = merge_provider_results(existing, [ProviderResult("Provider A", [fresh])])
+
+        self.assertEqual(41, merged[0]["id"])
+        self.assertEqual(fresh["url"], merged[0]["url"])
+
+    def test_unrelated_insert_and_remove_do_not_change_surviving_ids(self):
+        existing = [
+            camera(7, "https://legacy.test/keep.jpg"),
+            camera(20, "https://provider.test/remove.jpg", provider="Provider A"),
+        ]
+        fresh = camera(999, "https://provider.test/new.jpg", provider="Provider A")
+
+        merged = merge_provider_results(existing, [ProviderResult("Provider A", [fresh])])
+
+        self.assertEqual(
+            [(7, "https://legacy.test/keep.jpg"), (21, "https://provider.test/new.jpg")],
+            [(row["id"], row["url"]) for row in merged],
+        )
+
+    def test_saved_favorites_keep_the_same_canonical_feed_after_refresh(self):
+        existing = [
+            camera(7, "https://legacy.test/keep.jpg"),
+            camera(
+                12,
+                "https://provider.test/old.jpg",
+                provider="Provider A",
+                provider_camera_id="durable-12",
+            ),
+            camera(30, "https://legacy.test/replace.jpg"),
+        ]
+        favorites = {
+            row["id"]: camera_data.provider_identity(row) or camera_data.feed_identity(row)
+            for row in existing
+        }
+        rotated = camera(
+            999,
+            "https://provider.test/rotated.jpg",
+            provider="Provider A",
+            provider_camera_id="durable-12",
+        )
+        replacement = camera(1000, "https://legacy.test/replacement.jpg", provider="Provider B")
+        replacement["_replace_feed_urls"] = ["https://legacy.test/replace.jpg"]
+
+        merged = merge_provider_results(
+            existing,
+            [
+                ProviderResult("Provider A", [rotated]),
+                ProviderResult("Provider B", [replacement]),
+            ],
+        )
+        refreshed = {row["id"]: row for row in merged}
+
+        self.assertEqual(favorites[7], camera_data.feed_identity(refreshed[7]))
+        self.assertEqual(favorites[12], camera_data.provider_identity(refreshed[12]))
+        self.assertEqual(30, refreshed[30]["id"])
+
+    def test_conflicting_stable_identity_fails_closed(self):
+        existing = [
+            camera(1, "https://provider.test/one.jpg", provider="Provider A", provider_camera_id="same"),
+            camera(2, "https://provider.test/two.jpg", provider="Provider A", provider_camera_id="same"),
+        ]
+        fresh = camera(
+            99,
+            "https://provider.test/current.jpg",
+            provider="Provider A",
+            provider_camera_id="same",
+        )
+
+        with self.assertRaises(camera_data.CameraDataError):
+            merge_provider_results(
+                existing,
+                [ProviderResult("Provider A", [fresh])],
+                retention_ratio=0,
+            )
+    def test_removed_highest_id_is_never_reused(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            sequence = Path(temporary) / "camera-id-sequence.json"
+            cameras = [camera(1, "https://test/one.jpg"), camera(9, "https://test/nine.jpg")]
+            self.assertEqual([10], camera_data.reserve_camera_ids(sequence, cameras, 1))
+            cameras = cameras[:1]
+            self.assertEqual([11], camera_data.reserve_camera_ids(sequence, cameras, 1))
+
+    def test_failed_dataset_write_leaves_a_safe_gap(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            sequence = Path(temporary) / "camera-id-sequence.json"
+            cameras = [camera(4, "https://test/four.jpg")]
+            self.assertEqual([5, 6], camera_data.reserve_camera_ids(sequence, cameras, 2))
+            self.assertEqual([7], camera_data.reserve_camera_ids(sequence, cameras, 1))
 
     def test_truncated_provider_snapshot_retains_previous_rows(self):
         existing = [
@@ -177,14 +293,18 @@ class FetchMergeTests(unittest.TestCase):
 
             urls = [row["url"] for row in json.loads(path.read_text(encoding="utf-8"))]
             self.assertEqual(
-                ["https://dot.test/fresh.jpg", "https://curated.test/concurrent.jpg"],
+                ["https://curated.test/concurrent.jpg", "https://dot.test/fresh.jpg"],
                 urls,
             )
             dataset = json.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual("healthy", dataset[0]["health"])
-            self.assertIsNotNone(dataset[0]["last_verified"])
-            self.assertEqual("https://dot.test/fresh.jpg", dataset[0]["source_url"])
-            self.assertEqual("unknown", dataset[1]["health"])
+            by_url = {row["url"]: row for row in dataset}
+            self.assertEqual("healthy", by_url["https://dot.test/fresh.jpg"]["health"])
+            self.assertIsNotNone(by_url["https://dot.test/fresh.jpg"]["last_verified"])
+            self.assertEqual(
+                "https://dot.test/fresh.jpg",
+                by_url["https://dot.test/fresh.jpg"]["source_url"],
+            )
+            self.assertEqual("unknown", by_url["https://curated.test/concurrent.jpg"]["health"])
 
     def test_hls_verification_requires_an_advancing_media_playlist(self):
         with (

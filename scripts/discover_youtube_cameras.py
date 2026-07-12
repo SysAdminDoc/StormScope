@@ -36,6 +36,7 @@ try:
         canonical_source_url,
         healthy_metadata,
         load_json,
+        reserve_camera_ids,
         update_camera_data,
         utc_now_iso,
     )
@@ -45,6 +46,7 @@ except ModuleNotFoundError:  # pragma: no cover - package import during tests
         canonical_source_url,
         healthy_metadata,
         load_json,
+        reserve_camera_ids,
         update_camera_data,
         utc_now_iso,
     )
@@ -72,7 +74,7 @@ NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 "
-    "StormScope/0.62.0"
+    "StormScope/0.65.0"
 )
 
 US_STATES = {
@@ -1123,7 +1125,6 @@ def append_cameras(data_file: Path, located: list[LocatedCamera], limit_add: int
     def append(cameras: list[dict[str, Any]]) -> tuple[int, int]:
         verified_at = utc_now_iso()
         existing_ids = {str(cam.get("url")) for cam in cameras if cam.get("type") == "youtube"}
-        max_id = max(int(cam.get("id") or 0) for cam in cameras) if cameras else 0
         added = 0
         replaced = 0
         for camera in located:
@@ -1136,7 +1137,11 @@ def append_cameras(data_file: Path, located: list[LocatedCamera], limit_add: int
                 if camera.replace_source_url
                 and existing.get("source_url") == camera.replace_source_url
             ), None)
-            camera_id = cameras[replacement_index]["id"] if replacement_index is not None else max_id + 1
+            camera_id = (
+                cameras[replacement_index]["id"]
+                if replacement_index is not None
+                else reserve_camera_ids(data_file.with_name("camera-id-sequence.json"), cameras, 1)[0]
+            )
             record = {
                     "id": camera_id,
                     "name": camera.name,
@@ -1160,7 +1165,6 @@ def append_cameras(data_file: Path, located: list[LocatedCamera], limit_add: int
                 record["category"] = camera.category
             record["provider_camera_id"] = camera.video_id
             if replacement_index is None:
-                max_id += 1
                 cameras.append(record)
                 added += 1
             else:
