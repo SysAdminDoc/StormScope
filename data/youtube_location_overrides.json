@@ -1496,5 +1496,68 @@
     "lon": -77.03648,
     "state": "DC",
     "county": "Washington"
+  },
+  "5vvWqjygRtI": {
+    "name": "Dutchess the Tiger at Turpentine Creek Wildlife Refuge",
+    "lat": 36.310548,
+    "lon": -93.760587,
+    "state": "Arkansas",
+    "county": "Carroll County"
+  },
+  "PcAOecvAh1U": {
+    "name": "Max the Tiger at Turpentine Creek Wildlife Refuge",
+    "lat": 36.310548,
+    "lon": -93.760587,
+    "state": "Arkansas",
+    "county": "Carroll County"
+  },
+  "dXKCmOEq3ns": {
+    "name": "Jasmine the Tiger at Turpentine Creek Wildlife Refuge",
+    "lat": 36.310548,
+    "lon": -93.760587,
+    "state": "Arkansas",
+    "county": "Carroll County"
+  },
+  "eeMDlq_kQpQ": {
+    "name": "Doj, Jinx, and Rosie at Turpentine Creek Wildlife Refuge",
+    "lat": 36.310548,
+    "lon": -93.760587,
+    "state": "Arkansas",
+    "county": "Carroll County"
+  },
+  "ya36dX89dGU": {
+    "name": "Russellville, Arkansas Live Railcam",
+    "lat": 35.2804475,
+    "lon": -93.1356706,
+    "state": "Arkansas",
+    "county": "Pope County"
+  },
+  "6s1KTevqrNY": {
+    "name": "Texarkana, Arkansas Live Railcam PTZ",
+    "lat": 33.4210196,
+    "lon": -94.0416209,
+    "state": "Arkansas",
+    "county": "Miller County"
+  },
+  "gQJzzwqyEsg": {
+    "name": "Decatur Depot Live Railcam PTZ",
+    "lat": 36.3349285,
+    "lon": -94.4609678,
+    "state": "Arkansas",
+    "county": "Benton County"
+  },
+  "P81KyFafa-s": {
+    "name": "Calico Rock Trout Dock Live Cam",
+    "lat": 36.116461280095045,
+    "lon": -92.14447868434168,
+    "state": "Arkansas",
+    "county": "Izard County"
+  },
+  "wN1lcy77SyE": {
+    "name": "Estes Ace Harrison Weather Cam",
+    "lat": 36.255154,
+    "lon": -93.123543,
+    "state": "Arkansas",
+    "county": "Boone County"
   }
 }

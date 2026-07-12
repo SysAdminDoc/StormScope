@@ -2093,6 +2093,112 @@ def fetch_smithsonian_national_zoo():
     return len(accepted)
 
 
+def fetch_arkansas_cobblestone():
+    source_page = 'https://cobblestoneonnorfork.com/live-webcam/'
+    player_url = 'https://rtsp.me/embed/ifn2nBEf/'
+    homepage = _http_bytes(source_page, timeout=30).decode('utf-8', 'replace')
+    if player_url not in homepage:
+        raise IncompleteProviderError('Cobblestone first-party camera embed is missing')
+    def resolve_hls():
+        player = _http_bytes(
+            player_url, headers={'Referer': source_page}, timeout=30
+        ).decode('utf-8', 'replace')
+        match = re.search(r"https://[^'\"]+\.m3u8[^'\"]*", player)
+        if not match:
+            raise IncompleteProviderError('Cobblestone RTSP.me live playlist is missing')
+        resolved = match.group(0)
+        parsed = urllib.parse.urlsplit(resolved)
+        if (parsed.scheme != 'https' or not parsed.hostname
+                or not (parsed.hostname == 'rtsp.me'
+                        or parsed.hostname.endswith('.rtsp.me'))
+                or '/hls/ifn2nBEf.m3u8' not in parsed.path):
+            raise IncompleteProviderError('Cobblestone RTSP.me playlist contract changed')
+        return resolved
+
+    hls_url = ''
+    detail = 'transient_network:verification_incomplete'
+    verification_attempts = 0
+    for attempt in range(3):
+        verification_attempts = attempt + 1
+        hls_url = resolve_hls()
+        verified, errors = verify_live_hls(
+            [hls_url], probe_interval=7.0, workers=1, referer=player_url
+        )
+        if hls_url in verified:
+            break
+        detail = errors.get(hls_url, 'transient_network:verification_incomplete')
+        if not detail.startswith('transient_network:') or attempt == 2:
+            break
+        time.sleep(2 ** attempt)
+    else:  # pragma: no cover - loop always exits through range exhaustion
+        verified = set()
+    if hls_url not in verified:
+        atomic_write_json(
+            DATA_DIR / 'rtspme_discovery_report.json',
+            {
+                'generated_at': utc_now_iso(),
+                'provider': 'Cobblestone Resort / RTSP.me',
+                'source_url': source_page,
+                'verified_live': 0,
+                'rejected': 1,
+                'rejections': [{
+                    'provider_camera_id': 'ifn2nBEf',
+                    'failure_class': detail.split(':', 1)[0],
+                    'detail': detail,
+                }],
+            },
+        )
+        if detail.startswith(('transient_network:', 'rate_limited:',
+                              'authentication_required:')):
+            raise IncompleteProviderError(
+                f'Cobblestone camera retryable failure: {detail}'
+            )
+        return 0
+    add_camera(
+        'Lake Norfork at Cobblestone Resort',
+        36.4072021,
+        -92.2352157,
+        player_url,
+        'embed',
+        'Arkansas',
+        'Baxter County',
+        '',
+        'rtspme',
+        source_page,
+        10,
+    )
+    cameras[-1]['provider_camera_id'] = 'ifn2nBEf'
+    cameras[-1]['category'] = 'lake'
+    atomic_write_json(
+        DATA_DIR / 'rtspme_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'Cobblestone Resort / RTSP.me',
+            'source_url': source_page,
+            'player_url': player_url,
+            'verification_stream_url': hls_url,
+            'geographic_scope': 'Cobblestone Resort, Gamaliel, Arkansas',
+            'location_evidence': (
+                'First-party address and Get Directions link identify 149 Co Rd 820, '
+                'Gamaliel, AR 72537 at 36.4072021,-92.2352157.'
+            ),
+            'attribution': 'Cobblestone Resort on Norfork Lake; RTSP.me player',
+            'license_or_usage_terms': (
+                'The operator intentionally publishes the live player on its public '
+                'webcam page and no camera-specific reuse restriction was found. '
+                'StormScope stores only the stable player URL and does not retain '
+                'or rehost the expiring HLS media URL.'
+            ),
+            'verified_live': 1,
+            'rejected': 0,
+            'verification_attempts': verification_attempts,
+            'refresh_cadence_seconds': 10,
+        },
+    )
+    print('  Cobblestone RTSP.me verification: 1/1 advancing')
+    return 1
+
+
 # ── West Virginia (WV511) — official map inventory + per-camera live HLS ──
 WV511_COUNTIES = {
     'BER': 'Berkeley',
@@ -2586,6 +2692,7 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
         ('Puerto Rico (ACT/ITS)', fetch_pr_act),
         ('Guam (GNTF/IPCamLive)', fetch_guam_gntf),
         ('Smithsonian National Zoo', fetch_smithsonian_national_zoo),
+        ('Arkansas (Cobblestone/RTSP.me)', fetch_arkansas_cobblestone),
         ('Florida (ArcGIS)', fetch_fl_arcgis),
         ('Georgia DOT (DataTables)', lambda: fetch_511_datatables(
             'https://511ga.org', 'Georgia', 'https://511ga.org/cctv')),

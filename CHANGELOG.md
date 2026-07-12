@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.50.0 - 2026-07-12
+
+### +10 verified Arkansas rail, wildlife, river, weather, and lake cameras
+- Added five exact-location YouTube feeds: Virtual Railfan at Russellville and Texarkana, SouthWest RailCams at the Decatur Depot, Calico Rock Trout Dock on the White River, and Estes Ace Harrison weather. Added four distinct Turpentine Creek Wildlife Refuge enclosure views using the intentionally public refuge location rather than inferring sensitive habitat coordinates.
+- Added Cobblestone Resort's first-party Norfork Lake camera through its stable RTSP.me player. The verifier resolves but never stores the expiring HLS target, requires available segments and advancing media sequences, and re-resolves the token with bounded backoff after a single transient probe; the final accepted run advanced cleanly.
+- Added the `rtspme` source, exact embed-host trust policy, CSP permission, source filter, transactional provider refresh, ignored attribution/location report, and regression/browser coverage. His Place Resort was initially live but withdrawn before commit because its JSON-LD coordinate conflicts with its mapped street address; Rogers and several weather/observatory feeds remain location-ambiguous or unsupported.
+- ARDOT/iDriveArkansas publishes hundreds of live views but explicitly prohibits embedding, direct or indirect camera links, and third-party apps using its camera data; all 546 researched view records remain `licensing_restricted` and were not probed. Other rejects include two authentication-required rail companions, one dead stream, three non-fixed programs, one wrong-state feed, and a licensing-restricted airport camera.
+- Corpus **33,665 -> 33,675**; Arkansas **1 -> 11**; YouTube **463 -> 472**; provider embeds **453 -> 454**; RTSP.me **0 -> 1**; service-worker cache bumped to v26.
+
 ## v0.49.0 - 2026-07-12
 
 ### +4 verified Washington, D.C. wildlife and landmark cameras

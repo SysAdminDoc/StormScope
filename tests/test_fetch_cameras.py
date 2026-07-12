@@ -510,6 +510,82 @@ class FetchMergeTests(unittest.TestCase):
             referer="https://nationalzoo.si.edu/webcams",
         )
 
+    def test_cobblestone_accepts_only_first_party_advancing_rtspme_embed(self):
+        source_page = "https://cobblestoneonnorfork.com/live-webcam/"
+        player_url = "https://rtsp.me/embed/ifn2nBEf/"
+        hls_url = "https://mia.rtsp.me/token/expiry/hls/ifn2nBEf.m3u8?ip=test"
+
+        def response(url, **_kwargs):
+            if url == source_page:
+                return f'<iframe src="{player_url}"></iframe>'.encode()
+            if url == player_url:
+                return f"var source = '{hls_url}';".encode()
+            raise AssertionError(url)
+
+        with (
+            mock.patch.object(fetch_cameras, "_http_bytes", side_effect=response),
+            mock.patch.object(
+                fetch_cameras, "verify_live_hls", return_value=({hls_url}, {})
+            ) as verifier,
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Arkansas (Cobblestone/RTSP.me)",
+                fetch_cameras.fetch_arkansas_cobblestone,
+            )
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual(1, len(result.cameras))
+        row = result.cameras[0]
+        self.assertEqual("Arkansas", row["state"])
+        self.assertEqual("Baxter County", row["county"])
+        self.assertEqual("rtspme", row["source"])
+        self.assertEqual("embed", row["type"])
+        self.assertEqual("ifn2nBEf", row["provider_camera_id"])
+        self.assertEqual("lake", row["category"])
+        self.assertEqual(36.407202, row["lat"])
+        self.assertEqual(-92.235216, row["lon"])
+        self.assertEqual(source_page, row["source_url"])
+        verifier.assert_called_once_with(
+            [hls_url],
+            probe_interval=7.0,
+            workers=1,
+            referer=player_url,
+        )
+
+    def test_cobblestone_reresolves_after_one_transient_probe(self):
+        source_page = "https://cobblestoneonnorfork.com/live-webcam/"
+        player_url = "https://rtsp.me/embed/ifn2nBEf/"
+        hls_url = "https://mia.rtsp.me/token/expiry/hls/ifn2nBEf.m3u8?ip=test"
+
+        def response(url, **_kwargs):
+            if url == source_page:
+                return f'<iframe src="{player_url}"></iframe>'.encode()
+            if url == player_url:
+                return f"var source = '{hls_url}';".encode()
+            raise AssertionError(url)
+
+        with (
+            mock.patch.object(fetch_cameras, "_http_bytes", side_effect=response),
+            mock.patch.object(
+                fetch_cameras,
+                "verify_live_hls",
+                side_effect=[
+                    (set(), {hls_url: "transient_network:inconsistent_probes:http_404"}),
+                    ({hls_url}, {}),
+                ],
+            ) as verifier,
+            mock.patch.object(fetch_cameras.time, "sleep"),
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Arkansas (Cobblestone/RTSP.me)",
+                fetch_cameras.fetch_arkansas_cobblestone,
+            )
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual(2, verifier.call_count)
+
 
 if __name__ == "__main__":
     unittest.main()
