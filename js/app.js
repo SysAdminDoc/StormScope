@@ -7,6 +7,8 @@
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
   var IMAGE_REFRESH_INTERVAL = 15000;
   var TRUSTED_EMBED_HOST_SUFFIXES = Object.freeze([
+    'v.angelcam.com',
+    'cdn.jwplayer.com',
     'earthcam.com',
     'myearthcam.com',
     'nps.gov',
@@ -14,6 +16,7 @@
     'abbeyroad.com',
     'esbnyc.com',
     'weathercams.faa.gov',
+    'hazcams.com',
     'ipcamlive.com',
     'rtsp.me'
   ]);
@@ -1482,8 +1485,7 @@
     iframe.title = camera.name;
     iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
     iframe.referrerPolicy = 'strict-origin-when-cross-origin';
-    iframe.src = 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(camera.url) +
-      '?autoplay=1&mute=1&enablejsapi=1&rel=0';
+    iframe.src = youtubeEmbedUrl(camera.url, 'enablejsapi=1');
     function command(name) {
       if (iframe.contentWindow) iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: name, args: [] }), '*');
     }
@@ -1805,17 +1807,30 @@
     appendLiveIndicator(container, tr('camera.liveMjpeg'));
   }
 
+  // YouTube's embedded player refuses to start with a "video player configuration
+  // error" (error 153 / embedder.identity.missing.referrer) when the embedding page
+  // sends no referrer. Send the origin and pass it as ?origin= so the player can
+  // verify the embedder. Falls back gracefully on file:// (origin is "null").
+  function youtubeEmbedUrl(videoId, extraParams) {
+    var params = 'autoplay=1&mute=1&playsinline=1&rel=0';
+    if (extraParams) params += '&' + extraParams;
+    if (location.origin && location.origin !== 'null') {
+      params += '&origin=' + encodeURIComponent(location.origin);
+    }
+    return 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(videoId) + '?' + params;
+  }
+
   function loadYouTubeFeed(cam, container) {
     var iframe = document.createElement('iframe');
     var sourceUrl = 'https://www.youtube.com/watch?v=' + encodeURIComponent(cam.url);
-    iframe.src = 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(cam.url) + '?autoplay=1&mute=1&playsinline=1';
+    iframe.src = youtubeEmbedUrl(cam.url);
     iframe.width = '100%';
     iframe.height = '100%';
     iframe.style.cssText = 'min-height:400px;border:none;';
     iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
     iframe.allowFullscreen = true;
     iframe.title = cam.name;
-    iframe.referrerPolicy = 'no-referrer';
+    iframe.referrerPolicy = 'strict-origin-when-cross-origin';
 
     container.replaceChildren(iframe);
     var clearLoadTimeout = appendFrameFallback(cam, container, iframe, sourceUrl);
