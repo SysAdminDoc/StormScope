@@ -58,6 +58,31 @@ test('normalizes RainViewer past frames and builds only current public tile cont
   assert.throws(() => radar.parseRainViewerDiscovery({ host: 'https://rainviewer.com.attacker.test', radar: { past: [] } }), /untrusted/);
 });
 
+test('rolling RainViewer budget enforces every sixty-second window and exact retry timing', () => {
+  const budget = radar.createRollingRequestBudget({ limit: 5, windowMs: 60000 });
+  assert.equal(budget.consume(3, 0), true);
+  assert.equal(budget.consume(2, 30000), true);
+  assert.equal(budget.consume(1, 59999), false);
+  assert.deepEqual(budget.snapshot(59999), {
+    limit: 5, windowMs: 60000, used: 5, remaining: 0, rateLimitedUntil: 60000
+  });
+  assert.equal(budget.consume(1, 60000), true);
+  assert.deepEqual(budget.snapshot(60000), {
+    limit: 5, windowMs: 60000, used: 3, remaining: 2, rateLimitedUntil: null
+  });
+  assert.equal(budget.consume(3, 60000), false);
+});
+
+test('provider health exposes the active RainViewer retry time', () => {
+  const retryAt = NOW + 60000;
+  const health = radar.assessProviderHealth('rainviewer', {
+    latestFrame: { providerId: 'rainviewer', time: NOW - 5 * 60000 },
+    rateLimitedUntil: retryAt
+  }, NOW);
+  assert.equal(health.reason, 'rate-limited');
+  assert.equal(health.rateLimitedUntil, retryAt);
+});
+
 function noaaFeature(subset, validTime, validEndTime, fileDate, objectId) {
   return {
     attributes: {

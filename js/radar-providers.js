@@ -174,6 +174,46 @@
     }
   }
 
+  function createRollingRequestBudget(options) {
+    options = options || {};
+    var limit = Number.isInteger(options.limit) && options.limit > 0 ? options.limit : 90;
+    var windowMs = Number.isInteger(options.windowMs) && options.windowMs > 0 ? options.windowMs : MINUTE_MS;
+    var timestamps = [];
+    var rateLimitedUntil = null;
+
+    function prune(now) {
+      while (timestamps.length && timestamps[0] <= now - windowMs) timestamps.shift();
+      if (rateLimitedUntil !== null && rateLimitedUntil <= now) rateLimitedUntil = null;
+    }
+
+    function snapshot(now) {
+      now = finiteNumber(now) ? now : Date.now();
+      prune(now);
+      return {
+        limit: limit,
+        windowMs: windowMs,
+        used: timestamps.length,
+        remaining: Math.max(0, limit - timestamps.length),
+        rateLimitedUntil: rateLimitedUntil
+      };
+    }
+
+    function consume(count, now) {
+      count = count == null ? 1 : count;
+      now = finiteNumber(now) ? now : Date.now();
+      if (!Number.isInteger(count) || count < 1) throw new RangeError('request count must be a positive integer');
+      prune(now);
+      if (rateLimitedUntil !== null || timestamps.length + count > limit) {
+        rateLimitedUntil = timestamps.length ? timestamps[0] + windowMs : now + windowMs;
+        return false;
+      }
+      for (var index = 0; index < count; index += 1) timestamps.push(now);
+      return true;
+    }
+
+    return Object.freeze({ consume: consume, snapshot: snapshot });
+  }
+
   function parseRainViewerDiscovery(payload, discoveredAt) {
     if (!payload || typeof payload !== 'object') throw new TypeError('RainViewer discovery payload must be an object.');
     var tileHost = trustedHttpsOrigin(payload.host, 'rainviewer.com');
@@ -431,6 +471,7 @@
       reason: reason,
       latestFrameAge: age,
       lastSuccessAt: epochMilliseconds(observation.lastSuccessAt),
+      rateLimitedUntil: rateLimitedUntil,
       consecutiveFailures: failures,
       checkedAt: nowMs
     };
@@ -543,6 +584,7 @@
     parseRainViewerDiscovery: parseRainViewerDiscovery,
     buildRainViewerTileUrl: buildRainViewerTileUrl,
     buildRainViewerCoverageUrl: buildRainViewerCoverageUrl,
+    createRollingRequestBudget: createRollingRequestBudget,
     parseNoaaDiscovery: parseNoaaDiscovery,
     noaaWmsParameters: noaaWmsParameters,
     buildNoaaWmsUrl: buildNoaaWmsUrl,

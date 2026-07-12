@@ -157,6 +157,15 @@ test('radar failover, coverage semantics, and NWS alerts are wired into the UI',
   assert.match(css, /\.alert-list-button\[data-severity="Extreme"\]/);
 });
 
+test('RainViewer requests are guarded before tile and sampling fetches', () => {
+  assert.match(app, /createRollingRequestBudget\(\{ limit: 90, windowMs: 60000 \}\)/);
+  assert.match(app, /function guardRainViewerTileLayer/);
+  assert.match(app, /function consumeRainViewerRequest/);
+  assert.match(app, /RAINVIEWER_PRELOAD_RESERVE/);
+  assert.match(app, /initRadar\(\{ forceNoaa: true, resumePlayback: false \}\)/);
+  assert.match(app, /getRainViewerBudget/);
+});
+
 test('weather routing, units, freshness, and accessibility contracts are integrated', () => {
   assert.match(html, /js\/weather\.js/);
   assert.match(html, /id="weather-units"/);

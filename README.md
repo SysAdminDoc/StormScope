@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.67.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.68.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
 [![Cameras](https://img.shields.io/badge/cameras-36%2C592-cyan)]()
@@ -13,7 +13,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 ## Features
 
 - **Live Weather Radar** — Animated RainViewer radar with official NOAA/NWS MRMS failover, source/age/coverage status, and adjustable opacity
-- **Accessible Radar Timeline** — Direct frame scrubbing, manual-only/0.5×/1×/2× playback, explicit frame age and light/moderate/heavy scale text, plus standard, color-vision-friendly, and high-contrast presentations
+- **Accessible Radar Timeline** — Direct frame scrubbing, manual-only/0.5×/1×/2× playback, explicit frame age and light/moderate/heavy scale text, color-accessible palettes, and a rolling request budget that automatically falls back to NOAA before exceeding RainViewer's public limit
 - **Official Weather Alerts** — Viewport-scoped NWS watches, warnings, and advisories with severity polygons and accessible details
 - **Optional Hazard Context** — Keyless NOAA lightning density and viewport-bounded NIFC wildfire perimeters start off, show freshness and attribution, fail independently, and stay below warnings and cameras
 - **36,592 Indexed Cameras** — 13,071 verified healthy, 1 degraded, and 23,520 not yet verified across traffic, FAA, NOAA/NWS, USGS, NRAO, park, university, provider, and webcam sources

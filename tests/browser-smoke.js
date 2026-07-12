@@ -45,7 +45,8 @@ function serveStatic(request, response) {
   });
 }
 
-async function addNetworkFixtures(page) {
+async function addNetworkFixtures(page, metrics) {
+  metrics = metrics || { rainViewerRequests: 0 };
   await page.route('**/*', async (route) => {
     const url = route.request().url();
     if (url === 'https://api.rainviewer.com/public/weather-maps.json') {
@@ -120,6 +121,7 @@ async function addNetworkFixtures(page) {
       return;
     }
     if (url.includes('tilecache.rainviewer.com') || url.includes('basemaps.cartocdn.com')) {
+      if (url.includes('tilecache.rainviewer.com')) metrics.rainViewerRequests += 1;
       await route.fulfill({ contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: pixel });
       return;
     }
@@ -224,7 +226,8 @@ async function main() {
       if (text.startsWith('Failed to load resource') && source && !source.startsWith(baseURL)) return;
       errors.push(text);
     });
-    await addNetworkFixtures(page);
+    const networkMetrics = { rainViewerRequests: 0 };
+    await addNetworkFixtures(page, networkMetrics);
     await waitForApp(page);
 
     const vendorRuntime = await page.evaluate(() => ({
@@ -277,6 +280,10 @@ async function main() {
     const frameBeforeNext = await scrubber.inputValue();
     await nextRadar.click();
     assert.notEqual(await scrubber.inputValue(), frameBeforeNext, 'manual frame controls must remain usable without animation');
+    const budgetSnapshot = await page.evaluate(() => window._stormscope.getRainViewerBudget());
+    assert.ok(budgetSnapshot.used <= 90, 'RainViewer rolling budget exceeded: ' + JSON.stringify(budgetSnapshot));
+    assert.ok(networkMetrics.rainViewerRequests <= 90,
+      'RainViewer network requests exceeded the safety ceiling: ' + networkMetrics.rainViewerRequests);
     const failLightning = (route) => route.fulfill({ status: 503, body: 'fixture unavailable' });
     await page.route('https://nowcoast.noaa.gov/**', failLightning);
     await page.getByRole('button', { name: 'Toggle layers panel' }).click();

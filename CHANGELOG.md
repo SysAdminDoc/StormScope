@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.68.0 - 2026-07-12
+
+- Enforced RainViewer's public request limit with a pure rolling 60-second budget capped at a conservative 90 requests. Every radar tile, invisible preload tile, coverage tile, and center-sampling image is reserved before the browser can start its request.
+- Preloads are suppressed when fewer than 20 requests remain. On exhaustion, animation pauses, pending preload work is removed, the retry time is exposed, and the app switches once to NOAA/NWS MRMS without a request burst.
+- Added rolling-window/retry-time unit simulation, provider health propagation, application wiring assertions, and headless network counting. Service-worker cache bumped to v43.
+
 ## v0.67.0 - 2026-07-12
 
 - Separated device-local playback observations from durable provider health. Browser CORS/offline/unsupported/retry outcomes now persist under a canonical feed key with observation time and a bounded six-hour expiry, without changing camera `health`, `failure_class`, or `last_verified`.

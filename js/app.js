@@ -27,6 +27,7 @@
   var RAINVIEWER_API_URL = 'https://api.rainviewer.com/public/weather-maps.json';
   var RAINVIEWER_COLOR_SCHEME = 2;
   var RAINVIEWER_MAX_NATIVE_ZOOM = 7;
+  var RAINVIEWER_PRELOAD_RESERVE = 20;
 
   var map, radarLayer, radarLayerNext, cameraCluster, basemapLayer;
   var themePreference = 'auto';
@@ -49,6 +50,8 @@
   var radarCoverageLayer = null;
   var radarSampleToken = 0;
   var radarSemanticState = null;
+  var rainViewerBudget = StormScopeRadarProviders.createRollingRequestBudget({ limit: 90, windowMs: 60000 });
+  var radarBudgetFallbackPending = false;
   var activeCamera = null;
   var priorFocusEl = null;
   var weatherAbort = null;
@@ -280,6 +283,7 @@
     radarDiscovery = discovery;
     radarProviderSelection = selection;
     radarProviderId = selection.selectedProviderId;
+    radarBudgetFallbackPending = false;
     radarHost = discovery.tileHost || '';
     radarFrames = discovery.frames;
     if (!radarFrames.length) throw new Error('selected provider returned no frames');
@@ -391,6 +395,7 @@
         crossOrigin: 'anonymous',
         attribution: 'Radar: <a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>'
       });
+      guardRainViewerTileLayer(layer);
     } else if (radarProviderId === 'noaa-mrms') {
       var params = StormScopeRadarProviders.noaaWmsParameters(frame);
       var wmsOptions = {
@@ -428,11 +433,55 @@
     return layer;
   }
 
+  function handleRainViewerBudgetExhausted() {
+    if (radarBudgetFallbackPending || radarProviderId !== 'rainviewer') return;
+    radarBudgetFallbackPending = true;
+    var snapshot = rainViewerBudget.snapshot();
+    setRadarPlaying(false);
+    clearTimeout(radarPreloadTimer);
+    if (radarLayerNext) map.removeLayer(radarLayerNext);
+    radarLayerNext = null;
+    radarPreloadState = { status: 'rate-limited', durationMs: null };
+    setRadarStatus(tr('radar.rateLimited', {
+      time: StormScopeI18n.formatDateTime(snapshot.rateLimitedUntil, {
+        hour: 'numeric', minute: '2-digit', second: '2-digit'
+      }, appLocale)
+    }), false, true);
+    setTimeout(function () {
+      initRadar({ forceNoaa: true, resumePlayback: false });
+    }, 0);
+  }
+
+  function consumeRainViewerRequest() {
+    var allowed = rainViewerBudget.consume(1);
+    if (!allowed) handleRainViewerBudgetExhausted();
+    return allowed;
+  }
+
+  function guardRainViewerTileLayer(layer) {
+    var createTile = layer.createTile;
+    layer.createTile = function (coords, done) {
+      if (consumeRainViewerRequest()) return createTile.call(this, coords, done);
+      var tile = document.createElement('img');
+      tile.alt = '';
+      tile.setAttribute('role', 'presentation');
+      setTimeout(function () { done(null, tile); }, 0);
+      return tile;
+    };
+    return layer;
+  }
+
   function preloadRadarFrame(index) {
     if (radarLayerNext) {
       map.removeLayer(radarLayerNext);
     }
     clearTimeout(radarPreloadTimer);
+    if (radarProviderId === 'rainviewer' &&
+        rainViewerBudget.snapshot().remaining <= RAINVIEWER_PRELOAD_RESERVE) {
+      radarLayerNext = null;
+      radarPreloadState = { status: 'suppressed-budget', durationMs: 0, index: index };
+      return;
+    }
     var startedAt = Date.now();
     radarPreloadState = { status: 'loading', durationMs: null, index: index };
     radarLayerNext = createRadarTileLayer(index);
@@ -529,7 +578,8 @@
         crossOrigin: 'anonymous',
         attribution: 'Coverage: RainViewer'
       }
-    ).addTo(map);
+    );
+    guardRainViewerTileLayer(radarCoverageLayer).addTo(map);
   }
 
   function contextTimestamp(value) {
@@ -760,6 +810,10 @@
 
   function sampleTilePixel(url, coordinate) {
     return new Promise(function (resolve) {
+      if (!consumeRainViewerRequest()) {
+        resolve(null);
+        return;
+      }
       var image = new Image();
       var settled = false;
       var timeout = setTimeout(function () { if (!settled) resolve(null); }, 4000);
@@ -2812,6 +2866,7 @@
   window._stormscope = {
     getMap: function () { return map; },
     getRadarPreloadState: function () { return Object.assign({}, radarPreloadState); },
+    getRainViewerBudget: function () { return rainViewerBudget.snapshot(); },
     getCameraLoadMetrics: function () { return Object.assign({}, cameraLoadMetrics); },
     getCameraResults: function () { return currentCameraResults.slice(); },
     getMonitorState: function () {
