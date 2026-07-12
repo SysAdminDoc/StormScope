@@ -24,6 +24,8 @@ data/pr_act_discovery_report*.json
 data/ipcamlive_discovery_report*.json
 data/smithsonian_discovery_report*.json
 data/rtspme_discovery_report*.json
+data/wyoming_nps_discovery_report*.json
+data/wyoming_dot_discovery_report*.json
 ROADMAP.md
 Roadmap_Blocked.md
 RESEARCH.md

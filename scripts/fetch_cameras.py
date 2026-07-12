@@ -6,6 +6,7 @@ Usage: python scripts/fetch_cameras.py
 """
 import argparse
 import concurrent.futures
+import email.utils
 import hashlib
 import json
 import gzip
@@ -741,6 +742,236 @@ def fetch_nps():
         return 0
 
 
+# ── Verified Wyoming NPS feeds ──
+WYOMING_NPS_IMAGE_FEEDS = (
+    {
+        'provider_camera_id': 'yell-mammoth-parade',
+        'name': 'Mammoth Hot Springs - Travertine Terraces',
+        'lat': 44.976418715,
+        'lon': -110.700087547,
+        'url': 'https://www.nps.gov/webcams-yell/mammoth_parade.jpg',
+        'county': 'Park County',
+        'direction': '',
+        'source_url': ('https://www.nps.gov/media/webcam/view.htm?'
+                       'id=696F20E1-F421-B232-FE72D6D85B157422'),
+    },
+    {
+        'provider_camera_id': 'yell-washburn-ne',
+        'name': 'Mount Washburn - Northeastern View',
+        'lat': 44.797831049,
+        'lon': -110.434384583,
+        'url': 'https://www.nps.gov/webcams-yell/washburn_ne.jpg',
+        'county': 'Park County',
+        'direction': 'NE',
+        'source_url': ('https://www.nps.gov/media/webcam/view.htm?'
+                       'id=81B46891-1DD8-B71B-0B6575944D4DECD5'),
+    },
+    {
+        'provider_camera_id': 'yell-washburn-s',
+        'name': 'Mount Washburn - Southern View',
+        'lat': 44.797831049,
+        'lon': -110.434384583,
+        'url': 'https://www.nps.gov/webcams-yell/washburn_sw.jpg',
+        'county': 'Park County',
+        'direction': 'S',
+        'source_url': ('https://www.nps.gov/media/webcam/view.htm?'
+                       'id=81B4689E-1DD8-B71B-0B8741319EA29FD3'),
+    },
+    {
+        'provider_camera_id': 'yell-east-out',
+        'name': 'Yellowstone East Entrance - Out of Park',
+        'lat': 44.489854349,
+        'lon': -110.001113483,
+        'url': 'https://www.nps.gov/webcams-yell/east_out.jpg',
+        'county': 'Park County',
+        'direction': 'E',
+        'source_url': ('https://www.nps.gov/media/webcam/view.htm?'
+                       'id=45FDA0AC-0A10-4ACA-A0C6-44F440575AE1'),
+    },
+    {
+        'provider_camera_id': 'yell-east-in',
+        'name': 'Yellowstone East Entrance - Into Park',
+        'lat': 44.489854349,
+        'lon': -110.001113483,
+        'url': 'https://www.nps.gov/webcams-yell/east_in.jpg',
+        'county': 'Park County',
+        'direction': 'W',
+        'source_url': ('https://www.nps.gov/media/webcam/view.htm?'
+                       'id=E3772256-9585-4859-A1FD-FC47F15F7226'),
+    },
+    {
+        'provider_camera_id': 'deto-prairie-dog-town',
+        'name': 'Devils Tower Prairie Dog Town from Amphitheater',
+        'lat': 44.582910805,
+        'lon': -104.707953792,
+        'url': 'https://www.nps.gov/webcams-deto/deto1.jpg',
+        'county': 'Crook County',
+        'direction': '',
+        'source_url': ('https://www.nps.gov/media/webcam/view.htm?'
+                       'id=34A2E299-D1A6-73B6-83317D912825FDF8'),
+    },
+    {
+        'provider_camera_id': 'deto-tower-prairie-dog-town',
+        'name': 'Devils Tower from Prairie Dog Town',
+        'lat': 44.585137073,
+        'lon': -104.707873617,
+        'url': 'https://www.nps.gov/webcams-deto/deto2.jpg',
+        'county': 'Crook County',
+        'direction': '',
+        'source_url': ('https://www.nps.gov/media/webcam/view.htm?'
+                       'id=34CA6D33-B7F4-4D81-012FADCDA97D746E'),
+    },
+)
+
+WYOMING_OLD_FAITHFUL = {
+    'provider_camera_id': 'yell-old-faithful',
+    'name': 'Old Faithful and Upper Geyser Basin',
+    'lat': 44.459886644,
+    'lon': -110.830614567,
+    'url': 'https://cs7.pixelcaster.com/nps/faithful.stream/playlist_dvr.m3u8',
+    'county': 'Park County',
+    'source_url': 'https://www.nps.gov/yell/learn/photosmultimedia/webcams.htm',
+}
+
+
+def _nps_image_snapshot(url):
+    request = urllib.request.Request(
+        url,
+        headers={
+            'User-Agent': 'StormScope/0.51.0',
+            'Accept': 'image/jpeg,image/*,*/*',
+            'Cache-Control': 'no-cache',
+        },
+    )
+    with urllib.request.urlopen(request, timeout=25, context=ctx) as response:
+        content_type = (response.headers.get('Content-Type') or '').lower()
+        last_modified = response.headers.get('Last-Modified')
+        body = response.read()
+    if 'image' not in content_type or len(body) < 10_000 or not body.startswith(b'\xff\xd8\xff'):
+        raise ValueError('placeholder:not_a_current_jpeg')
+    if not last_modified:
+        raise ValueError('placeholder:missing_provider_timestamp')
+    provider_time = email.utils.parsedate_to_datetime(last_modified)
+    if provider_time.tzinfo is None:
+        provider_time = provider_time.replace(tzinfo=timezone.utc)
+    age = datetime.now(timezone.utc) - provider_time.astimezone(timezone.utc)
+    if age < -timedelta(minutes=5) or age > timedelta(minutes=20):
+        raise ValueError(f'placeholder:stale_provider_timestamp:{int(age.total_seconds())}')
+    return hashlib.sha256(body).hexdigest(), len(body), provider_time.isoformat()
+
+
+def verify_nps_images(candidates, probe_interval=2.0, workers=7):
+    snapshots = {}
+    errors = {}
+
+    def probe(item):
+        try:
+            return item['provider_camera_id'], _nps_image_snapshot(item['url']), None
+        except Exception as exc:  # noqa: BLE001
+            return item['provider_camera_id'], None, str(exc)
+
+    first = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+        for camera_id, snapshot, error in executor.map(probe, candidates):
+            if error:
+                errors.setdefault(camera_id, []).append(error)
+            else:
+                first[camera_id] = snapshot
+    if probe_interval:
+        time.sleep(probe_interval)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+        for camera_id, snapshot, error in executor.map(probe, candidates):
+            if error:
+                errors.setdefault(camera_id, []).append(error)
+            else:
+                snapshots[camera_id] = snapshot
+
+    verified = set(first) & set(snapshots)
+    final_errors = {}
+    for candidate in candidates:
+        camera_id = candidate['provider_camera_id']
+        if camera_id in verified:
+            continue
+        details = errors.get(camera_id, ['transient_network:incomplete'])
+        detail = details[-1]
+        final_errors[camera_id] = (
+            detail if detail.startswith(('placeholder:', 'confirmed_dead:'))
+            else f'transient_network:{detail}'
+        )
+    return verified, final_errors, snapshots
+
+
+def fetch_wyoming_nps_verified():
+    image_candidates = [dict(item) for item in WYOMING_NPS_IMAGE_FEEDS]
+    verified_images, image_errors, image_snapshots = verify_nps_images(image_candidates)
+    old_faithful = dict(WYOMING_OLD_FAITHFUL)
+    verified_hls, hls_errors = verify_live_hls(
+        [old_faithful['url']], probe_interval=10.0, workers=1,
+        referer=old_faithful['source_url'],
+    )
+    rejected = []
+    count = 0
+
+    for camera in image_candidates:
+        camera_id = camera['provider_camera_id']
+        if camera_id not in verified_images:
+            rejected.append({
+                'provider_camera_id': camera_id,
+                'name': camera['name'],
+                'failure_class': image_errors.get(camera_id, 'transient_network:incomplete'),
+            })
+            continue
+        add_camera(
+            camera['name'], camera['lat'], camera['lon'], camera['url'], 'image',
+            'Wyoming', camera['county'], camera['direction'], 'nps',
+            camera['source_url'], 60,
+        )
+        cameras[-1]['provider_camera_id'] = camera_id
+        cameras[-1]['provider_timestamp'] = image_snapshots[camera_id][2]
+        cameras[-1]['_replace_source_page'] = True
+        count += 1
+
+    if old_faithful['url'] in verified_hls:
+        add_camera(
+            old_faithful['name'], old_faithful['lat'], old_faithful['lon'],
+            old_faithful['url'], 'hls', 'Wyoming', old_faithful['county'], '', 'nps',
+            old_faithful['source_url'], 10,
+        )
+        cameras[-1]['provider_camera_id'] = old_faithful['provider_camera_id']
+        cameras[-1]['_replace_source_page'] = True
+        count += 1
+    else:
+        rejected.append({
+            'provider_camera_id': old_faithful['provider_camera_id'],
+            'name': old_faithful['name'],
+            'failure_class': hls_errors.get(
+                old_faithful['url'], 'transient_network:incomplete'
+            ),
+        })
+
+    atomic_write_json(
+        DATA_DIR / 'wyoming_nps_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'National Park Service',
+            'source_url': 'https://www.nps.gov/subjects/digital/webcams.htm',
+            'geographic_scope': 'Wyoming - Yellowstone and Devils Tower',
+            'attribution': {
+                'old_faithful': 'NPS, Canon USA, and Yellowstone Forever',
+                'still_images': 'National Park Service',
+            },
+            'usage': 'Direct first-party feeds; media is linked and not mirrored',
+            'refresh_cadence_seconds': {'image': 60, 'hls': 10},
+            'candidates': len(image_candidates) + 1,
+            'verified_live': count,
+            'rejected': rejected,
+        },
+        indent=2,
+    )
+    print(f'  Wyoming NPS verification: {count}/{len(image_candidates) + 1} live')
+    return count
+
+
 # ── Virginia DOT (VDOT) ──
 def fetch_vdot():
     try:
@@ -1470,29 +1701,22 @@ def fetch_ia_iris():
 
 # ── Wyoming DOT ──
 def fetch_wyoming():
-    try:
-        data = fetch_json('https://map.wyoroad.info/wtimap/data/wtimap-webcameras.json', timeout=20)
-        count = 0
-        items = data if isinstance(data, list) else data.get('features', [])
-        for feat in items:
-            props = feat.get('properties', feat)
-            geom = feat.get('geometry', {})
-            coords = geom.get('coordinates', [0, 0])
-            name = props.get('name', '') or props.get('CAMERATITLE', 'WY Camera')
-            markup = props.get('IMAGEMARKUP', '')
-            m = re.search(r'src="([^"]+)"', markup) if markup else None
-            img_url = m.group(1) if m else (props.get('imageUrl', '') or props.get('url', ''))
-            if not img_url:
-                continue
-            lat = coords[1] if len(coords) >= 2 else props.get('lat')
-            lon = coords[0] if len(coords) >= 2 else props.get('lon')
-            add_camera(name, lat, lon, img_url, detect_type(img_url),
-                       'Wyoming', '', '', 'dot')
-            count += 1
-        return count
-    except Exception as e:
-        print(f'  Wyoming: {e}')
-        return 0
+    report = {
+        'generated_at': utc_now_iso(),
+        'provider': 'Wyoming Department of Transportation',
+        'source_url': 'https://map.wyoroad.info/511-map/',
+        'inventory_sites': 228,
+        'inventory_views': 757,
+        'accepted': 0,
+        'failure_class': 'licensing_restricted',
+        'reason': (
+            'Frames are marked All rights reserved and no third-party '
+            'hotlink or embed grant is published'
+        ),
+        'contact': 'wyoroad@wyo.gov',
+    }
+    atomic_write_json(DATA_DIR / 'wyoming_dot_discovery_report.json', report, indent=2)
+    raise IncompleteProviderError('licensing_restricted:WYDOT_hotlink_permission_required')
 
 
 # ── Maryland CHART (live HLS via per-camera Wowza server) ──
@@ -2712,6 +2936,7 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
         ('Mississippi (MDOT Traffic)', fetch_ms_mdot),
         ('Alaska (511)', fetch_alaska),
         ('Arizona (AZ511)', fetch_az511),
+        ('Wyoming NPS verified', fetch_wyoming_nps_verified),
         ('NPS Webcams', fetch_nps),
     ])
     return providers
@@ -2740,9 +2965,17 @@ def merge_provider_results(
         if result.name not in successful
     }
     fresh_by_provider = {result.name: result.cameras for result in accepted_results}
+    replacement_source_pages = {
+        camera.get('source_url')
+        for result in accepted_results
+        for camera in result.cameras
+        if camera.pop('_replace_source_page', False) and camera.get('source_url')
+    }
     inserted_providers = set()
     ordered = []
     for camera in existing:
+        if camera.get('source_url') in replacement_source_pages:
+            continue
         provider = camera.get('provider')
         if provider in successful:
             if provider not in inserted_providers:

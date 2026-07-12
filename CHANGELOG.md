@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.51.0 - 2026-07-12
+
+### Verified Wyoming national-park, landmark, and downtown cameras
+- Added seven current NPS still-image feeds at Yellowstone and Devils Tower plus Old Faithful's advancing first-party HLS stream. Five stale NPS page embeds were replaced in place with direct feeds, correcting blank state labels and the false Mount Washburn coordinate; all stills supplied current provider timestamps across repeated probes.
+- Added the NPS-embedded Grand Teton Craig Thomas Visitor Center stream and Visit Laramie's Downtown Laramie camera. Both canonical YouTube IDs were rechecked live, public, embed-enabled, backed by active HLS formats, and written through exact first-party location overrides.
+- Added bounded NPS snapshot freshness verification, Old Faithful HLS advancement verification, transactional source-page replacement, Pixelcaster CSP coverage, an ignored provider report, and regression coverage. SeeJH and Virtual Railfan feeds remain licensing-restricted; Afton Airport is not embeddable; other researched state-park, weather, wildlife, and mountain feeds were dead, seasonal, authenticated, transient, or location-ambiguous.
+- WYDOT research recovered 228 exactly located sites and 757 advancing views from its current protobuf map inventory. Every frame is marked all-rights-reserved and no third-party hotlink/embed grant is published, so no WYDOT row was retained; the provider remains `licensing_restricted` pending written permission.
+- Corpus **33,675 -> 33,680**; Wyoming **5 -> 15**; NPS **172 -> 175**; YouTube **472 -> 474**; provider embeds **454 -> 449**; service-worker cache bumped to v27.
+
 ## v0.50.0 - 2026-07-12
 
 ### +10 verified Arkansas rail, wildlife, river, weather, and lake cameras

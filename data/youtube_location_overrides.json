@@ -1559,5 +1559,19 @@
     "lon": -93.123543,
     "state": "Arkansas",
     "county": "Boone County"
+  },
+  "XhBUrjhJm1A": {
+    "name": "Grand Teton Craig Thomas Visitor Center Live Cam",
+    "lat": 43.6533806502,
+    "lon": -110.718606283,
+    "state": "Wyoming",
+    "county": "Teton County"
+  },
+  "gicEyI_T8Hk": {
+    "name": "Downtown Laramie 2nd and Ivinson Live Cam",
+    "lat": 41.311972,
+    "lon": -105.594778,
+    "state": "Wyoming",
+    "county": "Albany County"
   }
 }

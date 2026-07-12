@@ -75,6 +75,28 @@ class FetchMergeTests(unittest.TestCase):
         )
         self.assertEqual([1, 2], [row["id"] for row in merged])
 
+    def test_verified_provider_can_replace_a_legacy_source_page(self):
+        source_page = "https://www.nps.gov/media/webcam/view.htm?id=test"
+        legacy = camera(1, source_page, source="nps")
+        legacy["type"] = "embed"
+        legacy["source_url"] = source_page
+        fresh = camera(
+            99,
+            "https://www.nps.gov/webcams-test/current.jpg",
+            source="nps",
+            provider="Verified NPS",
+        )
+        fresh["source_url"] = source_page
+        fresh["_replace_source_page"] = True
+
+        merged = merge_provider_results(
+            [legacy], [ProviderResult("Verified NPS", [fresh])]
+        )
+
+        self.assertEqual(1, len(merged))
+        self.assertEqual(fresh["url"], merged[0]["url"])
+        self.assertNotIn("_replace_source_page", merged[0])
+
     def test_truncated_provider_snapshot_retains_previous_rows(self):
         existing = [
             camera(index, f"https://dot.test/{index}.jpg", provider="Provider A")
@@ -357,6 +379,16 @@ class FetchMergeTests(unittest.TestCase):
         with self.assertRaises(fetch_cameras.IncompleteProviderError):
             fetch_cameras._parse_wv511_inventory(payload)
 
+    def test_wydot_is_not_ingested_without_hotlink_permission(self):
+        with mock.patch.object(fetch_cameras, "atomic_write_json") as report_writer:
+            result = fetch_cameras.run_fetcher("Wyoming DOT", fetch_cameras.fetch_wyoming)
+        self.assertFalse(result.succeeded)
+        self.assertIn("licensing_restricted", result.error)
+        self.assertEqual([], result.cameras)
+        report = report_writer.call_args.args[1]
+        self.assertEqual(757, report["inventory_views"])
+        self.assertEqual("licensing_restricted", report["failure_class"])
+
     def test_pr_act_image_verification_requires_advancing_current_snapshots(self):
         candidate = {"camera_id": "13"}
         first = (100, "hash-one", 4000, "2026-07-12T03:30:00-04:00")
@@ -508,6 +540,64 @@ class FetchMergeTests(unittest.TestCase):
             probe_interval=8.0,
             workers=3,
             referer="https://nationalzoo.si.edu/webcams",
+        )
+
+    def test_nps_image_verification_requires_two_current_provider_snapshots(self):
+        candidate = {
+            "provider_camera_id": "yell-test",
+            "url": "https://www.nps.gov/webcams-yell/test.jpg",
+        }
+        first = ("hash-one", 40000, "2026-07-12T09:00:00+00:00")
+        second = ("hash-two", 41000, "2026-07-12T09:01:00+00:00")
+        with (
+            mock.patch.object(fetch_cameras, "_nps_image_snapshot", side_effect=[first, second]),
+            mock.patch.object(fetch_cameras.time, "sleep"),
+        ):
+            verified, errors, snapshots = fetch_cameras.verify_nps_images(
+                [candidate], probe_interval=0, workers=1
+            )
+        self.assertEqual({"yell-test"}, verified)
+        self.assertEqual({}, errors)
+        self.assertEqual(second, snapshots["yell-test"])
+
+    def test_wyoming_nps_accepts_current_images_and_advancing_old_faithful_hls(self):
+        image_ids = {
+            item["provider_camera_id"] for item in fetch_cameras.WYOMING_NPS_IMAGE_FEEDS
+        }
+        snapshots = {
+            camera_id: ("hash", 40000, "2026-07-12T09:00:00+00:00")
+            for camera_id in image_ids
+        }
+        old_faithful = fetch_cameras.WYOMING_OLD_FAITHFUL
+        with (
+            mock.patch.object(
+                fetch_cameras,
+                "verify_nps_images",
+                return_value=(image_ids, {}, snapshots),
+            ),
+            mock.patch.object(
+                fetch_cameras,
+                "verify_live_hls",
+                return_value=({old_faithful["url"]}, {}),
+            ) as hls_verifier,
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Wyoming NPS verified", fetch_cameras.fetch_wyoming_nps_verified
+            )
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual(8, len(result.cameras))
+        self.assertTrue(all(row["state"] == "Wyoming" for row in result.cameras))
+        self.assertTrue(all(row["source"] == "nps" for row in result.cameras))
+        self.assertEqual(7, sum(row["type"] == "image" for row in result.cameras))
+        self.assertEqual(1, sum(row["type"] == "hls" for row in result.cameras))
+        self.assertTrue(all(row["_replace_source_page"] for row in result.cameras))
+        hls_verifier.assert_called_once_with(
+            [old_faithful["url"]],
+            probe_interval=10.0,
+            workers=1,
+            referer=old_faithful["source_url"],
         )
 
     def test_cobblestone_accepts_only_first_party_advancing_rtspme_embed(self):
