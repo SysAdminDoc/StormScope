@@ -2573,5 +2573,160 @@
     "refresh_cadence_seconds": 30,
     "provider": "University of North Dakota Atmospheric Sciences",
     "category": "university_weather"
+  },
+  "dQ6hVkm_9Kg": {
+    "name": "DuPont Nature Center - Mispillion Harbor",
+    "lat": 38.947722,
+    "lon": -75.314951,
+    "state": "Delaware",
+    "county": "Sussex County",
+    "source_url": "https://dnrec.delaware.gov/fish-wildlife/education-outreach/dupont-nature-center/",
+    "refresh_cadence_seconds": 30,
+    "provider": "Delaware Department of Natural Resources and Environmental Control",
+    "category": "nature_harbor"
+  },
+  "2ETd5HZopJA": {
+    "name": "DuPont Nature Center - Mispillion Harbor Osprey",
+    "lat": 38.947722,
+    "lon": -75.314951,
+    "state": "Delaware",
+    "county": "Sussex County",
+    "source_url": "https://dnrec.delaware.gov/fish-wildlife/education-outreach/dupont-nature-center/",
+    "refresh_cadence_seconds": 30,
+    "provider": "Delaware Department of Natural Resources and Environmental Control",
+    "category": "wildlife"
+  },
+  "JuJVUhj9JBo": {
+    "name": "Mount Washington Observatory Tower Cam",
+    "lat": 44.270838,
+    "lon": -71.303457,
+    "state": "New Hampshire",
+    "county": "Coos County",
+    "direction": "S",
+    "source_url": "https://mountwashington.org/weather-cams/tower-weather-camera/",
+    "refresh_cadence_seconds": 30,
+    "provider": "Mount Washington Observatory",
+    "category": "weather_scenic"
+  },
+  "NNF7tXuJUSs": {
+    "name": "Cannon Mountain Summit Cam",
+    "lat": 44.156692,
+    "lon": -71.698621,
+    "state": "New Hampshire",
+    "county": "Grafton County",
+    "source_url": "https://mountwashington.org/weather-cams/cannon-mountain-weather-cam/",
+    "refresh_cadence_seconds": 30,
+    "provider": "Mount Washington Observatory / Cannon Mountain",
+    "category": "ski_weather"
+  },
+  "TMwZInXDfvI": {
+    "name": "Cranmore Mountain Meister Cam",
+    "lat": 44.057569,
+    "lon": -71.092848,
+    "state": "New Hampshire",
+    "county": "Carroll County",
+    "source_url": "https://mountwashington.org/weather-cams/cranmore-mountain-mesiter-cam/",
+    "refresh_cadence_seconds": 30,
+    "provider": "Mount Washington Observatory / Cranmore Mountain Resort",
+    "category": "ski_weather"
+  },
+  "xYbH_qKYb5A": {
+    "name": "Mount Washington Cog Railway - Waumbek Up-Track Cam",
+    "lat": 44.273767,
+    "lon": -71.333004,
+    "state": "New Hampshire",
+    "county": "Coos County",
+    "source_url": "https://mountwashington.org/weather-cams/cog-waumbek-station-upthetracks/",
+    "refresh_cadence_seconds": 30,
+    "provider": "Mount Washington Observatory / Mount Washington Cog Railway",
+    "category": "rail_weather"
+  },
+  "BEHwTBqq3vM": {
+    "name": "Manchester Peregrine Falcon Nest Feed 1",
+    "lat": 43.003808,
+    "lon": -71.465866,
+    "state": "New Hampshire",
+    "county": "Hillsborough County",
+    "source_url": "https://nhaudubon.org/education/birds-and-birding/peregrine-cam/",
+    "refresh_cadence_seconds": 30,
+    "provider": "New Hampshire Audubon / Peregrine Networks",
+    "category": "wildlife"
+  },
+  "i07IVN7ZKek": {
+    "name": "Manchester Peregrine Falcon Perch Feed 3",
+    "lat": 43.003808,
+    "lon": -71.465866,
+    "state": "New Hampshire",
+    "county": "Hillsborough County",
+    "source_url": "https://nhaudubon.org/education/birds-and-birding/peregrine-cam/",
+    "refresh_cadence_seconds": 30,
+    "provider": "New Hampshire Audubon / Peregrine Networks",
+    "category": "wildlife"
+  },
+  "KFjl8wPJvyg": {
+    "name": "Pats Peak Base Area Cam",
+    "lat": 43.161944,
+    "lon": -71.796277,
+    "state": "New Hampshire",
+    "county": "Merrimack County",
+    "source_url": "https://www.patspeak.com/the-mountain/cams-media/web-cams/",
+    "refresh_cadence_seconds": 30,
+    "provider": "Pats Peak Ski Area",
+    "category": "ski"
+  },
+  "ZLsh8WsISr0": {
+    "name": "Pats Peak Terrain Park Cam",
+    "lat": 43.161944,
+    "lon": -71.796277,
+    "state": "New Hampshire",
+    "county": "Merrimack County",
+    "source_url": "https://www.patspeak.com/the-mountain/cams-media/web-cams/",
+    "refresh_cadence_seconds": 30,
+    "provider": "Pats Peak Ski Area",
+    "category": "ski"
+  },
+  "PoZ1Hy7PQig": {
+    "name": "Strawbery Banke Museum Outdoor Patio Cam",
+    "lat": 43.075301,
+    "lon": -70.752076,
+    "state": "New Hampshire",
+    "county": "Rockingham County",
+    "source_url": "https://www.strawberybanke.org/livestream-webcams",
+    "refresh_cadence_seconds": 30,
+    "provider": "Strawbery Banke Museum / Boston and Maine Live",
+    "category": "museum_destination"
+  },
+  "jZEvrGZ_8y0": {
+    "name": "Hampton Beach Seashell Cam",
+    "lat": 42.908007,
+    "lon": -70.811194,
+    "state": "New Hampshire",
+    "county": "Rockingham County",
+    "source_url": "https://hamptonbeach.org/beach-cam/",
+    "refresh_cadence_seconds": 30,
+    "provider": "Hampton Beach Village District",
+    "category": "beach"
+  },
+  "h-e0HcDBnBU": {
+    "name": "Hampton Beach - Pelham Resort Street Cam",
+    "lat": 42.907986,
+    "lon": -70.811356,
+    "state": "New Hampshire",
+    "county": "Rockingham County",
+    "source_url": "https://hamptonbeach.org/beach-cam/",
+    "refresh_cadence_seconds": 30,
+    "provider": "Hampton Beach Village District / The Pelham Resort",
+    "category": "beach"
+  },
+  "-77GFFb5_Ao": {
+    "name": "Mount Washington Cog Railway Base Station Cam",
+    "lat": 44.269091,
+    "lon": -71.354881,
+    "state": "New Hampshire",
+    "county": "Coos County",
+    "source_url": "https://www.youtube.com/watch?v=-77GFFb5_Ao",
+    "refresh_cadence_seconds": 30,
+    "provider": "Mount Washington Cog Railway",
+    "category": "rail_destination"
   }
 }

@@ -712,7 +712,7 @@ def fetch_txdot():
 def fetch_nps():
     try:
         url = 'https://developer.nps.gov/api/v1/webcams?api_key=DEMO_KEY&limit=500'
-        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.60.0'})
+        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.61.0'})
         count = 0
         for cam in data.get('data', []):
             if str(cam.get('status') or '').lower() == 'inactive':
@@ -842,7 +842,7 @@ def _current_jpeg_snapshot(
     request = urllib.request.Request(
         url,
         headers={
-            'User-Agent': 'StormScope/0.60.0',
+            'User-Agent': 'StormScope/0.61.0',
             'Accept': 'image/jpeg,image/*,*/*',
             'Cache-Control': 'no-cache',
         },
@@ -2413,6 +2413,152 @@ def fetch_delaware_live():
     except Exception as e:
         print(f'  Delaware live: {e}')
         return 0
+
+
+DELAWARE_CMLF_CAMERAS = (
+    {
+        'player_id': 'ubwk93C3',
+        'name': 'Cape May-Lewes Ferry - Lewes Bulkhead Osprey',
+        'stream': 'LewesOsprey.stream',
+        'category': 'wildlife',
+    },
+    {
+        'player_id': 'XogzbMib',
+        'name': 'Cape May-Lewes Ferry - Lewes Toll Booth',
+        'stream': 'LewesTollBooth.stream',
+        'category': 'ferry_traffic',
+    },
+    {
+        'player_id': 'FsOGfNId',
+        'name': 'Cape May-Lewes Ferry - Lewes Staging Lanes',
+        'stream': 'LewesParkingLot.stream',
+        'category': 'ferry_traffic',
+    },
+    {
+        'player_id': 'lxHUe3TN',
+        'name': 'Cape May-Lewes Ferry - Lewes Green',
+        'stream': 'LewesGreen.stream',
+        'category': 'ferry_harbor',
+    },
+    {
+        'player_id': 'hN4hXxOq',
+        'name': 'Cape May-Lewes Ferry - Lewes Freeman Highway',
+        'stream': 'FreemanHighway.stream',
+        'category': 'ferry_traffic',
+    },
+    {
+        'player_id': '7964lNnn',
+        'name': 'Cape May-Lewes Ferry - Lewes Grain On the Rocks',
+        'stream': 'OTRLewes.stream',
+        'category': 'ferry_harbor',
+    },
+)
+
+
+def fetch_delaware_cmlf_verified():
+    source_page = 'https://www.cmlf.com/check-traffic-live-webcam-feeds/'
+    page = _http_bytes(source_page, timeout=30).decode('utf-8', 'replace')
+    missing_players = [
+        item['player_id']
+        for item in DELAWARE_CMLF_CAMERAS
+        if item['player_id'] not in page
+    ]
+    if missing_players:
+        raise IncompleteProviderError(
+            f'CMLF official camera inventory is missing players: {missing_players}'
+        )
+    hls_by_id = {
+        item['player_id']: (
+            'https://5b18e54927a82.streamlock.net/live/'
+            f"{item['stream']}/playlist.m3u8"
+        )
+        for item in DELAWARE_CMLF_CAMERAS
+    }
+    verified, errors = verify_live_hls(
+        list(hls_by_id.values()),
+        probe_interval=8.0,
+        workers=6,
+        referer=source_page,
+    )
+    rejected = [
+        {
+            'provider_camera_id': f'cmlf:{player_id}',
+            'failure_class': errors.get(
+                hls_url, 'confirmed_not_live:not_advancing'
+            ),
+        }
+        for player_id, hls_url in hls_by_id.items()
+        if hls_url not in verified
+    ]
+    if rejected:
+        atomic_write_json(
+            DATA_DIR / 'youtube_discovery_report_delaware_cmlf.json',
+            {
+                'generated_at': utc_now_iso(),
+                'provider': 'Cape May-Lewes Ferry / Delaware River and Bay Authority',
+                'source_url': source_page,
+                'verified_live': len(verified),
+                'rejected': rejected,
+            },
+            indent=2,
+        )
+        raise IncompleteProviderError('CMLF HLS verification is incomplete')
+
+    accepted = []
+    for item in DELAWARE_CMLF_CAMERAS:
+        player_id = item['player_id']
+        player_url = f'https://cdn.jwplayer.com/players/{player_id}-wHOfzSFM.html'
+        add_camera(
+            item['name'],
+            38.782424,
+            -75.119877,
+            player_url,
+            'embed',
+            'Delaware',
+            'Sussex County',
+            '',
+            'dot',
+            source_page,
+            30,
+        )
+        cameras[-1]['provider_camera_id'] = f'cmlf:{player_id}'
+        cameras[-1]['category'] = item['category']
+        accepted.append({
+            'provider_camera_id': f'cmlf:{player_id}',
+            'name': item['name'],
+            'player_url': player_url,
+            'verification_stream_url': hls_by_id[player_id],
+        })
+    atomic_write_json(
+        DATA_DIR / 'youtube_discovery_report_delaware_cmlf.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'Cape May-Lewes Ferry / Delaware River and Bay Authority',
+            'source_url': source_page,
+            'geographic_scope': 'Lewes Ferry Terminal, Lewes, Sussex County, Delaware',
+            'location_evidence': (
+                'The official webcam page identifies every accepted player as a '
+                'Lewes terminal view and publishes the terminal GPS point '
+                '38.782424,-75.119877.'
+            ),
+            'attribution': 'Cape May-Lewes Ferry / Delaware River and Bay Authority',
+            'license_or_usage_terms': (
+                'DRBA reserves copyright in site contents. StormScope therefore '
+                'stores the exact provider-published branded JWPlayer iframe and '
+                'does not persist, proxy, or archive the verification HLS media.'
+            ),
+            'verified_live': len(accepted),
+            'rejected': [],
+            'refresh_cadence_seconds': 30,
+            'accepted': accepted,
+        },
+        indent=2,
+    )
+    print(
+        f'  CMLF Lewes HLS verification: '
+        f'{len(accepted)}/{len(DELAWARE_CMLF_CAMERAS)} advancing'
+    )
+    return len(accepted)
 
 
 # ── New Mexico DOT ──
@@ -4468,6 +4614,125 @@ def fetch_mississippi_state_university():
     return 1
 
 
+NEW_HAMPSHIRE_UNIVERSITY_CAMS = (
+    {
+        'provider_camera_id': 'franklin-pierce-monadnock',
+        'name': 'Franklin Pierce University - Mount Monadnock',
+        'lat': 42.770947004468,
+        'lon': -72.057688117976,
+        'url': 'https://www.franklinpierce.edu/webcam_monadnock/thumbnail1.jpg',
+        'county': 'Cheshire County',
+        'direction': '',
+        'source_url': 'https://franklinpierce.edu/webcam_monadnock/index.html',
+        'refresh_cadence_seconds': 300,
+        'max_age_seconds': 10_800,
+        'category': 'weather_scenic',
+    },
+    {
+        'provider_camera_id': 'psu-boyd-science-center-1',
+        'name': 'Plymouth State University - Boyd Science Center',
+        'lat': 43.7571075,
+        'lon': -71.6898445,
+        'url': 'https://vortex.plymouth.edu/webcam/1/latest.jpeg',
+        'county': 'Grafton County',
+        'direction': 'N',
+        'source_url': 'https://vortex.plymouth.edu/webcam/',
+        'refresh_cadence_seconds': 300,
+        'max_age_seconds': 1800,
+        'category': 'campus_weather',
+    },
+)
+
+
+def fetch_new_hampshire_university_cameras():
+    for item in NEW_HAMPSHIRE_UNIVERSITY_CAMS:
+        page = _http_bytes(item['source_url'], timeout=30).decode('utf-8', 'replace')
+        if item['url'] not in page and item['url'].rsplit('/', 1)[-1] not in page:
+            raise IncompleteProviderError(
+                f"university source page is missing {item['provider_camera_id']}"
+            )
+    verified, errors, snapshots = verify_current_jpeg_images(
+        list(NEW_HAMPSHIRE_UNIVERSITY_CAMS),
+        probe_interval=2.0,
+        workers=2,
+    )
+    rejected = [
+        {
+            'provider_camera_id': item['provider_camera_id'],
+            'failure_class': errors.get(
+                item['provider_camera_id'],
+                'transient_network:verification_incomplete',
+            ),
+        }
+        for item in NEW_HAMPSHIRE_UNIVERSITY_CAMS
+        if item['provider_camera_id'] not in verified
+    ]
+    report_path = DATA_DIR / 'youtube_discovery_report_new_hampshire_university.json'
+    if rejected:
+        atomic_write_json(
+            report_path,
+            {
+                'generated_at': utc_now_iso(),
+                'provider': 'New Hampshire university weather cameras',
+                'verified_live': len(verified),
+                'rejected': rejected,
+            },
+            indent=2,
+        )
+        raise IncompleteProviderError(
+            'New Hampshire university camera verification is incomplete'
+        )
+
+    accepted = []
+    for item in NEW_HAMPSHIRE_UNIVERSITY_CAMS:
+        add_camera(
+            item['name'],
+            item['lat'],
+            item['lon'],
+            item['url'],
+            'image',
+            'New Hampshire',
+            item['county'],
+            item['direction'],
+            'university',
+            item['source_url'],
+            item['refresh_cadence_seconds'],
+        )
+        cameras[-1]['provider_camera_id'] = item['provider_camera_id']
+        cameras[-1]['category'] = item['category']
+        accepted.append({
+            'provider_camera_id': item['provider_camera_id'],
+            'name': item['name'],
+            'url': item['url'],
+            'source_url': item['source_url'],
+            'snapshot': snapshots[item['provider_camera_id']],
+        })
+    atomic_write_json(
+        report_path,
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'Franklin Pierce University / Plymouth State University',
+            'geographic_scope': 'Rindge and Plymouth, New Hampshire',
+            'location_evidence': (
+                'Each first-party camera page names the campus/view. Coordinates '
+                'resolve the official Franklin Pierce University address and the '
+                'Boyd Science Center building; counties were cross-checked.'
+            ),
+            'license_or_usage_terms': (
+                'Both universities publish the JPEGs as public webcam views. '
+                'StormScope hotlinks the originals with first-party attribution '
+                'and does not proxy or archive the images.'
+            ),
+            'verified_live': len(accepted),
+            'rejected': [],
+            'accepted': accepted,
+        },
+        indent=2,
+    )
+    print('  New Hampshire university image verification: 2/2 current')
+    return len(accepted)
+
+
 WEST_VIRGINIA_CANAAN_CAMS = (
     {
         'alias': '6911368c776d3',
@@ -5022,7 +5287,7 @@ def fetch_faa_weathercams_north_dakota():
     headers = {
         'User-Agent': (
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-            'AppleWebKit/537.36 Chrome/130.0 StormScope/0.60.0'
+            'AppleWebKit/537.36 Chrome/130.0 StormScope/0.61.0'
         ),
         'Accept': 'application/json, image/*, */*',
         'Referer': state_page,
@@ -5608,6 +5873,401 @@ def fetch_arkansas_cobblestone():
     return 1
 
 
+ARKANSAS_HAZCAMS_COUNTIES = {
+    'alexander-ar-us-001': 'Saline County',
+    'arkadelphia-ar-us-001': 'Clark County',
+    'bay-ar-us-001': 'Craighead County',
+    'conway-ar-us-002': 'Faulkner County',
+    'crossett-ar-us-001': 'Ashley County',
+    'el-dorado-ar-us-001': 'Union County',
+    'fairfield-bay-ar-us-001': 'Van Buren County',
+    'hamburg-ar-us-001': 'Ashley County',
+    'helena-ar-us-001': 'Phillips County',
+    'little-rock-ar-us-001': 'Pulaski County',
+    'newport-ar-us-001': 'Jackson County',
+    'pine-bluff-ar-us-001': 'Jefferson County',
+    'prescott-ar-us-001': 'Nevada County',
+    'siloam-springs-ar-us-001': 'Benton County',
+    'stuttgart-ar-us-001': 'Arkansas County',
+    'wynne-ar-us-001': 'Cross County',
+    'wynne-ar-us-002': 'Cross County',
+}
+
+
+def fetch_arkansas_hazcams():
+    source_home = 'https://hazcams.com/'
+    html_text = _http_bytes(source_home, timeout=30).decode('utf-8', 'replace')
+    next_data_match = re.search(
+        r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>',
+        html_text,
+        re.DOTALL,
+    )
+    if not next_data_match:
+        raise IncompleteProviderError('Hazcams public station inventory is missing')
+    try:
+        page_data = json.loads(next_data_match.group(1))
+        inventory = page_data['props']['pageProps']['stations']
+    except (KeyError, TypeError, json.JSONDecodeError) as exc:
+        raise IncompleteProviderError(
+            'Hazcams public station inventory contract changed'
+        ) from exc
+    if not isinstance(inventory, list):
+        raise IncompleteProviderError('Hazcams public station inventory is invalid')
+
+    arkansas_inventory = {
+        item.get('id'): item
+        for item in inventory
+        if isinstance(item, dict)
+        and re.fullmatch(r'[a-z0-9-]+-ar-us-\d+', str(item.get('id') or ''))
+    }
+    expected_ids = set(ARKANSAS_HAZCAMS_COUNTIES)
+    missing_ids = sorted(expected_ids - set(arkansas_inventory))
+    uncurated_ids = sorted(set(arkansas_inventory) - expected_ids)
+    now_ms = int(time.time() * 1000)
+    rejected = []
+    candidates = []
+    for provider_id in sorted(expected_ids):
+        item = arkansas_inventory.get(provider_id)
+        if not item:
+            continue
+        lat = item.get('lat')
+        lon = item.get('lon')
+        timestamp_ms = item.get('timestamp')
+        failures = []
+        if item.get('online') is not True or item.get('video') is not True:
+            failures.append('confirmed_not_live:provider_offline')
+        if not isinstance(lat, (int, float)) or not 33.0 <= float(lat) <= 36.6:
+            failures.append('location_ambiguous:invalid_latitude')
+        if not isinstance(lon, (int, float)) or not -94.7 <= float(lon) <= -89.6:
+            failures.append('location_ambiguous:invalid_longitude')
+        if not isinstance(timestamp_ms, (int, float)):
+            failures.append('confirmed_not_live:missing_station_timestamp')
+        elif timestamp_ms < now_ms - 30 * 60 * 1000:
+            failures.append('confirmed_not_live:stale_station_timestamp')
+        elif timestamp_ms > now_ms + 24 * 60 * 60 * 1000:
+            failures.append('provider_error:future_station_timestamp')
+        if failures:
+            rejected.append({
+                'provider_camera_id': provider_id,
+                'failure_class': failures[0],
+                'failures': failures,
+            })
+            continue
+        candidates.append(item)
+
+    if missing_ids or rejected:
+        atomic_write_json(
+            DATA_DIR / 'youtube_discovery_report_arkansas_hazcams.json',
+            {
+                'generated_at': utc_now_iso(),
+                'provider': 'Hazcams / Arkansas Weather Network',
+                'source_url': source_home,
+                'inventory_count': len(arkansas_inventory),
+                'expected_count': len(expected_ids),
+                'verified_live': 0,
+                'missing_provider_camera_ids': missing_ids,
+                'rejected': rejected,
+                'uncurated_provider_camera_ids': uncurated_ids,
+            },
+            indent=2,
+        )
+        raise IncompleteProviderError(
+            'Hazcams Arkansas inventory is incomplete or reports an offline station'
+        )
+
+    hls_by_id = {
+        item['id']: f"https://video.hazcams.com/{item['id']}/index.m3u8"
+        for item in candidates
+    }
+    verified_hls, hls_errors = verify_live_hls(
+        list(hls_by_id.values()),
+        probe_interval=8.0,
+        workers=8,
+        referer=source_home,
+    )
+    failed_hls = [
+        {
+            'provider_camera_id': provider_id,
+            'failure_class': hls_errors.get(
+                hls_url, 'confirmed_not_live:not_advancing'
+            ),
+        }
+        for provider_id, hls_url in hls_by_id.items()
+        if hls_url not in verified_hls
+    ]
+    if failed_hls:
+        atomic_write_json(
+            DATA_DIR / 'youtube_discovery_report_arkansas_hazcams.json',
+            {
+                'generated_at': utc_now_iso(),
+                'provider': 'Hazcams / Arkansas Weather Network',
+                'source_url': source_home,
+                'inventory_count': len(arkansas_inventory),
+                'expected_count': len(expected_ids),
+                'verified_live': len(verified_hls),
+                'rejected': failed_hls,
+                'uncurated_provider_camera_ids': uncurated_ids,
+            },
+            indent=2,
+        )
+        raise IncompleteProviderError('Hazcams Arkansas HLS verification is incomplete')
+
+    accepted = []
+    compass_points = ('N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW')
+    for item in sorted(candidates, key=lambda row: (row['name'], row['id'])):
+        provider_id = item['id']
+        bearing = item.get('bearing')
+        direction = ''
+        if isinstance(bearing, (int, float)):
+            direction = compass_points[int((float(bearing) + 22.5) // 45) % 8]
+        source_page = f'https://hazcams.com/station/{provider_id}'
+        embed_url = (
+            f'https://hazcams.com/embed/station/{provider_id}'
+            '?backgroundColor=171a21&hd=true&keep_aspect=true&linkout=true&sponsor=true'
+        )
+        add_camera(
+            f"{item['name']} Weather Cam",
+            item['lat'],
+            item['lon'],
+            embed_url,
+            'embed',
+            'Arkansas',
+            ARKANSAS_HAZCAMS_COUNTIES[provider_id],
+            direction,
+            'hazcams',
+            source_page,
+            4,
+        )
+        cameras[-1]['provider_camera_id'] = provider_id
+        cameras[-1]['category'] = 'weather'
+        accepted.append({
+            'provider_camera_id': provider_id,
+            'name': item['name'],
+            'lat': item['lat'],
+            'lon': item['lon'],
+            'county': ARKANSAS_HAZCAMS_COUNTIES[provider_id],
+            'source_url': source_page,
+            'verification_stream_url': hls_by_id[provider_id],
+        })
+
+    atomic_write_json(
+        DATA_DIR / 'youtube_discovery_report_arkansas_hazcams.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'Hazcams / Arkansas Weather Network',
+            'source_url': source_home,
+            'geographic_scope': '17 current weather-camera stations across Arkansas',
+            'provider_inventory_count': len(arkansas_inventory),
+            'expected_count': len(expected_ids),
+            'location_evidence': (
+                'Hazcams machine-readable station metadata supplies exact coordinates; '
+                'county names were cross-checked against the U.S. Census geocoder. '
+                'Henderson State University independently identifies the Arkadelphia '
+                'station as its official campus weather camera.'
+            ),
+            'location_evidence_url': (
+                'https://www.hsu.edu/news/2026/feb/25/weathercam/'
+            ),
+            'attribution': 'Hazcams and the station sponsors shown in each player',
+            'license_or_usage_terms': (
+                'Hazcams intentionally exposes a branded public embed route for each '
+                'station. StormScope stores that supported player URL with sponsor '
+                'and link-out attribution enabled; verification HLS URLs are neither '
+                'persisted in the corpus nor proxied or archived.'
+            ),
+            'privacy_policy_url': 'https://hazcams.com/privacypolicy.html',
+            'verified_live': len(accepted),
+            'rejected': [],
+            'uncurated_provider_camera_ids': uncurated_ids,
+            'refresh_cadence_seconds': 4,
+            'accepted': accepted,
+        },
+        indent=2,
+    )
+    print(f'  Hazcams Arkansas HLS verification: {len(accepted)}/{len(expected_ids)} advancing')
+    return len(accepted)
+
+
+CONNECTICUT_ANGELCAM_CAMERAS = (
+    {
+        'provider_camera_id': '111999',
+        'alias': '17ydm1ozye',
+        'name': 'Connecticut Audubon Milford Point Osprey Cam',
+        'lat': 41.173934010404,
+        'lon': -73.103990039371,
+        'county': 'New Haven County',
+        'source_url': (
+            'https://ctaudubon.org/conservation/science/bird-cams/'
+            'milford-point-osprey-cam/'
+        ),
+        'category': 'wildlife',
+    },
+    {
+        'provider_camera_id': '40266',
+        'alias': '1eyv39e1r7',
+        'name': 'Falkner Island Lighthouse Cam',
+        'lat': 41.21205,
+        'lon': -72.65361,
+        'county': 'New Haven County',
+        'source_url': 'https://menunkatuck.org/falkner-island-lighthouse-camera',
+        'category': 'lighthouse',
+    },
+    {
+        'provider_camera_id': '127096',
+        'alias': '16lb553el4',
+        'name': 'Hammonasset Beach State Park Osprey Cam',
+        'lat': 41.252384,
+        'lon': -72.546026,
+        'county': 'New Haven County',
+        'source_url': 'https://menunkatuck.org/hammo-osprey-cam',
+        'category': 'wildlife',
+    },
+    {
+        'provider_camera_id': '127097',
+        'alias': '2dy6nn7vrk',
+        'name': 'Meigs Point Nature Center Feeder Cam',
+        'lat': 41.252384,
+        'lon': -72.546026,
+        'county': 'New Haven County',
+        'source_url': 'https://menunkatuck.org/meigs-point-nature-center-camera',
+        'category': 'nature_center',
+    },
+)
+
+
+def _resolve_angelcam_hls(item):
+    embed_url = f"https://v.angelcam.com/iframe?v={item['alias']}&autoplay=1"
+    player = _http_bytes(
+        embed_url,
+        headers={'Referer': item['source_url']},
+        timeout=30,
+    ).decode('utf-8', 'replace')
+    match = re.search(r"['\"]hls['\"]\s*:\s*['\"]([^'\"]+\.m3u8[^'\"]*)", player)
+    if not match:
+        raise IncompleteProviderError(
+            f"AngelCam live playlist is missing for {item['provider_camera_id']}"
+        )
+    try:
+        hls_url = json.loads(f'"{match.group(1)}"')
+    except json.JSONDecodeError as exc:
+        raise IncompleteProviderError('AngelCam live playlist encoding changed') from exc
+    parsed = urllib.parse.urlsplit(hls_url)
+    expected_path = (
+        f"/cameras/{item['provider_camera_id']}/streams/hls/playlist.m3u8"
+    )
+    if (
+        parsed.scheme != 'https'
+        or not parsed.hostname
+        or not parsed.hostname.endswith('.angelcam.com')
+        or parsed.path != expected_path
+        or not urllib.parse.parse_qs(parsed.query).get('token')
+    ):
+        raise IncompleteProviderError('AngelCam live playlist contract changed')
+    return embed_url, hls_url
+
+
+def fetch_connecticut_angelcam_verified():
+    resolved = {}
+    for item in CONNECTICUT_ANGELCAM_CAMERAS:
+        source_page = _http_bytes(item['source_url'], timeout=30).decode(
+            'utf-8', 'replace'
+        )
+        if item['alias'] not in source_page:
+            raise IncompleteProviderError(
+                f"first-party page is missing AngelCam alias {item['alias']}"
+            )
+        resolved[item['provider_camera_id']] = _resolve_angelcam_hls(item)
+    verified, errors = verify_live_hls(
+        [hls_url for _, hls_url in resolved.values()],
+        probe_interval=8.0,
+        workers=4,
+        referer='https://v.angelcam.com/',
+    )
+    rejected = [
+        {
+            'provider_camera_id': f"angelcam:{item['provider_camera_id']}",
+            'failure_class': errors.get(
+                resolved[item['provider_camera_id']][1],
+                'confirmed_not_live:not_advancing',
+            ),
+        }
+        for item in CONNECTICUT_ANGELCAM_CAMERAS
+        if resolved[item['provider_camera_id']][1] not in verified
+    ]
+    report_path = DATA_DIR / 'youtube_discovery_report_connecticut_angelcam.json'
+    if rejected:
+        atomic_write_json(
+            report_path,
+            {
+                'generated_at': utc_now_iso(),
+                'provider': 'Connecticut Audubon / Menunkatuck / AngelCam',
+                'verified_live': len(verified),
+                'rejected': rejected,
+            },
+            indent=2,
+        )
+        raise IncompleteProviderError('Connecticut AngelCam verification is incomplete')
+
+    accepted = []
+    for item in CONNECTICUT_ANGELCAM_CAMERAS:
+        provider_id = item['provider_camera_id']
+        embed_url, _ = resolved[provider_id]
+        add_camera(
+            item['name'],
+            item['lat'],
+            item['lon'],
+            embed_url,
+            'embed',
+            'Connecticut',
+            item['county'],
+            '',
+            'angelcam',
+            item['source_url'],
+            6,
+        )
+        cameras[-1]['provider_camera_id'] = f'angelcam:{provider_id}'
+        cameras[-1]['category'] = item['category']
+        accepted.append({
+            'provider_camera_id': f'angelcam:{provider_id}',
+            'name': item['name'],
+            'url': embed_url,
+            'source_url': item['source_url'],
+        })
+    atomic_write_json(
+        report_path,
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'Connecticut Audubon / Menunkatuck / AngelCam',
+            'geographic_scope': (
+                'Milford Point, Falkner Island, and Hammonasset Beach State Park, '
+                'New Haven County, Connecticut'
+            ),
+            'location_evidence': (
+                'First-party operator and Connecticut DEEP/USFWS pages identify '
+                'each public camera location. Public building or landmark points '
+                'are used for sensitive wildlife cameras.'
+            ),
+            'attribution': (
+                'The Connecticut Audubon Society, Menunkatuck Audubon Society, '
+                'Friends of Hammonasset, and AngelCam'
+            ),
+            'license_or_usage_terms': (
+                'AngelCam permits published content to be accessed through its '
+                'service functionality. StormScope stores only the exact public '
+                'iframe and never persists, proxies, or archives expiring HLS tokens.'
+            ),
+            'terms_url': 'https://www.angelcam.com/terms',
+            'verified_live': len(accepted),
+            'rejected': [],
+            'refresh_cadence_seconds': 6,
+            'accepted': accepted,
+        },
+        indent=2,
+    )
+    print('  Connecticut AngelCam HLS verification: 4/4 advancing')
+    return len(accepted)
+
+
 # ── West Virginia (WV511) — official map inventory + per-camera live HLS ──
 WV511_COUNTIES = {
     'BER': 'Berkeley',
@@ -6086,6 +6746,7 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
         ('New Jersey Turnpike Authority', fetch_njta),
         ('New England 511 (ME/NH/VT)', fetch_newengland511),
         ('Connecticut (CT511)', lambda: fetch_511_mapicons('https://www.ctroads.org', 'Connecticut')),
+        ('Connecticut AngelCam verified', fetch_connecticut_angelcam_verified),
         ('Idaho (ID511)', lambda: fetch_511_mapicons('https://511.idaho.gov', 'Idaho')),
         ('South Carolina (SkyVDN)', lambda: fetch_skyvdn_hls(
             'SC', 'South Carolina', 'https://www.511sc.org/', 'scdot_skyvdn_discovery_report.json')),
@@ -6099,6 +6760,7 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
         ('South Dakota (Iteris)', lambda: fetch_iteris_geojson('SD', 'South Dakota')),
         ('Missouri DOT', fetch_missouri),
         ('Delaware (live HLS)', fetch_delaware_live),
+        ('Delaware (Cape May-Lewes Ferry)', fetch_delaware_cmlf_verified),
         ('New Mexico DOT', fetch_newmexico),
         ('New Mexico NWS', fetch_new_mexico_nws),
         ('New Mexico NPS verified', fetch_new_mexico_nps_verified),
@@ -6116,6 +6778,7 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
         ('American Samoa (Clipper Oil/IPCamLive)', fetch_american_samoa_clipper),
         ('Rhode Island URI Quadcams', fetch_rhode_island_uri_quadcams),
         ('Mississippi State University', fetch_mississippi_state_university),
+        ('New Hampshire university cameras', fetch_new_hampshire_university_cameras),
         ('West Virginia Canaan IPCamLive', fetch_west_virginia_canaan),
         ('West Virginia NPS verified', fetch_west_virginia_nps_verified),
         ('West Virginia State Park', fetch_west_virginia_state_park),
@@ -6128,6 +6791,7 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
         ('Alaska Volcano Observatory / U.S. Geological Survey', fetch_alaska_avo_verified),
         ('Smithsonian National Zoo', fetch_smithsonian_national_zoo),
         ('Arkansas (Cobblestone/RTSP.me)', fetch_arkansas_cobblestone),
+        ('Arkansas (Hazcams weather network)', fetch_arkansas_hazcams),
         ('Florida (ArcGIS)', fetch_fl_arcgis),
         ('Georgia DOT (DataTables)', lambda: fetch_511_datatables(
             'https://511ga.org', 'Georgia', 'https://511ga.org/cctv')),

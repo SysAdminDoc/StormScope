@@ -23,7 +23,25 @@ from urllib.parse import urlsplit, urlunsplit
 CAMERA_SCHEMA_VERSION = 2
 ALLOWED_TYPES = frozenset({"embed", "hls", "image", "mjpeg", "youtube"})
 ALLOWED_SOURCES = frozenset(
-    {"dot", "earthcam", "faa", "ipcamlive", "livebeaches", "mwra", "noaa", "nps", "nrao", "rtspme", "smithsonian", "state_park", "university", "usgs", "youtube"}
+    {
+        "angelcam",
+        "dot",
+        "earthcam",
+        "faa",
+        "hazcams",
+        "ipcamlive",
+        "livebeaches",
+        "mwra",
+        "noaa",
+        "nps",
+        "nrao",
+        "rtspme",
+        "smithsonian",
+        "state_park",
+        "university",
+        "usgs",
+        "youtube",
+    }
 )
 ALLOWED_STATUSES = frozenset({"Active", "Offline", "Unknown"})
 ALLOWED_HEALTH = frozenset({"unknown", "healthy", "degraded", "offline"})
@@ -33,13 +51,16 @@ ALLOWED_FAILURE_CLASSES = frozenset(
 EMBED_HOST_SUFFIXES = frozenset(
     {
         "abbeyroad.com",
+        "cdn.jwplayer.com",
         "earthcam.com",
         "esbnyc.com",
+        "hazcams.com",
         "ipcamlive.com",
         "myearthcam.com",
         "nps.gov",
         "player.brownrice.com",
         "rtsp.me",
+        "v.angelcam.com",
         "weathercams.faa.gov",
     }
 )

@@ -39,8 +39,11 @@ test('embed trust uses exact host-or-subdomain matching', () => {
   assert.equal(hostMatchesSuffix('notearthcam.com', 'earthcam.com'), false);
 
   assert.match(app, /'abbeyroad\.com'/);
+  assert.match(app, /'v\.angelcam\.com'/);
+  assert.match(app, /'cdn\.jwplayer\.com'/);
   assert.match(app, /'esbnyc\.com'/);
   assert.match(app, /'weathercams\.faa\.gov'/);
+  assert.match(app, /'hazcams\.com'/);
   assert.match(app, /'ipcamlive\.com'/);
   assert.match(app, /'rtsp\.me'/);
   assert.doesNotMatch(app, /hostname\.indexOf/);
@@ -82,8 +85,11 @@ test('static CSP removes inline script execution and mirrors trusted frame hosts
   assert.match(csp[1], /base-uri 'none'/);
   assert.match(csp[1], /worker-src 'self' blob:/);
   assert.match(csp[1], /https:\/\/\*\.abbeyroad\.com/);
+  assert.match(csp[1], /https:\/\/v\.angelcam\.com/);
+  assert.match(csp[1], /https:\/\/cdn\.jwplayer\.com/);
   assert.match(csp[1], /https:\/\/\*\.esbnyc\.com/);
   assert.match(csp[1], /https:\/\/weathercams\.faa\.gov/);
+  assert.match(csp[1], /https:\/\/\*\.hazcams\.com/);
   assert.match(csp[1], /https:\/\/\*\.ipcamlive\.com/);
   assert.match(csp[1], /https:\/\/nzp-wowza01\.si\.edu/);
   assert.match(csp[1], /https:\/\/nzp-wowza02\.si\.edu/);

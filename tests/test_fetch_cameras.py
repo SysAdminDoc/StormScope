@@ -333,6 +333,52 @@ class FetchMergeTests(unittest.TestCase):
         self.assertEqual(10, row["refresh_cadence_seconds"])
         self.assertEqual("https://tmc.deldot.gov/json/videocamera.json", row["source_url"])
 
+    def test_cmlf_accepts_only_official_players_with_advancing_hls(self):
+        page = "\n".join(item["player_id"] for item in fetch_cameras.DELAWARE_CMLF_CAMERAS)
+        hls_urls = {
+            (
+                "https://5b18e54927a82.streamlock.net/live/"
+                f"{item['stream']}/playlist.m3u8"
+            )
+            for item in fetch_cameras.DELAWARE_CMLF_CAMERAS
+        }
+        with (
+            mock.patch.object(fetch_cameras, "_http_bytes", return_value=page.encode()),
+            mock.patch.object(
+                fetch_cameras, "verify_live_hls", return_value=(hls_urls, {})
+            ) as verifier,
+            mock.patch.object(fetch_cameras, "atomic_write_json") as report_writer,
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Delaware (Cape May-Lewes Ferry)",
+                fetch_cameras.fetch_delaware_cmlf_verified,
+            )
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual(6, len(result.cameras))
+        self.assertTrue(all(row["state"] == "Delaware" for row in result.cameras))
+        self.assertTrue(all(row["source"] == "dot" for row in result.cameras))
+        self.assertTrue(all(row["type"] == "embed" for row in result.cameras))
+        self.assertTrue(all(row["county"] == "Sussex County" for row in result.cameras))
+        self.assertTrue(all(row["url"].startswith("https://cdn.jwplayer.com/players/") for row in result.cameras))
+        self.assertTrue(all(row["source_url"] == "https://www.cmlf.com/check-traffic-live-webcam-feeds/" for row in result.cameras))
+        verifier.assert_called_once()
+        self.assertEqual(hls_urls, set(verifier.call_args.args[0]))
+        self.assertEqual(6, report_writer.call_args.args[1]["verified_live"])
+
+    def test_cmlf_rejects_a_truncated_official_player_inventory(self):
+        with (
+            mock.patch.object(fetch_cameras, "_http_bytes", return_value=b"ubwk93C3"),
+            mock.patch.object(fetch_cameras, "verify_live_hls") as verifier,
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Delaware (Cape May-Lewes Ferry)",
+                fetch_cameras.fetch_delaware_cmlf_verified,
+            )
+
+        self.assertFalse(result.succeeded)
+        verifier.assert_not_called()
+
     def test_wv511_uses_official_map_coordinates_and_advancing_player_stream(self):
         camera_id = "CAM117"
         stream_url = "https://vtc2.roadsummary.com/rtplive/CAM117/playlist.m3u8"
@@ -1389,6 +1435,63 @@ class FetchMergeTests(unittest.TestCase):
         self.assertEqual([], result.cameras)
         self.assertIn("MSU HLS unavailable", result.error)
 
+    def test_new_hampshire_university_cameras_require_current_jpegs(self):
+        camera_ids = {
+            item["provider_camera_id"]
+            for item in fetch_cameras.NEW_HAMPSHIRE_UNIVERSITY_CAMS
+        }
+        snapshots = {
+            camera_id: ("hash", 20_000, "2026-07-12T15:50:00+00:00")
+            for camera_id in camera_ids
+        }
+
+        def source_page(url, **_kwargs):
+            item = next(
+                row
+                for row in fetch_cameras.NEW_HAMPSHIRE_UNIVERSITY_CAMS
+                if row["source_url"] == url
+            )
+            return item["url"].encode()
+
+        with (
+            mock.patch.object(fetch_cameras, "_http_bytes", side_effect=source_page),
+            mock.patch.object(
+                fetch_cameras,
+                "verify_current_jpeg_images",
+                return_value=(camera_ids, {}, snapshots),
+            ) as verifier,
+            mock.patch.object(fetch_cameras, "atomic_write_json") as report_writer,
+        ):
+            result = fetch_cameras.run_fetcher(
+                "New Hampshire university cameras",
+                fetch_cameras.fetch_new_hampshire_university_cameras,
+            )
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual(2, len(result.cameras))
+        self.assertTrue(all(row["state"] == "New Hampshire" for row in result.cameras))
+        self.assertTrue(all(row["source"] == "university" for row in result.cameras))
+        self.assertTrue(all(row["type"] == "image" for row in result.cameras))
+        verifier.assert_called_once_with(
+            list(fetch_cameras.NEW_HAMPSHIRE_UNIVERSITY_CAMS),
+            probe_interval=2.0,
+            workers=2,
+        )
+        self.assertEqual(2, report_writer.call_args.args[1]["verified_live"])
+
+    def test_new_hampshire_university_cameras_fail_closed(self):
+        with (
+            mock.patch.object(fetch_cameras, "_http_bytes", return_value=b"no camera"),
+            mock.patch.object(fetch_cameras, "verify_current_jpeg_images") as verifier,
+        ):
+            result = fetch_cameras.run_fetcher(
+                "New Hampshire university cameras",
+                fetch_cameras.fetch_new_hampshire_university_cameras,
+            )
+
+        self.assertFalse(result.succeeded)
+        verifier.assert_not_called()
+
     def test_west_virginia_canaan_requires_every_advancing_player(self):
         aliases = [item["alias"] for item in fetch_cameras.WEST_VIRGINIA_CANAAN_CAMS]
         hls_by_alias = {
@@ -2074,6 +2177,168 @@ class FetchMergeTests(unittest.TestCase):
 
         self.assertTrue(result.succeeded)
         self.assertEqual(2, verifier.call_count)
+
+    def test_arkansas_hazcams_requires_current_inventory_and_advancing_hls(self):
+        now_ms = int(fetch_cameras.time.time() * 1000)
+        inventory = [
+            {
+                "id": provider_id,
+                "type": "hazcam",
+                "name": provider_id.replace("-ar-us-001", "").replace("-", " ").title(),
+                "timestamp": now_ms,
+                "lat": 34.5,
+                "lon": -92.5,
+                "online": True,
+                "video": True,
+                "bearing": 90,
+            }
+            for provider_id in fetch_cameras.ARKANSAS_HAZCAMS_COUNTIES
+        ]
+        payload = (
+            '<script id="__NEXT_DATA__" type="application/json">'
+            + json.dumps({"props": {"pageProps": {"stations": inventory}}})
+            + "</script>"
+        ).encode()
+        hls_urls = {
+            f"https://video.hazcams.com/{item['id']}/index.m3u8"
+            for item in inventory
+        }
+        with (
+            mock.patch.object(fetch_cameras, "_http_bytes", return_value=payload),
+            mock.patch.object(
+                fetch_cameras, "verify_live_hls", return_value=(hls_urls, {})
+            ) as verifier,
+            mock.patch.object(fetch_cameras, "atomic_write_json") as report_writer,
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Arkansas (Hazcams weather network)",
+                fetch_cameras.fetch_arkansas_hazcams,
+            )
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual(17, len(result.cameras))
+        self.assertTrue(all(row["state"] == "Arkansas" for row in result.cameras))
+        self.assertTrue(all(row["source"] == "hazcams" for row in result.cameras))
+        self.assertTrue(all(row["type"] == "embed" for row in result.cameras))
+        self.assertTrue(all(row["category"] == "weather" for row in result.cameras))
+        self.assertTrue(all(row["direction"] == "E" for row in result.cameras))
+        self.assertTrue(all("sponsor=true" in row["url"] for row in result.cameras))
+        verifier.assert_called_once()
+        self.assertEqual(hls_urls, set(verifier.call_args.args[0]))
+        self.assertEqual(8.0, verifier.call_args.kwargs["probe_interval"])
+        self.assertEqual(8, verifier.call_args.kwargs["workers"])
+        self.assertEqual("https://hazcams.com/", verifier.call_args.kwargs["referer"])
+        self.assertEqual(17, report_writer.call_args.args[1]["verified_live"])
+
+    def test_arkansas_hazcams_rejects_a_truncated_inventory(self):
+        provider_id = next(iter(fetch_cameras.ARKANSAS_HAZCAMS_COUNTIES))
+        payload = (
+            '<script id="__NEXT_DATA__" type="application/json">'
+            + json.dumps({
+                "props": {
+                    "pageProps": {
+                        "stations": [{
+                            "id": provider_id,
+                            "timestamp": int(fetch_cameras.time.time() * 1000),
+                            "lat": 34.5,
+                            "lon": -92.5,
+                            "online": True,
+                            "video": True,
+                        }]
+                    }
+                }
+            })
+            + "</script>"
+        ).encode()
+        with (
+            mock.patch.object(fetch_cameras, "_http_bytes", return_value=payload),
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+            mock.patch.object(fetch_cameras, "verify_live_hls") as verifier,
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Arkansas (Hazcams weather network)",
+                fetch_cameras.fetch_arkansas_hazcams,
+            )
+
+        self.assertFalse(result.succeeded)
+        verifier.assert_not_called()
+
+    def test_connecticut_angelcam_requires_first_party_advancing_players(self):
+        source_page = "\n".join(
+            item["alias"] for item in fetch_cameras.CONNECTICUT_ANGELCAM_CAMERAS
+        ).encode()
+        resolved = {
+            item["provider_camera_id"]: (
+                f"https://v.angelcam.com/iframe?v={item['alias']}&autoplay=1",
+                (
+                    f"https://e1-na7.angelcam.com/cameras/{item['provider_camera_id']}"
+                    "/streams/hls/playlist.m3u8?token=test"
+                ),
+            )
+            for item in fetch_cameras.CONNECTICUT_ANGELCAM_CAMERAS
+        }
+        hls_urls = {hls_url for _, hls_url in resolved.values()}
+
+        def resolve(item):
+            return resolved[item["provider_camera_id"]]
+
+        with (
+            mock.patch.object(fetch_cameras, "_http_bytes", return_value=source_page),
+            mock.patch.object(fetch_cameras, "_resolve_angelcam_hls", side_effect=resolve),
+            mock.patch.object(
+                fetch_cameras, "verify_live_hls", return_value=(hls_urls, {})
+            ) as verifier,
+            mock.patch.object(fetch_cameras, "atomic_write_json") as report_writer,
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Connecticut AngelCam verified",
+                fetch_cameras.fetch_connecticut_angelcam_verified,
+            )
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual(4, len(result.cameras))
+        self.assertTrue(all(row["state"] == "Connecticut" for row in result.cameras))
+        self.assertTrue(all(row["source"] == "angelcam" for row in result.cameras))
+        self.assertTrue(all(row["type"] == "embed" for row in result.cameras))
+        self.assertTrue(all(row["county"] == "New Haven County" for row in result.cameras))
+        verifier.assert_called_once()
+        self.assertEqual(hls_urls, set(verifier.call_args.args[0]))
+        self.assertEqual(4, report_writer.call_args.args[1]["verified_live"])
+
+    def test_angelcam_resolver_accepts_only_expected_tokenized_hls(self):
+        item = fetch_cameras.CONNECTICUT_ANGELCAM_CAMERAS[0]
+        escaped_hls = (
+            "https://e1\\u002Dna7.angelcam.com/cameras/111999/streams/hls/"
+            "playlist.m3u8?token\\u003Dtest"
+        )
+        with mock.patch.object(
+            fetch_cameras,
+            "_http_bytes",
+            return_value=f"'hls': '{escaped_hls}'".encode(),
+        ):
+            embed_url, hls_url = fetch_cameras._resolve_angelcam_hls(item)
+
+        self.assertEqual(
+            "https://v.angelcam.com/iframe?v=17ydm1ozye&autoplay=1", embed_url
+        )
+        self.assertEqual(
+            "https://e1-na7.angelcam.com/cameras/111999/streams/hls/"
+            "playlist.m3u8?token=test",
+            hls_url,
+        )
+
+    def test_connecticut_angelcam_fails_closed_on_missing_first_party_player(self):
+        with (
+            mock.patch.object(fetch_cameras, "_http_bytes", return_value=b"no player"),
+            mock.patch.object(fetch_cameras, "verify_live_hls") as verifier,
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Connecticut AngelCam verified",
+                fetch_cameras.fetch_connecticut_angelcam_verified,
+            )
+
+        self.assertFalse(result.succeeded)
+        verifier.assert_not_called()
 
     def test_minnesota_511_accepts_only_strictly_verified_public_views(self):
         hls_url = "https://video.dot.state.mn.us/public/C1.stream/playlist.m3u8"

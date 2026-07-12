@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.61.0 - 2026-07-12
+
+- Expanded Arkansas **11 -> 28** with all 17 current Hazcams weather-network stations. The fail-closed provider contract requires the complete curated inventory, current online/video metadata, provider coordinates, fresh timestamps, and advancing HLS, while StormScope stores only branded public embeds with sponsor/link-out attribution.
+- Expanded Delaware **315 -> 323** with six advancing Cape May-Lewes Ferry terminal views from the official DRBA inventory and two current Delaware DNREC Mispillion Harbor streams. Copyrighted ferry media remains behind provider-published JWPlayer embeds; sensitive wildlife locations use the operators' public facility points.
+- Expanded New Hampshire **185 -> 199** with 12 current exact-location YouTube streams and two current first-party university JPEGs spanning summit weather, ski, rail, beach, museum, campus, and wildlife views. The fresh 181-camera New England 511 inventory exactly matched the existing corpus.
+- Expanded Connecticut **352 -> 356** with four advancing AngelCam views from Connecticut Audubon, Menunkatuck Audubon, and Friends of Hammonasset. Added explicit `angelcam`, `hazcams`, and JWPlayer schema/runtime/CSP trust contracts; expiring verification HLS tokens are never persisted.
+- Re-ran the zero-camera Northern Mariana Islands gap. EarthCam Saipan still reports `cam_state=0` and a fresh HLS token returns HTTP 404; five exact YouTube query forms remain HTTP 403 rate-limited, while the successful Garapan query exhausted six continuation pages without a current fixed live camera.
+- Corpus **36,532 -> 36,575**; DOT **35,395 -> 35,401**; YouTube **577 -> 591**; University **1 -> 3**; Hazcams **0 -> 17**; AngelCam **0 -> 4**; provider embeds **482 -> 509**; deterministic shards remain **49**; service-worker cache v37.
+
 ## v0.60.0 - 2026-07-12
 
 - Expanded Kentucky from **226 to 252** state-labeled cameras. Added **23** current KYTC JPEG views from the official 250-row ArcGIS inventory and two current wildlife streams at Mill Creek and the Kentucky Equine Adoption Center. Six renamed/moved KYTC identities were replaced rather than duplicated, and Mammoth Cave's blank-state legacy embed was upgraded in place to the current Green River Bluffs NPS image. All 30 direct images and both YouTube manifests passed final probes and manual frame review.
