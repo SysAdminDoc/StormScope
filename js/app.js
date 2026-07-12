@@ -888,6 +888,15 @@
       });
       var result = await cameraStore.load({
         onProgress: function (progress) {
+          if (progress.source === 'monolith' && cameraLoadMetrics.source !== 'monolith') {
+            // Shard loading fell back to the monolith mid-stream: the store replaced
+            // its camera objects, so any markers already added reference stale objects
+            // that no longer match the search corpus. Rebuild markers from the fresh
+            // corpus so filtering never drops orphaned markers.
+            if (cameraCluster) cameraCluster.clearLayers();
+            allCameras = [];
+            cameraLoadProcessed = 0;
+          }
           var loaded = cameraStore.getCameras();
           var batch = loaded.slice(cameraLoadProcessed);
           cameraLoadProcessed = loaded.length;

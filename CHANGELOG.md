@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.43.0 - 2026-07-12
+
+### Correctness: camera markers survive a mid-load shard→monolith fallback
+- When progressive shard loading fails partway and the store falls back to the full `cameras.json` monolith, the store replaces its in-memory camera objects. Markers already added to the map still referenced the old shard objects, so they no longer matched the fresh search corpus and could disappear when a filter was applied. The loader now detects the source switch and rebuilds the marker layer from the fresh corpus, keeping the map and search results consistent. Service-worker cache bumped to v20.
+
 ## v0.42.0 - 2026-07-12
 
 ### Interaction and accessibility hardening (audit pass)

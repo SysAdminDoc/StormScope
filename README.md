@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.42.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.43.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
 [![Cameras](https://img.shields.io/badge/cameras-33%2C495-cyan)]()
