@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.66.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.67.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
 [![Cameras](https://img.shields.io/badge/cameras-36%2C592-cyan)]()
@@ -232,7 +232,7 @@ Camera data lives in `data/cameras.json`. Each entry:
 
 Supported `type` values: `hls` (M3U8 streams), `image` (JPEG with auto-refresh), `mjpeg` (motion JPEG streams), `embed` (iframe page URL), `youtube` (YouTube video ID only, not a full URL).
 
-Health/provenance fields are schema-v2 metadata. `unknown` and `null` mean the feed has not been verified by the current pipeline; they never imply success. Transient provider failures degrade existing rows instead of deleting them.
+Health/provenance fields are schema-v2 metadata. `unknown` and `null` mean the feed has not been verified by the current pipeline; they never imply success. Transient provider failures degrade existing rows instead of deleting them. Browser playback never rewrites this provider evidence: device-local playable, unavailable, unsupported, and retry outcomes are stored separately with a six-hour expiry.
 
 ## License
 

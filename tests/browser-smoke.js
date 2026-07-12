@@ -336,12 +336,59 @@ async function main() {
     const visibleResults = page.locator('.camera-result');
     assert.ok(await visibleResults.count() > 0, 'search should expose keyboard-accessible camera results');
     assert.ok(await visibleResults.count() < 30, 'search results should be virtualized');
-    await visibleResults.first().locator('.camera-result-open').click();
+    await page.locator('#camera-type').selectOption('image');
+    await page.waitForFunction(() => {
+      const results = window._stormscope.getCameraResults();
+      return results.length > 0 && results.every(camera => camera.type === 'image');
+    });
+    const observedCamera = await page.evaluate(() => {
+      const cameras = window._stormscope.getCameraResults();
+      const observedIndex = 0;
+      const camera = cameras[0];
+      return {
+        observedIndex,
+        url: camera.url,
+        type: camera.type,
+        health: camera.health,
+        lastVerified: camera.last_verified
+      };
+    });
+    assert.equal(observedCamera.type, 'image');
+    const cameraImageFixture = route => route.fulfill({
+      contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: pixel
+    });
+    const cameraImageMatch = url => url.href.startsWith(observedCamera.url);
+    await page.route(cameraImageMatch, cameraImageFixture);
+    await visibleResults.nth(observedCamera.observedIndex).locator('.camera-result-open').click();
     await page.locator('#camera-modal').waitFor({ state: 'visible' });
     assert.equal(await page.locator('#camera-modal').getAttribute('role'), 'dialog');
+    const modalImage = page.locator('#modal-feed img');
+    await modalImage.waitFor({ state: 'visible' });
+    await modalImage.dispatchEvent('load');
+    await page.waitForFunction(() => {
+      const observations = JSON.parse(localStorage.getItem('stormscope-camera-observations-v1') || '{}');
+      return Object.values(observations).some(item => item.outcome === 'playable' && item.reason === 'refresh_advanced');
+    });
+    const playbackContract = await page.evaluate(() => {
+      const camera = window._stormscope.getCameraResults().find(item => item.type === 'image');
+      const observations = JSON.parse(localStorage.getItem('stormscope-camera-observations-v1'));
+      const observation = Object.values(observations)[0];
+      return {
+        health: camera.health,
+        lastVerified: camera.last_verified,
+        observation,
+        now: Date.now()
+      };
+    });
+    assert.equal(playbackContract.health, observedCamera.health);
+    assert.equal(playbackContract.lastVerified, observedCamera.lastVerified);
+    assert.ok(playbackContract.observation.expires_at > playbackContract.now);
+    assert.ok(playbackContract.observation.expires_at <= playbackContract.now + 6 * 60 * 60 * 1000);
     await page.getByRole('button', { name: 'Close camera viewer' }).click();
     await page.locator('#camera-modal').waitFor({ state: 'hidden' });
     assert.equal(await page.locator('#modal-feed video, #modal-feed iframe, #modal-feed img').count(), 0);
+    await page.unroute(cameraImageMatch, cameraImageFixture);
+    await page.locator('#camera-type').selectOption('');
 
     const firstFavorite = visibleResults.first().locator('.favorite-result');
     await firstFavorite.click();

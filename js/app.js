@@ -6,6 +6,10 @@
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
   var IMAGE_REFRESH_INTERVAL = 15000;
+  var CAMERA_OBSERVATION_TTL = 6 * 60 * 60 * 1000;
+  var OBSERVATION_UNSUPPORTED = 'unsupported';
+  var REASON_BROWSER_HLS = 'browser_hls';
+  var REASON_UNTRUSTED_EMBED = 'untrusted_embed';
   var TRUSTED_EMBED_HOST_SUFFIXES = Object.freeze([
     'v.angelcam.com',
     'cdn.jwplayer.com',
@@ -52,7 +56,7 @@
   var activeFeedCleanup = null;
   var allCameras = [];
   var cameraIconCache = Object.create(null);
-  var cameraHealthOverrides = Object.create(null);
+  var cameraObservations = Object.create(null);
   var cameraStore = null;
   var cameraLoadMetrics = { startedAt: 0, firstBatchMs: null, completeMs: null, source: null, index: null };
   var cameraLoadProcessed = 0;
@@ -864,47 +868,49 @@
     return cameraIconCache[key];
   }
 
-  function loadCameraHealthOverrides() {
+  function loadCameraObservations() {
     try {
-      var value = JSON.parse(localStorage.getItem('stormscope-camera-health-v1') || '{}');
-      return value && typeof value === 'object' && !Array.isArray(value) ? value : Object.create(null);
+      var value = JSON.parse(localStorage.getItem('stormscope-camera-observations-v1') || '{}');
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return Object.create(null);
+      var now = Date.now();
+      Object.keys(value).forEach(function (key) {
+        if (!value[key] || !Number.isFinite(value[key].expires_at) || value[key].expires_at <= now) {
+          delete value[key];
+        }
+      });
+      return value;
     } catch (error) {
       return Object.create(null);
     }
   }
 
-  function persistCameraHealthOverrides() {
-    try { localStorage.setItem('stormscope-camera-health-v1', JSON.stringify(cameraHealthOverrides)); } catch (error) { /* optional */ }
+  function persistCameraObservations() {
+    try { localStorage.setItem('stormscope-camera-observations-v1', JSON.stringify(cameraObservations)); } catch (error) { /* optional */ }
   }
 
   function cameraHealthKey(cam) {
     return cam.type + '|' + (cam.source_url || cam.url);
   }
 
-  function recordCameraHealth(cam, health, failureClass) {
+  function recordCameraObservation(cam, outcome, reason) {
     if (!cam) return;
-    cam.health = health;
-    cam.failure_class = failureClass || null;
-    if (health === 'healthy') cam.last_verified = new Date().toISOString();
-    cameraHealthOverrides[cameraHealthKey(cam)] = {
-      health: cam.health,
-      failure_class: cam.failure_class,
-      last_verified: cam.last_verified || null
+    var observedAt = Date.now();
+    var observation = {
+      outcome: outcome,
+      reason: reason || null,
+      observed_at: new Date(observedAt).toISOString(),
+      expires_at: observedAt + CAMERA_OBSERVATION_TTL
     };
-    persistCameraHealthOverrides();
-    if (cam._marker) {
-      cam._marker.setIcon(cameraIconFor(cam));
-      var element = cam._marker.getElement();
-      if (element) element.setAttribute('aria-label', tr('camera.feedLabel', { name: cam.name, health: tr('camera.health.' + (cam.health || 'unknown')) }));
-    }
-    if (activeCamera === cam) updateModalCameraHealth(cam);
+    cameraObservations[cameraHealthKey(cam)] = observation;
+    cam.local_observation = observation;
+    persistCameraObservations();
   }
 
   async function loadCameras() {
     try {
       document.getElementById('camera-count').textContent = tr('camera.loadingCount');
       cameraDataTimestamp = null;
-      cameraHealthOverrides = loadCameraHealthOverrides();
+      cameraObservations = loadCameraObservations();
       cameraCluster = L.markerClusterGroup({
         maxClusterRadius: 50,
         spiderfyOnMaxZoom: true,
@@ -982,12 +988,7 @@
     var markers = [];
     for (var i = 0; i < batch.length; i++) {
       var cam = batch[i];
-      var override = cameraHealthOverrides[cameraHealthKey(cam)];
-      if (override) {
-        cam.health = override.health || cam.health;
-        cam.failure_class = override.failure_class || null;
-        cam.last_verified = override.last_verified || cam.last_verified;
-      }
+      cam.local_observation = cameraObservations[cameraHealthKey(cam)] || null;
       var marker = L.marker([cam.lat, cam.lon], {
         icon: cameraIconFor(cam),
         title: cam.name + ' — ' + (cam.health || 'unknown') + ' feed'
@@ -1712,9 +1713,9 @@
     }
   }
 
-  function renderFeedError(cam, container, message) {
+  function renderFeedError(cam, container, message, outcome, reason) {
     if (activeCamera !== cam) return;
-    recordCameraHealth(cam, 'degraded', 'transient');
+    recordCameraObservation(cam, outcome || 'unavailable', reason || 'playback_error');
     destroyActiveFeed(container);
 
     var error = document.createElement('div');
@@ -1731,7 +1732,7 @@
     retry.textContent = tr('camera.feedRetry');
     retry.addEventListener('click', function () {
       if (activeCamera !== cam) return;
-      recordCameraHealth(cam, 'degraded', 'manual_retry');
+      recordCameraObservation(cam, 'retrying', 'manual_retry');
       var loading = document.createElement('div');
       loading.className = 'feed-loading';
       loading.textContent = tr('camera.retrying');
@@ -1762,7 +1763,7 @@
     retry.textContent = tr('camera.reload');
     retry.addEventListener('click', function () {
       if (activeCamera !== cam) return;
-      recordCameraHealth(cam, 'degraded', 'manual_retry');
+      recordCameraObservation(cam, 'retrying', 'manual_retry');
       destroyActiveFeed(container);
       loadCameraFeed(cam, container);
     });
@@ -1816,9 +1817,6 @@
       });
       hls.loadSource(cam.url);
       hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, function () {
-        if (activeCamera === cam) recordCameraHealth(cam, 'healthy', null);
-      });
       hls.on(Hls.Events.ERROR, function (event, data) {
         if (data.fatal) {
           renderFeedError(cam, container, tr('feed.streamUnavailable'));
@@ -1826,16 +1824,17 @@
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = cam.url;
-      video.addEventListener('loadeddata', function () {
-        if (activeCamera === cam) recordCameraHealth(cam, 'healthy', null);
-      }, { once: true });
       video.addEventListener('error', function () {
         renderFeedError(cam, container, tr('feed.streamUnavailable'));
       }, { once: true });
     } else {
-      renderFeedError(cam, container, tr('feed.hlsUnsupported'));
+      renderFeedError(cam, container, tr('feed.hlsUnsupported'), OBSERVATION_UNSUPPORTED, REASON_BROWSER_HLS);
       return;
     }
+
+    video.addEventListener('loadeddata', function () {
+      if (activeCamera === cam) recordCameraObservation(cam, 'playable', 'decoded_media');
+    }, { once: true });
 
     container.replaceChildren(video);
     appendLiveIndicator(container, tr('camera.liveStream'));
@@ -1852,7 +1851,7 @@
       }
     };
     img.onload = function () {
-      if (activeCamera === cam) recordCameraHealth(cam, 'healthy', null);
+      if (activeCamera === cam) recordCameraObservation(cam, 'playable', 'mjpeg_rendered');
     };
 
     activeFeedCleanup = function () {
@@ -1918,7 +1917,7 @@
 
   function loadEmbedFeed(cam, container) {
     if (!isAllowedEmbedUrl(cam.url)) {
-      renderFeedError(cam, container, tr('feed.untrusted'));
+      renderFeedError(cam, container, tr('feed.untrusted'), OBSERVATION_UNSUPPORTED, REASON_UNTRUSTED_EMBED);
       return;
     }
 
@@ -1952,6 +1951,7 @@
   function loadImageFeed(cam, container) {
     var img = document.createElement('img');
     img.alt = cam.name;
+    var successfulLoads = 0;
 
     function setImageSrc() {
       img.src = cam.url + (cam.url.indexOf('?') >= 0 ? '&' : '?') + '_t=' + Date.now();
@@ -1964,7 +1964,14 @@
     };
 
     img.onload = function () {
-      if (activeCamera === cam) recordCameraHealth(cam, 'healthy', null);
+      successfulLoads += 1;
+      if (activeCamera === cam) {
+        recordCameraObservation(
+          cam,
+          successfulLoads >= 2 ? 'playable' : 'loaded',
+          successfulLoads >= 2 ? 'refresh_advanced' : 'initial_image'
+        );
+      }
       var loadingEl = container.querySelector('.feed-loading');
       if (loadingEl) loadingEl.remove();
     };

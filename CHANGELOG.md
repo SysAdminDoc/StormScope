@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.67.0 - 2026-07-12
+
+- Separated device-local playback observations from durable provider health. Browser CORS/offline/unsupported/retry outcomes now persist under a canonical feed key with observation time and a bounded six-hour expiry, without changing camera `health`, `failure_class`, or `last_verified`.
+- HLS is considered locally playable only after decoded media fires `loadeddata`, not when a manifest parses. Refreshing images require a second successful cache-busted load before recording a playable/advanced observation; the first load remains an initial-image observation.
+- Added a headless playback contract proving observations expire, image refresh advancement is required, and local playback cannot mutate provider health evidence. Service-worker cache bumped to v42.
+
 ## v0.66.0 - 2026-07-12
 
 - Published camera index v2 with an authoritative UTC generation time, exact health/provider/verification totals, exact on-disk shard byte hashes, and an ordered aggregate generation hash. The UI now reports indexed, verified healthy, degraded, and unverified counts instead of calling the entire corpus live, and offline freshness uses the cached generation timestamp rather than page-load time.

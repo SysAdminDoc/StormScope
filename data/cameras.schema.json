@@ -24,12 +24,16 @@
       "provider": {"type": "string", "minLength": 1},
       "status": {"enum": ["Active", "Offline", "Unknown"]},
       "last_verified": {
+        "description": "Provider-side or ingestion verification time; never overwritten by browser playback.",
         "oneOf": [
           {"type": "null"},
           {"type": "string", "format": "date-time"}
         ]
       },
-      "health": {"enum": ["unknown", "healthy", "degraded", "offline"]},
+      "health": {
+        "description": "Durable provider/ingestion health, independent of device-local playback observations.",
+        "enum": ["unknown", "healthy", "degraded", "offline"]
+      },
       "failure_class": {
         "oneOf": [
           {"type": "null"},

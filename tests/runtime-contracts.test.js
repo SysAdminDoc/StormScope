@@ -192,11 +192,13 @@ test('official context layers are optional, attributed, and cannot obscure warni
 });
 
 test('live feed checks maintain a local non-destructive health overlay', () => {
-  assert.match(app, /stormscope-camera-health-v1/);
-  assert.match(app, /function recordCameraHealth/);
-  assert.match(app, /Hls\.Events\.MANIFEST_PARSED/);
+  assert.match(app, /stormscope-camera-observations-v1/);
+  assert.match(app, /function recordCameraObservation/);
+  assert.match(app, /CAMERA_OBSERVATION_TTL/);
   assert.match(app, /loadeddata/);
+  assert.match(app, /decoded_media/);
+  assert.match(app, /refresh_advanced/);
   assert.match(app, /manual_retry/);
-  assert.match(app, /recordCameraHealth\(cam, 'degraded', 'transient'\)/);
-  assert.doesNotMatch(app, /cameraHealthOverrides\[String\(cam\.id\)\]/);
+  assert.doesNotMatch(app, /cam\.health\s*=/);
+  assert.doesNotMatch(app, /cam\.last_verified\s*=/);
 });
