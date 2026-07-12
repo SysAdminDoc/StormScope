@@ -198,6 +198,76 @@ button:focus-visible {
   height: 16px;
 }
 
+.situation-panel {
+  position: fixed;
+  top: 64px;
+  left: 12px;
+  z-index: 1001;
+  width: min(430px, calc(100% - 24px));
+  max-height: calc(100vh - 78px - env(safe-area-inset-bottom));
+  overflow: auto;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  color: var(--text);
+  backdrop-filter: blur(var(--blur));
+}
+
+.situation-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.situation-header h2 { margin: 0; font-size: 15px; }
+.situation-header p { margin: 3px 0 0; color: var(--text-dim); font-size: 11px; }
+
+#close-summary {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font-size: 20px;
+  cursor: pointer;
+}
+
+#situation-content {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.situation-section {
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-inset);
+}
+
+.situation-section h3 { margin: 0 0 5px; font-size: 13px; }
+.situation-section p { margin: 3px 0; color: var(--text-dim); font-size: 12px; }
+.situation-section ul { display: grid; gap: 6px; margin: 7px 0 0; padding: 0; list-style: none; }
+.situation-section li { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.situation-section li span { min-width: 0; font-size: 12px; }
+
+.situation-section button,
+#refresh-summary {
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-panel-hover);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+#refresh-summary { width: 100%; border-color: var(--accent); }
+
 /* --- Layers Panel --- */
 .panel {
   position: fixed;
@@ -1196,6 +1266,7 @@ button:focus-visible {
 @media (forced-colors: active) {
   .panel,
   #header,
+  .situation-panel,
   #radar-controls,
   .modal-content,
   .update-notice {
@@ -1219,6 +1290,18 @@ button:focus-visible {
   display: none !important;
 }
 
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
 /* --- Responsive --- */
 @media (max-width: 600px) {
   #header {
@@ -1230,6 +1313,13 @@ button:focus-visible {
 
   #header h1 {
     font-size: 14px;
+  }
+
+  .situation-panel {
+    top: calc(58px + env(safe-area-inset-top));
+    left: 8px;
+    width: calc(100% - 16px);
+    max-height: calc(100vh - 66px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   }
 
   #data-freshness {
@@ -1353,7 +1443,8 @@ button:focus-visible {
 
   .panel,
   .search-panel,
-  .alerts-panel {
+  .alerts-panel,
+  .situation-panel {
     top: calc(54px + env(safe-area-inset-top));
     max-height: calc(100vh - 62px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
     overscroll-behavior: contain;

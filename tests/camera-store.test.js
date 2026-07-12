@@ -190,6 +190,20 @@ test('sorting is health-first with distance or name inside each health class', (
   assert.deepEqual(cameraStore.sortCameras(cameras, { sortBy: 'name' }).map(item => item.id), [3, 2, 1]);
 });
 
+test('nearest verified cameras ignore local or unverified evidence and use deterministic distance ties', () => {
+  const cameras = [
+    camera(1, { name: 'Unknown', lat: 40, lon: -75, health: 'unknown', last_verified: null }),
+    camera(2, { name: 'Zulu', lat: 40.1, lon: -75, health: 'healthy', last_verified: '2026-07-11T00:00:00Z' }),
+    camera(3, { name: 'Alpha', lat: 40.1, lon: -75, health: 'healthy', last_verified: '2026-07-12T00:00:00Z' }),
+    camera(4, { name: 'Offline', lat: 40.01, lon: -75, health: 'offline', last_verified: '2026-07-12T00:00:00Z' })
+  ];
+  const nearest = cameraStore.nearestVerifiedCameras(cameras, { lat: 40, lon: -75 }, 3);
+  assert.deepEqual(nearest.map(result => result.camera.id), [3, 2]);
+  assert.ok(nearest[0].distanceKm > 11 && nearest[0].distanceKm < 12);
+  assert.ok(nearest[0].bearing < 1 || nearest[0].bearing > 359);
+  assert.deepEqual(cameraStore.nearestVerifiedCameras(cameras, { lat: NaN, lon: -75 }, 3), []);
+});
+
 test('virtual-window calculations clamp bounds and include overscan spacers', () => {
   const window = cameraStore.calculateVirtualWindow({
     total: 100,

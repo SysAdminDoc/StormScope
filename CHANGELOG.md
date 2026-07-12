@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.82.0 - 2026-07-12
+
+- Added a keyboard-accessible, user-triggered situation summary with localized map coordinates/zoom, radar source/coverage/age and Universal Blue light/moderate/heavy center echoes, active alert/warning counts, independently loaded wildfire perimeter counts/freshness, and the five globally nearest verified cameras.
+- The summary uses structured headings and a dedicated polite announcer, supports direct alert reading and camera opening without changing map center/zoom, restores focus on close/Escape, and remains bounded/reachable on mobile and short landscape layouts. Added true nearest-verified sorting, radar-pixel classification, runtime, unit, and rendered accessibility coverage. Service-worker cache bumped to v55.
+
 ## v0.81.0 - 2026-07-12
 
 - Added bounded incident-to-camera spatial queries for alerts and wildfire polygons, including holes, MultiPolygons, antimeridian geometry, boundary distance, relative bearing, authoritative health ranking, offline exclusion, and a 50 km/8-result ceiling with bounding-box prefiltering.

@@ -568,12 +568,30 @@
       state: state,
       label: label,
       providerId: providerId || null,
+      intensity: observation.intensity || null,
       frameAge: age,
       canRetry: canRetry,
       controlsEnabled: controlsEnabled,
       degraded: state === RADAR_STATE.STALE || state === RADAR_STATE.FAILURE ||
         !!(health && health.status === HEALTH.DEGRADED)
     };
+  }
+
+  function classifyRainViewerPixel(pixel) {
+    if (!Array.isArray(pixel) || pixel.length < 4 || Number(pixel[3]) <= 0) return 'clear';
+    var red = Math.round(Number(pixel[0]));
+    var green = Math.round(Number(pixel[1]));
+    var blue = Math.round(Number(pixel[2]));
+    if (![red, green, blue].every(Number.isFinite)) return 'unknown';
+    var hex = [red, green, blue].map(function (value) {
+      return Math.max(0, Math.min(255, value)).toString(16).padStart(2, '0');
+    }).join('');
+    var moderate = ['ffaa00', 'ff9f00', 'ff9500', 'ff8b00', 'ff8100',
+      'ff4400', 'f23600', 'e62800', 'd91b00', 'cd0d00'];
+    if (moderate.indexOf(hex) !== -1) return 'moderate';
+    if (red <= 193 && green === 0 && blue === 0 || red >= 240 && blue >= 240 ||
+        red <= 20 && green >= 240 && blue <= 20) return 'heavy';
+    return 'light';
   }
 
   return deepFreeze({
@@ -591,6 +609,7 @@
     getFrameAge: getFrameAge,
     assessProviderHealth: assessProviderHealth,
     selectProvider: selectProvider,
-    classifyRadarState: classifyRadarState
+    classifyRadarState: classifyRadarState,
+    classifyRainViewerPixel: classifyRainViewerPixel
   });
 });

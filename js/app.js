@@ -2,7 +2,7 @@
   'use strict';
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.81.0';
+  var APP_VERSION = '0.82.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -111,6 +111,12 @@
   var wildfireCount = 0;
   var wildfireStatusState = 'off';
   var wildfireAttributionAdded = false;
+  var summaryWildfireStatus = 'idle';
+  var summaryWildfireCount = 0;
+  var summaryWildfireUpdatedAt = null;
+  var summaryWildfireFetchedAt = 0;
+  var summaryWildfireBoundsKey = null;
+  var summaryWildfireAbort = null;
   var incidentCameraSections = [];
 
   function tr(key, variables) {
@@ -844,7 +850,7 @@
       var actions = document.createElement('div');
       actions.className = 'incident-camera-actions';
       actions.appendChild(incidentCameraButton(tr('incident.showOnMap'), 'incident-camera-map', function () {
-        map.setView([camera.lat, camera.lon], Math.max(12, map.getZoom()));
+        map.setView([camera.lat, camera.lon], Math.max(12, map.getZoom()), { animate: false });
       }));
       actions.appendChild(incidentCameraButton(tr('incident.openCamera'), 'incident-camera-open', function () {
         openCameraModal(camera);
@@ -884,6 +890,37 @@
     wildfireRefreshTimer = setTimeout(refreshWildfires, StormScopeContextLayers.providers.wildfires.refreshMs);
   }
 
+  function currentWildfireBounds() {
+    var bounds = map.getBounds();
+    return { west: bounds.getWest(), south: bounds.getSouth(), east: bounds.getEast(), north: bounds.getNorth() };
+  }
+
+  function wildfireBoundsKey(bounds) {
+    return [bounds.west, bounds.south, bounds.east, bounds.north].map(function (value) {
+      return Number(value).toFixed(2);
+    }).join(',');
+  }
+
+  async function fetchWildfireSnapshot(bounds, signal) {
+    var provider = StormScopeContextLayers.providers.wildfires;
+    var urls = StormScopeContextLayers.buildWildfireQueries(bounds);
+    var metadataResponse = await fetch(provider.layerUrl + '?f=pjson', { cache: 'no-store', signal: signal });
+    if (!metadataResponse.ok) throw new Error('HTTP ' + metadataResponse.status);
+    var metadata = StormScopeContextLayers.parseWildfireMetadata(await metadataResponse.json());
+    var paged = await StormScopeContextLayers.fetchWildfirePages({
+      urls: urls,
+      pageSize: metadata.maxRecordCount,
+      signal: signal,
+      fetchPage: function (url, pageSignal) {
+        return fetch(url, { cache: 'no-store', signal: pageSignal }).then(function (response) {
+          if (!response.ok) throw new Error('HTTP ' + response.status);
+          return response.json();
+        });
+      }
+    });
+    return { collection: paged.collection, metadata: metadata };
+  }
+
   async function refreshWildfires() {
     if (!document.getElementById('toggle-wildfires').checked || document.hidden) return;
     if (wildfireAbort) wildfireAbort.abort();
@@ -894,26 +931,10 @@
     renderWildfireStatus();
     try {
       var provider = StormScopeContextLayers.providers.wildfires;
-      var bounds = map.getBounds();
-      var urls = StormScopeContextLayers.buildWildfireQueries({
-        west: bounds.getWest(), south: bounds.getSouth(), east: bounds.getEast(), north: bounds.getNorth()
-      });
-      var metadataResponse = await fetch(provider.layerUrl + '?f=pjson', { cache: 'no-store', signal: signal });
-      if (!metadataResponse.ok) throw new Error('HTTP ' + metadataResponse.status);
-      var metadata = StormScopeContextLayers.parseWildfireMetadata(await metadataResponse.json());
-      var paged = await StormScopeContextLayers.fetchWildfirePages({
-        urls: urls,
-        pageSize: metadata.maxRecordCount,
-        signal: signal,
-        fetchPage: function (url, pageSignal) {
-          return fetch(url, { cache: 'no-store', signal: pageSignal }).then(function (response) {
-            if (!response.ok) throw new Error('HTTP ' + response.status);
-            return response.json();
-          });
-        }
-      });
+      var bounds = currentWildfireBounds();
+      var snapshot = await fetchWildfireSnapshot(bounds, signal);
       if (generation !== wildfireGeneration) return;
-      var collection = paged.collection;
+      var collection = snapshot.collection;
       var nextLayer = L.geoJSON(collection, {
         pane: 'contextVectorPane',
         style: { color: '#ff6b35', weight: 2, opacity: 0.9, fillColor: '#ff6b35', fillOpacity: 0.09 },
@@ -927,9 +948,14 @@
         map.attributionControl.addAttribution('<a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>');
         wildfireAttributionAdded = true;
       }
-      wildfireUpdatedAt = metadata.updatedAt;
+      wildfireUpdatedAt = snapshot.metadata.updatedAt;
       wildfireCount = collection.features.length;
       wildfireStatusState = 'ready';
+      summaryWildfireStatus = 'ready';
+      summaryWildfireCount = wildfireCount;
+      summaryWildfireUpdatedAt = wildfireUpdatedAt;
+      summaryWildfireFetchedAt = Date.now();
+      summaryWildfireBoundsKey = wildfireBoundsKey(bounds);
       renderWildfireStatus();
     } catch (error) {
       if (error.name === 'AbortError') return;
@@ -1023,13 +1049,15 @@
     if (token !== radarSampleToken || frame !== radarFrames[radarIndex]) return;
     var coveragePixel = pixels[0];
     var radarPixel = pixels[1];
+    var intensity = StormScopeRadarProviders.classifyRainViewerPixel(radarPixel);
     var covered = coveragePixel
       ? !(coveragePixel[3] > 0 && coveragePixel[0] < 16 && coveragePixel[1] < 16 && coveragePixel[2] < 16)
       : null;
     radarSemanticState = StormScopeRadarProviders.classifyRadarState({
       frame: frame,
       coverage: covered,
-      hasPrecipitation: radarPixel ? radarPixel[3] > 0 : null
+      hasPrecipitation: radarPixel ? intensity !== 'clear' : null,
+      intensity: radarPixel ? intensity : null
     });
     updateRadarTimeDisplay();
   }
@@ -1289,7 +1317,7 @@
   }
 
   function selectCameraResult(camera) {
-    map.setView([camera.lat, camera.lon], Math.max(14, map.getZoom()));
+    map.setView([camera.lat, camera.lon], Math.max(14, map.getZoom()), { animate: false });
     openCameraModal(camera);
   }
 
@@ -2854,7 +2882,7 @@
     return true;
   }
 
-  function showAlertDetail(alert, focus, trigger) {
+  function showAlertDetail(alert, focus, trigger, fitMap) {
     var detail = document.getElementById('alert-detail');
     alertDetailReturnFocus = trigger || null;
     detail.replaceChildren();
@@ -2899,10 +2927,189 @@
     appendNearbyCameraSection(detail, alert.geometry, tr('incident.camerasNearAlert'));
     detail.classList.remove('hidden');
     if (focus) detail.focus();
-    if (focus && alertLayersById[alert.id]) {
+    if (focus && fitMap !== false && alertLayersById[alert.id]) {
       var bounds = alertLayersById[alert.id].getBounds();
-      if (bounds.isValid()) map.fitBounds(bounds, { padding: [30, 30], maxZoom: 9 });
+      if (bounds.isValid()) map.fitBounds(bounds, { padding: [30, 30], maxZoom: 9, animate: false });
     }
+  }
+
+  function appendSituationSection(container, headingText, bodyText) {
+    var section = document.createElement('section');
+    section.className = 'situation-section';
+    var heading = document.createElement('h3');
+    heading.textContent = headingText;
+    var body = document.createElement('p');
+    body.textContent = bodyText;
+    section.appendChild(heading);
+    section.appendChild(body);
+    container.appendChild(section);
+    return section;
+  }
+
+  function situationCoordinate(value, positiveKey, negativeKey) {
+    return tr('summary.coordinate', {
+      value: StormScopeI18n.formatNumber(Math.abs(value), {
+        minimumFractionDigits: 2, maximumFractionDigits: 2
+      }, appLocale),
+      direction: tr(value >= 0 ? positiveKey : negativeKey)
+    });
+  }
+
+  function situationRadarText() {
+    if (!radarFrames.length || !radarSemanticState) return tr('summary.radarPending');
+    var frame = radarFrames[radarIndex];
+    var age = StormScopeRadarProviders.getFrameAge(frame, radarProviderId);
+    var provider = StormScopeRadarProviders.providers[radarProviderId];
+    var stateKey = {
+      clear: 'summary.radarClear',
+      precipitation: 'summary.radarPrecipitation',
+      'no-coverage': 'summary.radarNoCoverage',
+      stale: 'summary.radarStale',
+      failure: 'summary.radarFailure',
+      available: 'summary.radarAvailable'
+    }[radarSemanticState.state] || 'summary.radarAvailable';
+    return tr(stateKey, {
+      age: StormScopeI18n.formatAge(age.ageMinutes, appLocale),
+      source: provider ? provider.label : tr('weather.unknown'),
+      intensity: tr('radar.intensity.' + (radarSemanticState.intensity || 'unknown'))
+    });
+  }
+
+  function openAlertsFromSummary() {
+    closeOpenPanel('situation-panel', 'btn-summary');
+    document.getElementById('search-panel').classList.add('hidden');
+    document.getElementById('btn-search').setAttribute('aria-expanded', 'false');
+    document.getElementById('layers-panel').classList.add('hidden');
+    document.getElementById('btn-layers').setAttribute('aria-expanded', 'false');
+    var panel = document.getElementById('alerts-panel');
+    panel.classList.remove('hidden');
+    var first = panel.querySelector('.alert-list-button');
+    if (first) first.focus();
+  }
+
+  function readAlertFromSummary(alert) {
+    document.getElementById('situation-panel').classList.add('hidden');
+    document.getElementById('btn-summary').setAttribute('aria-expanded', 'false');
+    document.getElementById('alerts-panel').classList.remove('hidden');
+    showAlertDetail(alert, true, document.getElementById('btn-summary'), false);
+  }
+
+  async function refreshSituationWildfires() {
+    var bounds = currentWildfireBounds();
+    var boundsKey = wildfireBoundsKey(bounds);
+    var provider = StormScopeContextLayers.providers.wildfires;
+    if (summaryWildfireStatus === 'loading' && summaryWildfireBoundsKey === boundsKey) return;
+    if (summaryWildfireStatus === 'ready' && summaryWildfireBoundsKey === boundsKey &&
+        Date.now() - summaryWildfireFetchedAt < provider.refreshMs) return;
+    if (summaryWildfireAbort) summaryWildfireAbort.abort();
+    summaryWildfireAbort = new AbortController();
+    var signal = summaryWildfireAbort.signal;
+    summaryWildfireStatus = 'loading';
+    summaryWildfireBoundsKey = boundsKey;
+    try {
+      var snapshot = await fetchWildfireSnapshot(bounds, signal);
+      summaryWildfireStatus = 'ready';
+      summaryWildfireCount = snapshot.collection.features.length;
+      summaryWildfireUpdatedAt = snapshot.metadata.updatedAt;
+      summaryWildfireFetchedAt = Date.now();
+    } catch (error) {
+      if (error.name === 'AbortError') return;
+      summaryWildfireStatus = 'error';
+    } finally {
+      if (summaryWildfireAbort && summaryWildfireAbort.signal === signal) summaryWildfireAbort = null;
+      if (!document.getElementById('situation-panel').classList.contains('hidden')) renderSituationSummary(false);
+    }
+  }
+
+  function renderSituationSummary(announce) {
+    var content = document.getElementById('situation-content');
+    content.replaceChildren();
+    var center = map.getCenter();
+    appendSituationSection(content, tr('summary.mapHeading'), tr('summary.mapPosition', {
+      lat: situationCoordinate(center.lat, 'summary.north', 'summary.south'),
+      lon: situationCoordinate(center.lng, 'summary.east', 'summary.west'),
+      zoom: localNumber(map.getZoom())
+    }));
+    appendSituationSection(content, tr('summary.radarHeading'), situationRadarText());
+
+    var wildfireText = summaryWildfireStatus === 'ready' ? tr('summary.wildfireCount', {
+      count: localNumber(summaryWildfireCount),
+      age: StormScopeI18n.formatAge((Date.now() - summaryWildfireUpdatedAt) / 60000, appLocale)
+    }) : summaryWildfireStatus === 'error' ? tr('summary.wildfiresUnavailable') : tr('summary.wildfiresLoading');
+    var warningCount = activeAlerts.filter(function (alert) { return alert.kind === 'warning'; }).length;
+    var hazards = appendSituationSection(content, tr('summary.hazardsHeading'), tr('summary.hazardCounts', {
+      alerts: localNumber(activeAlerts.length), warnings: localNumber(warningCount), wildfires: wildfireText
+    }));
+    if (activeAlerts.length) {
+      hazards.appendChild(incidentCameraButton(tr('summary.reviewAlerts'), 'summary-review-alerts', openAlertsFromSummary));
+      var alertList = document.createElement('ul');
+      activeAlerts.slice(0, 3).forEach(function (alert) {
+        var item = document.createElement('li');
+        var label = document.createElement('span');
+        label.textContent = tr('summary.alertLine', {
+          event: alert.event || tr('alerts.weatherAlert'),
+          severity: tr('severity.' + String(alert.severity || 'unknown').toLowerCase())
+        });
+        item.appendChild(label);
+        item.appendChild(incidentCameraButton(tr('summary.readAlert'), 'summary-read-alert', function () {
+          readAlertFromSummary(alert);
+        }));
+        alertList.appendChild(item);
+      });
+      hazards.appendChild(alertList);
+    }
+
+    var cameras = appendSituationSection(content, tr('summary.camerasHeading'), '');
+    var cameraStatus = cameras.querySelector('p');
+    if (cameraLoadMetrics.completeMs == null) {
+      cameraStatus.textContent = tr('summary.camerasLoading');
+    } else {
+      var nearby = StormScopeCameraStore.nearestVerifiedCameras(allCameras, {
+        lat: center.lat, lon: center.lng
+      }, 5);
+      if (!nearby.length) {
+        cameraStatus.textContent = tr('summary.noVerifiedCameras');
+      } else {
+        cameraStatus.textContent = tr(nearby.length === 1 ? 'summary.cameraCountOne' : 'summary.cameraCountMany', {
+          count: localNumber(nearby.length)
+        });
+        var list = document.createElement('ul');
+        nearby.forEach(function (result) {
+          var item = document.createElement('li');
+          var label = document.createElement('span');
+          label.textContent = tr('summary.cameraLine', {
+            name: result.camera.name,
+            distance: StormScopeWeather.distanceFromKm(result.distanceKm, weatherUnits),
+            bearing: localizedWindDirection(result.bearing)
+          });
+          item.appendChild(label);
+          item.appendChild(incidentCameraButton(tr('incident.openCamera'), 'summary-open-camera', function () {
+            openCameraModal(result.camera);
+          }));
+          list.appendChild(item);
+        });
+        cameras.appendChild(list);
+      }
+    }
+    document.getElementById('situation-updated').textContent = tr('summary.updated', { time: localTime(Date.now()) });
+    if (announce) document.getElementById('situation-announcer').textContent = tr('summary.announced');
+    if (summaryWildfireStatus !== 'loading' && summaryWildfireStatus !== 'error') refreshSituationWildfires();
+  }
+
+  function toggleSituationSummary() {
+    var panel = document.getElementById('situation-panel');
+    var opening = panel.classList.contains('hidden');
+    panel.classList.toggle('hidden', !opening);
+    document.getElementById('btn-summary').setAttribute('aria-expanded', String(opening));
+    if (!opening) return;
+    if (summaryWildfireStatus === 'error') summaryWildfireStatus = 'idle';
+    document.getElementById('search-panel').classList.add('hidden');
+    document.getElementById('btn-search').setAttribute('aria-expanded', 'false');
+    document.getElementById('layers-panel').classList.add('hidden');
+    document.getElementById('btn-layers').setAttribute('aria-expanded', 'false');
+    document.getElementById('alerts-panel').classList.add('hidden');
+    renderSituationSummary(true);
+    document.getElementById('situation-heading').focus({ preventScroll: true });
   }
 
   // ── UI Bindings ──
@@ -2920,7 +3127,17 @@
   }
 
   function bindUI() {
+    document.getElementById('btn-summary').addEventListener('click', toggleSituationSummary);
+    document.getElementById('close-summary').addEventListener('click', function () {
+      closeOpenPanel('situation-panel', 'btn-summary');
+    });
+    document.getElementById('refresh-summary').addEventListener('click', function () {
+      if (summaryWildfireStatus === 'error') summaryWildfireStatus = 'idle';
+      renderSituationSummary(true);
+    });
     document.getElementById('btn-search').addEventListener('click', function () {
+      document.getElementById('situation-panel').classList.add('hidden');
+      document.getElementById('btn-summary').setAttribute('aria-expanded', 'false');
       var panel = document.getElementById('search-panel');
       var isHidden = panel.classList.toggle('hidden');
       this.setAttribute('aria-expanded', String(!isHidden));
@@ -2934,6 +3151,8 @@
     });
 
     document.getElementById('btn-layers').addEventListener('click', function () {
+      document.getElementById('situation-panel').classList.add('hidden');
+      document.getElementById('btn-summary').setAttribute('aria-expanded', 'false');
       var panel = document.getElementById('layers-panel');
       var isHidden = panel.classList.toggle('hidden');
       this.setAttribute('aria-expanded', String(!isHidden));
@@ -3161,12 +3380,15 @@
       if (e.key !== 'Escape') return;
       if (activeCamera) { closeCameraModal(); return; }
       if (!document.getElementById('monitor-modal').classList.contains('hidden')) { closeMonitor(true); return; }
+      if (closeOpenPanel('situation-panel', 'btn-summary')) return;
       if (hideAlertDetail()) return;
       if (closeOpenPanel('search-panel', 'btn-search')) return;
       closeOpenPanel('layers-panel', 'btn-layers');
     });
 
     map.on('click', function () {
+      document.getElementById('situation-panel').classList.add('hidden');
+      document.getElementById('btn-summary').setAttribute('aria-expanded', 'false');
       document.getElementById('layers-panel').classList.add('hidden');
       document.getElementById('btn-layers').setAttribute('aria-expanded', 'false');
       document.getElementById('search-panel').classList.add('hidden');
@@ -3368,6 +3590,7 @@
       if (alertAbort) alertAbort.abort();
       if (lightningAbort) lightningAbort.abort();
       if (wildfireAbort) wildfireAbort.abort();
+      if (summaryWildfireAbort) summaryWildfireAbort.abort();
       if (cameraStore) cameraStore.cancel();
       if (monitorRegistry) monitorRegistry.destroyAll();
       clearTimeout(saveLastViewTimer);

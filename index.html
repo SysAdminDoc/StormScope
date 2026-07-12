@@ -36,6 +36,9 @@
       <button id="btn-search" class="header-btn" title="Find cameras" aria-label="Find cameras" aria-expanded="false" aria-controls="search-panel">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
       </button>
+      <button id="btn-summary" class="header-btn" title="Situation summary" aria-label="Open situation summary" aria-expanded="false" aria-controls="situation-panel">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5h14M5 12h14M5 19h9"/></svg>
+      </button>
       <button id="btn-layers" class="header-btn" title="Layers" aria-label="Toggle layers panel" aria-expanded="false" aria-controls="layers-panel">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <polygon points="12 2 2 7 12 12 22 7 12 2"/>
@@ -45,6 +48,19 @@
       </button>
     </div>
   </header>
+
+  <aside id="situation-panel" class="situation-panel hidden" aria-labelledby="situation-heading">
+    <div class="situation-header">
+      <div>
+        <h2 id="situation-heading" tabindex="-1">Situation summary</h2>
+        <p id="situation-updated"></p>
+      </div>
+      <button id="close-summary" type="button" aria-label="Close situation summary">×</button>
+    </div>
+    <div id="situation-content"></div>
+    <p id="situation-announcer" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></p>
+    <button id="refresh-summary" type="button">Refresh summary</button>
+  </aside>
 
   <div id="update-notice" class="update-notice hidden" role="status" aria-live="polite">
     <span>A StormScope update is ready.</span>

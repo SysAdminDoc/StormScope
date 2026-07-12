@@ -170,6 +170,16 @@ test('incident camera proximity loads before the app and remains available offli
   assert.match(app, /StormScopeSpatialQuery\.monitorCandidates/);
 });
 
+test('accessible situation summary is user-triggered and exposes non-map navigation', () => {
+  assert.match(html, /id="btn-summary"[^>]*aria-controls="situation-panel"/);
+  assert.match(html, /id="situation-panel"[^>]*aria-labelledby="situation-heading"/);
+  assert.match(html, /id="situation-heading"[^>]*tabindex="-1"/);
+  assert.match(html, /id="situation-announcer"[^>]*aria-live="polite"/);
+  assert.match(app, /function renderSituationSummary/);
+  assert.match(app, /StormScopeCameraStore\.nearestVerifiedCameras/);
+  assert.match(app, /showAlertDetail\(alert, true, document\.getElementById\('btn-summary'\), false\)/);
+});
+
 test('fatal recovery keeps shell cache and exports redacted diagnostics', () => {
   assert.match(app, /StormScopeDiagnostics\.create/);
   assert.match(app, /diagnostics\.install\(window/);

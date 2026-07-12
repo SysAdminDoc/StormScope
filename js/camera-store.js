@@ -72,6 +72,32 @@
     return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
+  function bearingDegrees(origin, camera) {
+    var radians = Math.PI / 180;
+    var lat1 = Number(origin.lat) * radians;
+    var lat2 = Number(camera.lat) * radians;
+    var deltaLon = (Number(camera.lon) - Number(origin.lon)) * radians;
+    var y = Math.sin(deltaLon) * Math.cos(lat2);
+    var x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLon);
+    return (Math.atan2(y, x) / radians + 360) % 360;
+  }
+
+  function nearestVerifiedCameras(cameras, origin, limit) {
+    if (!origin || !Number.isFinite(Number(origin.lat)) || !Number.isFinite(Number(origin.lon))) return [];
+    var maximum = Math.max(1, Math.min(20, Number(limit) || 3));
+    return (cameras || []).filter(function (camera) {
+      return camera && camera.health === 'healthy' && !Number.isNaN(Date.parse(camera.last_verified)) &&
+        Number.isFinite(Number(camera.lat)) && Number.isFinite(Number(camera.lon));
+    }).map(function (camera) {
+      return { camera: camera, distanceKm: distanceKm(origin, camera), bearing: bearingDegrees(origin, camera) };
+    }).sort(function (left, right) {
+      return left.distanceKm - right.distanceKm ||
+        Date.parse(right.camera.last_verified) - Date.parse(left.camera.last_verified) ||
+        String(left.camera.name || '').localeCompare(String(right.camera.name || ''), undefined, { sensitivity: 'base' }) ||
+        Number(left.camera.id || 0) - Number(right.camera.id || 0);
+    }).slice(0, maximum);
+  }
+
   function sortCameras(cameras, options) {
     options = options || {};
     var sortBy = options.sortBy || 'name';
@@ -365,6 +391,7 @@
     HEALTH_RANK: HEALTH_RANK,
     calculateVirtualWindow: calculateVirtualWindow,
     distanceKm: distanceKm,
+    nearestVerifiedCameras: nearestVerifiedCameras,
     filterCameras: filterCameras,
     searchCameras: searchCameras,
     sortCameras: sortCameras,

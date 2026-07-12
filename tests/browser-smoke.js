@@ -33,6 +33,13 @@ async function assertControlsReachable(page, containerSelector, selectors) {
 }
 
 async function exerciseLandscapeLayout(page, theme) {
+  const summaryToggle = page.getByRole('button', { name: /Open situation summary|Abrir resumen de situación/ });
+  await summaryToggle.click();
+  await page.locator('#situation-panel').waitFor({ state: 'visible' });
+  await assertSurfaceWithinViewport(page, '#situation-panel', `${theme} situation summary`);
+  await assertControlsReachable(page, '#situation-panel', ['#close-summary', '#refresh-summary']);
+  await page.locator('#close-summary').click();
+
   const layersToggle = page.getByRole('button', { name: 'Toggle layers panel' });
   if (await layersToggle.getAttribute('aria-expanded') !== 'true') await layersToggle.click();
   await page.locator('#app-theme').selectOption(theme);
@@ -360,6 +367,42 @@ async function main() {
     assert.equal(await page.locator('html').evaluate((element) => element.scrollWidth > element.clientWidth), false);
     assert.equal(await page.locator('#radar-retry').isHidden(), true);
     assert.match(await page.locator('#radar-time').textContent(), /old|ago|just now/i);
+    await page.locator('#btn-summary').focus();
+    await page.keyboard.press('Enter');
+    await page.locator('#situation-panel').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#btn-summary').getAttribute('aria-expanded'), 'true');
+    assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.id), 'situation-heading');
+    await page.locator('#situation-content').filter({ hasText: '2 current perimeters' }).waitFor({ state: 'visible' });
+    const summaryText = await page.locator('#situation-content').textContent();
+    assert.match(summaryText, /Map position.*zoom 5/s);
+    assert.match(summaryText, /Radar at map center.*coverage|Radar at map center.*no coverage/s);
+    assert.match(summaryText, /1 active alerts, including 1 warnings/);
+    assert.match(summaryText, /Nearest verified cameras.*5 nearest verified cameras/s);
+    const summaryMapState = await page.evaluate(() => {
+      const map = window._stormscope.getMap();
+      return { center: map.getCenter(), zoom: map.getZoom() };
+    });
+    await page.locator('.summary-read-alert').first().click();
+    await page.locator('#alert-detail').waitFor({ state: 'visible' });
+    assert.deepEqual(await page.evaluate(() => {
+      const map = window._stormscope.getMap();
+      return { center: map.getCenter(), zoom: map.getZoom() };
+    }), summaryMapState, 'reading an alert from the summary must not manipulate the map');
+    await page.getByRole('button', { name: 'Hide alert details' }).click();
+    assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.id), 'btn-summary');
+    await page.locator('#btn-summary').click();
+    await page.locator('.summary-open-camera').first().click();
+    await page.locator('#camera-modal').waitFor({ state: 'visible' });
+    assert.deepEqual(await page.evaluate(() => {
+      const map = window._stormscope.getMap();
+      return { center: map.getCenter(), zoom: map.getZoom() };
+    }), summaryMapState, 'opening a camera from the summary must not manipulate the map');
+    await page.getByRole('button', { name: 'Close camera viewer' }).click();
+    await page.locator('#refresh-summary').click();
+    assert.equal(await page.locator('#situation-announcer').textContent(), 'Situation summary updated.');
+    await page.keyboard.press('Escape');
+    await page.locator('#situation-panel').waitFor({ state: 'hidden' });
+    assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.id), 'btn-summary');
     const scrubber = page.locator('#radar-scrubber');
     assert.ok(Number(await scrubber.getAttribute('max')) > 0, 'radar timeline should expose multiple frames');
     assert.deepEqual(await page.evaluate(() => window._stormscope.getContextState()), {
@@ -858,6 +901,9 @@ async function main() {
     await mobile.getByRole('button', { name: 'Toggle layers panel' }).click();
     assert.equal(await mobile.getByRole('button', { name: 'Toggle layers panel' }).getAttribute('aria-expanded'), 'true');
     await mobile.getByRole('region', { name: 'Map layers' }).waitFor({ state: 'visible' });
+    await mobile.getByRole('button', { name: 'Open situation summary' }).click();
+    await mobile.locator('#situation-panel').waitFor({ state: 'visible' });
+    await assertSurfaceWithinViewport(mobile, '#situation-panel', 'mobile situation summary');
 
     for (const viewport of [{ width: 844, height: 390 }, { width: 667, height: 375 }]) {
       const landscape = await context.newPage();

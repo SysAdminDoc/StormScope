@@ -184,6 +184,15 @@ test('classifies clear, no-coverage, stale, and failure as distinct accessible s
   assert.equal(failure.controlsEnabled, false);
 });
 
+test('Universal Blue pixels classify transparent, light, moderate, and heavy echoes', () => {
+  assert.equal(radar.classifyRainViewerPixel([0, 0, 0, 0]), 'clear');
+  assert.equal(radar.classifyRainViewerPixel([0x00, 0xa3, 0xe0, 255]), 'light');
+  assert.equal(radar.classifyRainViewerPixel([0xff, 0x95, 0x00, 255]), 'moderate');
+  assert.equal(radar.classifyRainViewerPixel([0xc1, 0x00, 0x00, 255]), 'heavy');
+  assert.equal(radar.classifyRainViewerPixel([0xff, 0x77, 0xff, 255]), 'heavy');
+  assert.equal(radar.classifyRainViewerPixel([NaN, 0, 0, 255]), 'unknown');
+});
+
 test('returns no-coverage separately from all-provider failure when no candidate can run', () => {
   const unavailable = { status: 'unavailable', reason: 'request-failed' };
   const health = { rainviewer: unavailable, 'noaa-mrms': unavailable };
