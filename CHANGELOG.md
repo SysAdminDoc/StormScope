@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.58.0 - 2026-07-12
+
+- Expanded New Jersey from **14 to 144** accurately located cameras. Added **129** New Jersey Turnpike Authority Turnpike/Parkway HLS views from the first-party embedded inventory with official coordinates and FCC-cross-checked counties. All 129 advanced across repeated manifest/segment probes; **132** active frames were manually reviewed, with three mispointed views rejected and five repeatable HLS 404s retained as confirmed dead.
+- Expanded Montana from **39 to 49** with all nine current Glacier National Park JPEG views plus the University of Montana/Cornell Hellgate Osprey nest stream. Every NPS image advanced across its one-minute provider cadence, carried a fresh provider timestamp, and passed manual review; the wildlife stream passed public/embed/current-live metadata and advancing-HLS checks at its intentionally public viewing point.
+- Expanded Vermont from **93 to 96** with Rikert Outdoor Center and two Sugarbush Allyn's Lodge cameras, and Rhode Island from **139 to 143** with all four official URI Kingston/Narragansett campus players. The five new YouTube streams and four URI players passed an immediate batch recheck for active manifests, advancing segments, public embedding, exact operator locations, and canonical identities.
+- Added fail-closed NJTA, Glacier NPS, and URI provider contracts plus curated location overrides. A partial provider response cannot replace the accepted set. Deferred an active Angelcam because the schema has no truthful source value; retained MDT authentication/stable-URL work, a black Montana FWP placeholder, unresolved Glacier mount points, YouTube continuation timeouts/403s, and other transient sources as retryable.
+- Corpus **36,320 -> 36,467**; New Jersey **14 -> 144**; Rhode Island **139 -> 143**; Vermont **93 -> 96**; Montana **39 -> 49**; DOT **35,242 -> 35,371**; NPS **186 -> 195**; IPCamLive **15 -> 19**; YouTube **558 -> 563**; deterministic shards remain **49**; service-worker cache v34.
+
 ## v0.57.0 - 2026-07-12
 
 - Added the first accepted American Samoa camera: Clipper Oil's fixed Pago Pago Harbor view. The first-party page identifies the southern-harbor office/warehouse location, and the independently mapped point was cross-checked against Fagatogo, Maoputasi County, the operator description, and the visible harbor geometry.

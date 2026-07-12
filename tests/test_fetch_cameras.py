@@ -1079,6 +1079,253 @@ class FetchMergeTests(unittest.TestCase):
             report["rejected"][0]["failure_class"],
         )
 
+    def test_njta_accepts_only_curated_advancing_inventory(self):
+        good_url = "https://wink.njta.test/1/public/hls/good_nj.m3u8"
+        dead_url = "https://wink.njta.test/1/public/hls/dead_nj.m3u8"
+        config = {
+            "initialData": {
+                "cameras": {
+                    "turnpike": [{
+                        "id": 1,
+                        "lat": 40.1,
+                        "lng": -74.1,
+                        "mile_marker": 12.5,
+                        "relative_direction": "north",
+                        "relative_text": "Interchange 3",
+                        "video_url": good_url,
+                    }],
+                    "parkway": [{
+                        "id": 2,
+                        "lat": 40.2,
+                        "lng": -74.2,
+                        "mile_marker": 20,
+                        "relative_direction": "south",
+                        "relative_text": "Interchange 4",
+                        "video_url": dead_url,
+                    }],
+                }
+            }
+        }
+        page = (
+            '<div data-block-config="'
+            + json.dumps(config).replace('"', "&quot;")
+            + '"></div>'
+        ).encode()
+        with (
+            mock.patch.object(fetch_cameras, "_http_bytes", return_value=page),
+            mock.patch.object(
+                fetch_cameras, "verify_live_hls", return_value=({good_url}, {})
+            ) as verifier,
+            mock.patch.object(fetch_cameras, "NJTA_EXPECTED_INVENTORY", 2),
+            mock.patch.object(fetch_cameras, "NJTA_REJECTED_IDS", {"2"}),
+            mock.patch.object(
+                fetch_cameras, "NJTA_COUNTIES", {"1": "Mercer County"}
+            ),
+            mock.patch.object(fetch_cameras, "atomic_write_json") as report_writer,
+        ):
+            result = fetch_cameras.run_fetcher(
+                "New Jersey Turnpike Authority", fetch_cameras.fetch_njta
+            )
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual(1, len(result.cameras))
+        row = result.cameras[0]
+        self.assertEqual("New Jersey", row["state"])
+        self.assertEqual("Mercer County", row["county"])
+        self.assertEqual("N", row["direction"])
+        self.assertEqual("hls", row["type"])
+        self.assertEqual("dot", row["source"])
+        self.assertEqual("njta:1", row["provider_camera_id"])
+        self.assertEqual("traffic", row["category"])
+        self.assertIn("MM 12.5 NORTH Interchange 3", row["name"])
+        verifier.assert_called_once_with(
+            [good_url],
+            probe_interval=6.0,
+            workers=12,
+            referer=fetch_cameras.NJTA_SOURCE_URL,
+        )
+        report = report_writer.call_args.args[1]
+        self.assertEqual(2, report["inventory"])
+        self.assertEqual(1, report["verified_live"])
+
+    def test_njta_partial_hls_snapshot_fails_closed(self):
+        url = "https://wink.njta.test/1/public/hls/camera_nj.m3u8"
+        config = {
+            "initialData": {
+                "cameras": {
+                    "turnpike": [{
+                        "id": 1,
+                        "lat": 40.1,
+                        "lng": -74.1,
+                        "mile_marker": 1,
+                        "relative_direction": "north",
+                        "relative_text": "Test",
+                        "video_url": url,
+                    }],
+                    "parkway": [],
+                }
+            }
+        }
+        page = (
+            '<div data-block-config="'
+            + json.dumps(config).replace('"', "&quot;")
+            + '"></div>'
+        ).encode()
+        with (
+            mock.patch.object(fetch_cameras, "_http_bytes", return_value=page),
+            mock.patch.object(
+                fetch_cameras,
+                "verify_live_hls",
+                return_value=(set(), {url: "transient_network:timeout"}),
+            ),
+            mock.patch.object(fetch_cameras, "NJTA_EXPECTED_INVENTORY", 1),
+            mock.patch.object(fetch_cameras, "NJTA_REJECTED_IDS", set()),
+            mock.patch.object(
+                fetch_cameras, "NJTA_COUNTIES", {"1": "Mercer County"}
+            ),
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "New Jersey Turnpike Authority", fetch_cameras.fetch_njta
+            )
+
+        self.assertFalse(result.succeeded)
+        self.assertEqual([], result.cameras)
+        self.assertIn("truncated_verified_inventory", result.error)
+
+    def test_montana_nps_requires_every_curated_advancing_image(self):
+        ids = {
+            item["provider_camera_id"] for item in fetch_cameras.MONTANA_NPS_FEEDS
+        }
+        snapshots = {
+            camera_id: ("hash", 120000, "2026-07-12T13:21:13+00:00")
+            for camera_id in ids
+        }
+        with (
+            mock.patch.object(
+                fetch_cameras,
+                "verify_current_jpeg_images",
+                return_value=(ids, {}, snapshots),
+            ) as verifier,
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Montana NPS verified", fetch_cameras.fetch_montana_nps_verified
+            )
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual(9, len(result.cameras))
+        self.assertTrue(all(row["state"] == "Montana" for row in result.cameras))
+        self.assertTrue(all(row["source"] == "nps" for row in result.cameras))
+        candidates = verifier.call_args.args[0]
+        self.assertTrue(all(item["require_content_change"] for item in candidates))
+        self.assertTrue(all(item["cache_bust"] for item in candidates))
+        self.assertEqual(65.0, verifier.call_args.kwargs["probe_interval"])
+
+    def test_montana_nps_partial_snapshot_fails_closed(self):
+        ids = [
+            item["provider_camera_id"] for item in fetch_cameras.MONTANA_NPS_FEEDS
+        ]
+        verified = set(ids[:-1])
+        snapshots = {
+            camera_id: ("hash", 120000, "2026-07-12T13:21:13+00:00")
+            for camera_id in verified
+        }
+        with (
+            mock.patch.object(
+                fetch_cameras,
+                "verify_current_jpeg_images",
+                return_value=(
+                    verified,
+                    {ids[-1]: "transient_network:timeout"},
+                    snapshots,
+                ),
+            ),
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Montana NPS verified", fetch_cameras.fetch_montana_nps_verified
+            )
+
+        self.assertFalse(result.succeeded)
+        self.assertEqual([], result.cameras)
+        self.assertIn("truncated_verified_inventory", result.error)
+
+    def test_uri_quadcams_require_all_first_party_advancing_players(self):
+        aliases = [item["alias"] for item in fetch_cameras.RHODE_ISLAND_URI_QUADCAMS]
+        hls_by_alias = {
+            alias: f"https://streams.test/{alias}/stream.m3u8" for alias in aliases
+        }
+
+        def resolve(_source_page, alias):
+            return (
+                f"https://g1.ipcamlive.com/player/player.php?alias={alias}",
+                hls_by_alias[alias],
+            )
+
+        with (
+            mock.patch.object(
+                fetch_cameras, "_resolve_ipcamlive_player", side_effect=resolve
+            ),
+            mock.patch.object(
+                fetch_cameras,
+                "verify_live_hls",
+                return_value=(set(hls_by_alias.values()), {}),
+            ) as verifier,
+            mock.patch.object(fetch_cameras, "atomic_write_json") as report_writer,
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Rhode Island URI Quadcams",
+                fetch_cameras.fetch_rhode_island_uri_quadcams,
+            )
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual(4, len(result.cameras))
+        self.assertTrue(all(row["state"] == "Rhode Island" for row in result.cameras))
+        self.assertTrue(all(row["county"] == "Washington County" for row in result.cameras))
+        self.assertTrue(all(row["source"] == "ipcamlive" for row in result.cameras))
+        self.assertTrue(all(row["type"] == "embed" for row in result.cameras))
+        verifier.assert_called_once_with(
+            list(hls_by_alias.values()),
+            probe_interval=6.0,
+            workers=4,
+            referer="https://www.uri.edu/about/quadcams/",
+        )
+        self.assertEqual(4, report_writer.call_args.args[1]["verified_live"])
+
+    def test_uri_quadcams_partial_hls_snapshot_fails_closed(self):
+        aliases = [item["alias"] for item in fetch_cameras.RHODE_ISLAND_URI_QUADCAMS]
+        hls_by_alias = {
+            alias: f"https://streams.test/{alias}/stream.m3u8" for alias in aliases
+        }
+
+        def resolve(_source_page, alias):
+            return (
+                f"https://g1.ipcamlive.com/player/player.php?alias={alias}",
+                hls_by_alias[alias],
+            )
+
+        verified = set(hls_by_alias.values()) - {hls_by_alias[aliases[-1]]}
+        with (
+            mock.patch.object(
+                fetch_cameras, "_resolve_ipcamlive_player", side_effect=resolve
+            ),
+            mock.patch.object(
+                fetch_cameras,
+                "verify_live_hls",
+                return_value=(verified, {hls_by_alias[aliases[-1]]: "transient_network"}),
+            ),
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Rhode Island URI Quadcams",
+                fetch_cameras.fetch_rhode_island_uri_quadcams,
+            )
+
+        self.assertFalse(result.succeeded)
+        self.assertEqual([], result.cameras)
+        self.assertIn("truncated_verified_inventory", result.error)
+
     def test_smithsonian_accepts_only_advancing_first_party_zoo_hls(self):
         urls = [
             "https://nzp-wowza02.si.edu/live_edge_nmr/nmr_1080_all.smil/playlist.m3u8",

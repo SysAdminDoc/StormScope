@@ -711,7 +711,7 @@ def fetch_txdot():
 def fetch_nps():
     try:
         url = 'https://developer.nps.gov/api/v1/webcams?api_key=DEMO_KEY&limit=500'
-        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.57.0'})
+        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.58.0'})
         count = 0
         for cam in data.get('data', []):
             if str(cam.get('status') or '').lower() == 'inactive':
@@ -841,7 +841,7 @@ def _current_jpeg_snapshot(
     request = urllib.request.Request(
         url,
         headers={
-            'User-Agent': 'StormScope/0.57.0',
+            'User-Agent': 'StormScope/0.58.0',
             'Accept': 'image/jpeg,image/*,*/*',
             'Cache-Control': 'no-cache',
         },
@@ -1071,26 +1071,266 @@ def fetch_nebraska():
         return 0
 
 
-# ── New Jersey DOT ──
-def fetch_njdot():
-    try:
-        url = 'https://511nj.org/map/mapIcons/Cameras'
-        data = fetch_json(url)
-        items = data.get('item2', []) if isinstance(data, dict) else data
-        count = 0
-        for item in items:
-            loc = item.get('location', [0, 0])
-            if not isinstance(loc, list) or len(loc) < 2:
-                continue
-            item_id = item.get('itemId', '')
-            name = item.get('title', '') or f'NJ Camera {item_id}'
-            img_url = f'https://511nj.org/map/Cctv/{item_id}'
-            add_camera(name, loc[0], loc[1], img_url, 'image', 'New Jersey', '', '', 'dot')
-            count += 1
-        return count
-    except Exception as e:
-        print(f'  NJ DOT: {e}')
-        return 0
+# ── New Jersey Turnpike Authority — public inventory + advancing HLS ──
+NJTA_SOURCE_URL = 'https://www.njta.gov/travel-resources/camera-list/'
+NJTA_EXPECTED_INVENTORY = 137
+NJTA_REJECTED_IDS = {
+    '56', '57', '127', '974', '993', '997', '1006', '1023',
+}
+NJTA_COUNTIES = {
+    '1': 'Burlington County',
+    '2': 'Burlington County',
+    '5': 'Burlington County',
+    '9': 'Middlesex County',
+    '28': 'Union County',
+    '29': 'Essex County',
+    '30': 'Bergen County',
+    '31': 'Bergen County',
+    '32': 'Middlesex County',
+    '34': 'Burlington County',
+    '35': 'Hudson County',
+    '36': 'Essex County',
+    '37': 'Essex County',
+    '38': 'Hudson County',
+    '39': 'Hudson County',
+    '40': 'Burlington County',
+    '41': 'Essex County',
+    '43': 'Essex County',
+    '44': 'Burlington County',
+    '45': 'Burlington County',
+    '47': 'Hudson County',
+    '48': 'Hudson County',
+    '49': 'Hudson County',
+    '50': 'Hudson County',
+    '51': 'Bergen County',
+    '53': 'Hudson County',
+    '54': 'Bergen County',
+    '55': 'Bergen County',
+    '60': 'Hudson County',
+    '61': 'Hudson County',
+    '63': 'Essex County',
+    '64': 'Hudson County',
+    '65': 'Hudson County',
+    '69': 'Cape May County',
+    '72': 'Atlantic County',
+    '73': 'Burlington County',
+    '74': 'Ocean County',
+    '75': 'Ocean County',
+    '76': 'Ocean County',
+    '77': 'Monmouth County',
+    '78': 'Ocean County',
+    '79': 'Ocean County',
+    '80': 'Monmouth County',
+    '81': 'Monmouth County',
+    '85': 'Monmouth County',
+    '96': 'Middlesex County',
+    '97': 'Middlesex County',
+    '98': 'Middlesex County',
+    '101': 'Middlesex County',
+    '104': 'Essex County',
+    '105': 'Essex County',
+    '106': 'Essex County',
+    '107': 'Passaic County',
+    '113': 'Union County',
+    '123': 'Essex County',
+    '125': 'Essex County',
+    '126': 'Bergen County',
+    '128': 'Bergen County',
+    '129': 'Bergen County',
+    '130': 'Bergen County',
+    '859': 'Essex County',
+    '963': 'Burlington County',
+    '964': 'Burlington County',
+    '965': 'Mercer County',
+    '966': 'Mercer County',
+    '967': 'Burlington County',
+    '968': 'Salem County',
+    '969': 'Gloucester County',
+    '970': 'Salem County',
+    '971': 'Mercer County',
+    '972': 'Middlesex County',
+    '973': 'Salem County',
+    '975': 'Middlesex County',
+    '976': 'Middlesex County',
+    '977': 'Union County',
+    '978': 'Middlesex County',
+    '979': 'Middlesex County',
+    '980': 'Union County',
+    '981': 'Union County',
+    '982': 'Middlesex County',
+    '983': 'Middlesex County',
+    '984': 'Union County',
+    '985': 'Middlesex County',
+    '986': 'Union County',
+    '987': 'Hudson County',
+    '988': 'Bergen County',
+    '989': 'Essex County',
+    '990': 'Hudson County',
+    '991': 'Atlantic County',
+    '992': 'Cape May County',
+    '994': 'Cape May County',
+    '995': 'Atlantic County',
+    '996': 'Monmouth County',
+    '998': 'Monmouth County',
+    '999': 'Monmouth County',
+    '1000': 'Monmouth County',
+    '1001': 'Monmouth County',
+    '1002': 'Monmouth County',
+    '1003': 'Monmouth County',
+    '1004': 'Monmouth County',
+    '1005': 'Monmouth County',
+    '1007': 'Middlesex County',
+    '1008': 'Middlesex County',
+    '1009': 'Middlesex County',
+    '1010': 'Middlesex County',
+    '1012': 'Bergen County',
+    '1013': 'Middlesex County',
+    '1014': 'Union County',
+    '1015': 'Union County',
+    '1016': 'Union County',
+    '1017': 'Union County',
+    '1018': 'Essex County',
+    '1019': 'Essex County',
+    '1020': 'Essex County',
+    '1021': 'Essex County',
+    '1022': 'Essex County',
+    '1024': 'Essex County',
+    '1025': 'Essex County',
+    '1026': 'Essex County',
+    '1048': 'Hudson County',
+    '1052': 'Bergen County',
+    '1053': 'Bergen County',
+    '1054': 'Bergen County',
+    '1055': 'Bergen County',
+    '1056': 'Bergen County',
+    '1057': 'Bergen County',
+    '1058': 'Cape May County',
+    '1059': 'Atlantic County',
+    '1060': 'Ocean County',
+}
+
+
+def _njta_camera_name(item, roadway):
+    parts = [roadway]
+    mile_marker = item.get('mile_marker')
+    if mile_marker is not None:
+        parts.append(f'MM {float(mile_marker):g}')
+    relative_direction = str(item.get('relative_direction', '') or '').strip().upper()
+    if relative_direction:
+        parts.append(relative_direction)
+    relative_text = str(item.get('relative_text', '') or '').strip()
+    if relative_text:
+        parts.append(relative_text)
+    return ' '.join(parts)
+
+
+def fetch_njta():
+    page = _http_bytes(
+        NJTA_SOURCE_URL,
+        headers={'Accept': 'text/html,application/xhtml+xml'},
+    ).decode('utf-8', 'replace')
+    match = re.search(r'data-block-config=(["\'])(.*?)\1', page, flags=re.DOTALL)
+    if not match:
+        raise IncompleteProviderError('NJTA data-block-config unavailable')
+    config = json.loads(html.unescape(match.group(2)))
+    grouped = config.get('initialData', {}).get('cameras', {})
+    inventory = []
+    for key, roadway in (
+        ('turnpike', 'New Jersey Turnpike'),
+        ('parkway', 'Garden State Parkway'),
+    ):
+        for raw in grouped.get(key, []):
+            inventory.append({**raw, '_roadway': roadway, '_group': key})
+    if len(inventory) != NJTA_EXPECTED_INVENTORY:
+        raise IncompleteProviderError(
+            f'truncated_inventory:{len(inventory)}!={NJTA_EXPECTED_INVENTORY}'
+        )
+
+    inventory_ids = [str(item.get('id', '')) for item in inventory]
+    inventory_urls = [str(item.get('video_url', '')) for item in inventory]
+    if len(set(inventory_ids)) != len(inventory_ids):
+        raise IncompleteProviderError('duplicate_provider_camera_id')
+    if len(set(inventory_urls)) != len(inventory_urls):
+        raise IncompleteProviderError('duplicate_provider_camera_url')
+    accepted_ids = set(inventory_ids) - NJTA_REJECTED_IDS
+    if accepted_ids != set(NJTA_COUNTIES):
+        missing = sorted(accepted_ids - set(NJTA_COUNTIES))
+        stale = sorted(set(NJTA_COUNTIES) - accepted_ids)
+        raise IncompleteProviderError(
+            f'location_inventory_changed:missing={missing}:stale={stale}'
+        )
+
+    candidates = [
+        item for item in inventory if str(item['id']) not in NJTA_REJECTED_IDS
+    ]
+    verified, errors = verify_live_hls(
+        [item['video_url'] for item in candidates],
+        probe_interval=6.0,
+        workers=12,
+        referer=NJTA_SOURCE_URL,
+    )
+    rejected = [
+        {
+            'provider_camera_id': f'njta:{camera_id}',
+            'failure_class': (
+                'placeholder:manually_rejected_mispointed'
+                if camera_id in {'127', '993', '1006'}
+                else 'confirmed_dead:repeatable_hls_404'
+            ),
+        }
+        for camera_id in sorted(NJTA_REJECTED_IDS, key=int)
+    ]
+    for item in candidates:
+        url = item['video_url']
+        camera_id = str(item['id'])
+        if url not in verified:
+            rejected.append({
+                'provider_camera_id': f'njta:{camera_id}',
+                'failure_class': errors.get(
+                    url, 'transient_network:verification_incomplete'
+                ),
+            })
+            continue
+        raw_direction = str(item.get('relative_direction', '') or '').upper()
+        direction = 'N' if raw_direction.startswith('N') else (
+            'S' if raw_direction.startswith('S') else ''
+        )
+        add_camera(
+            _njta_camera_name(item, item['_roadway']),
+            item['lat'], item['lng'], url, 'hls', 'New Jersey',
+            NJTA_COUNTIES[camera_id], direction, 'dot', NJTA_SOURCE_URL, 10,
+        )
+        cameras[-1]['provider_camera_id'] = f'njta:{camera_id}'
+        cameras[-1]['category'] = 'traffic'
+
+    count = len(verified)
+    atomic_write_json(
+        DATA_DIR / 'new_jersey_njta_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'New Jersey Turnpike Authority',
+            'source_url': NJTA_SOURCE_URL,
+            'disclaimer_url': 'https://www.njta.gov/disclaimer/',
+            'attribution': 'New Jersey Turnpike Authority',
+            'license_or_usage_terms': (
+                'NJTA publishes these streams for public traveler information. '
+                'StormScope links the original streams with attribution and does '
+                'not proxy or archive them.'
+            ),
+            'inventory': len(inventory),
+            'verified_live': count,
+            'manual_reviewed': len(candidates),
+            'rejected': rejected,
+            'refresh_cadence_seconds': 10,
+        },
+        indent=2,
+    )
+    if count != len(candidates):
+        raise IncompleteProviderError(
+            f'truncated_verified_inventory:{count}<{len(candidates)}'
+        )
+    print(f'  NJTA HLS verification: {count}/{len(candidates)} advancing')
+    return count
 
 
 # ── South Carolina DOT ──
@@ -3862,6 +4102,294 @@ def fetch_american_samoa_clipper():
     return 1
 
 
+MONTANA_NPS_FEEDS = (
+    {
+        'provider_camera_id': '81B4691B-1DD8-B71B-0BB9DBEE21A59335',
+        'name': 'Apgar Mountain',
+        'lat': 48.51827,
+        'lon': -114.0206,
+        'url': 'https://www.nps.gov/webcams-glac/ApgarLookout-01.jpg',
+        'county': 'Flathead County',
+        'direction': 'NE',
+        'category': 'scenic',
+    },
+    {
+        'provider_camera_id': '81B4692D-1DD8-B71B-0B9AE4B7C186B022',
+        'name': 'Apgar Village',
+        'lat': 48.527745,
+        'lon': -113.9931745,
+        'url': 'https://www.nps.gov/webcams-glac/ApgarVillage.jpg',
+        'county': 'Flathead County',
+        'direction': '',
+        'category': 'scenic',
+    },
+    {
+        'provider_camera_id': 'D428B88A-BC1A-A5BF-88E3D63CF89D3452',
+        'name': 'Lake McDonald - 2',
+        'lat': 48.527745,
+        'lon': -113.9931745,
+        'url': 'https://www.nps.gov/webcams-glac/lakemcdonaldptz.jpg',
+        'county': 'Flathead County',
+        'direction': '',
+        'category': 'scenic',
+    },
+    {
+        'provider_camera_id': '7290EA71-A74E-A7B4-74805070A3996FAC',
+        'name': 'Apgar Visitor Center Plaza',
+        'lat': 48.523099,
+        'lon': -113.988412,
+        'url': 'https://www.nps.gov/webcams-glac/ApgarVisitorCenter.jpg',
+        'county': 'Flathead County',
+        'direction': '',
+        'category': 'public_land',
+    },
+    {
+        'provider_camera_id': '81B46955-1DD8-B71B-0B698C4D88410C05',
+        'name': 'Middle Fork of the Flathead River',
+        'lat': 48.4995083,
+        'lon': -113.9759333,
+        'url': 'https://www.nps.gov/webcams-glac/MiddleForkBridge.jpg',
+        'county': 'Flathead County',
+        'direction': '',
+        'category': 'river',
+    },
+    {
+        'provider_camera_id': '81B46943-1DD8-B71B-0B46D68861599592',
+        'name': 'Glacier National Park Headquarters',
+        'lat': 48.5021135,
+        'lon': -113.9883873,
+        'url': 'https://www.nps.gov/webcams-glac/Headquarters.jpg',
+        'county': 'Flathead County',
+        'direction': '',
+        'category': 'public_land',
+    },
+    {
+        'provider_camera_id': '33478DF3-1DD8-B71B-0B8C97DB0A03B0F7',
+        'name': 'Glacier National Park West Entrance',
+        'lat': 48.5064094,
+        'lon': -113.987652,
+        'url': 'https://www.nps.gov/webcams-glac/WestEntrance.jpg',
+        'county': 'Flathead County',
+        'direction': '',
+        'category': 'traffic',
+    },
+    {
+        'provider_camera_id': 'AE7C9B53-910E-6D3A-D6133266826C6977',
+        'name': 'St. Mary Visitor Center',
+        'lat': 48.7473324,
+        'lon': -113.4390195,
+        'url': 'https://www.nps.gov/webcams-glac/StMaryPTZ.jpg',
+        'county': 'Glacier County',
+        'direction': '',
+        'category': 'public_land',
+    },
+    {
+        'provider_camera_id': '29CE45EA-EF1D-13A4-9C8E92F1FBFED9C7',
+        'name': 'Two Medicine',
+        'lat': 48.4863116,
+        'lon': -113.3674028,
+        'url': 'https://www.nps.gov/webcams-glac/TwoMedicine.jpg',
+        'county': 'Glacier County',
+        'direction': '',
+        'category': 'scenic',
+    },
+)
+
+
+def fetch_montana_nps_verified():
+    candidates = [
+        {
+            **item,
+            'source_url': (
+                'https://www.nps.gov/media/webcam/view.htm?'
+                f'id={item["provider_camera_id"]}'
+            ),
+            'max_age_seconds': 300,
+            'require_content_change': True,
+            'cache_bust': True,
+        }
+        for item in MONTANA_NPS_FEEDS
+    ]
+    verified, errors, snapshots = verify_current_jpeg_images(
+        candidates, probe_interval=65.0, workers=6
+    )
+    rejected = []
+    for camera in candidates:
+        camera_id = camera['provider_camera_id']
+        if camera_id not in verified:
+            rejected.append({
+                'provider_camera_id': camera_id,
+                'name': camera['name'],
+                'failure_class': errors.get(camera_id, 'transient_network:incomplete'),
+            })
+            continue
+        add_camera(
+            camera['name'], camera['lat'], camera['lon'], camera['url'], 'image',
+            'Montana', camera['county'], camera['direction'], 'nps',
+            camera['source_url'], 60,
+        )
+        cameras[-1]['provider_camera_id'] = camera_id
+        cameras[-1]['provider_timestamp'] = snapshots[camera_id][2]
+        cameras[-1]['category'] = camera['category']
+
+    count = len(verified)
+    atomic_write_json(
+        DATA_DIR / 'montana_nps_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'National Park Service - Glacier National Park',
+            'source_url': 'https://www.nps.gov/glac/learn/photosmultimedia/webcams.htm',
+            'attribution': 'National Park Service',
+            'license_or_usage_terms': (
+                'NPS-created website material is generally public domain; '
+                'StormScope links the original current images.'
+            ),
+            'usage_terms_url': 'https://www.nps.gov/aboutus/disclaimer.htm',
+            'refresh_cadence_seconds': 60,
+            'candidates': len(candidates),
+            'verified_live': count,
+            'rejected': rejected,
+        },
+        indent=2,
+    )
+    if count != len(candidates):
+        raise IncompleteProviderError(
+            f'truncated_verified_inventory:{count}<{len(candidates)}'
+        )
+    print(f'  Montana NPS image verification: {count}/{len(candidates)} advancing')
+    return count
+
+
+RHODE_ISLAND_URI_QUADCAMS = (
+    {
+        'alias': 'davis',
+        'name': 'URI Kingston Campus Quadrangle Cam',
+        'lat': 41.486511,
+        'lon': -71.5282976,
+        'direction': '',
+        'category': 'campus',
+        'location_evidence': 'Davis Hall, 10 Lippitt Road, Kingston campus',
+    },
+    {
+        'alias': 'baycampus',
+        'name': 'URI Narragansett Bay Campus Cam',
+        'lat': 41.4907502,
+        'lon': -71.4224636,
+        'direction': '',
+        'category': 'harbor',
+        'location_evidence': 'URI Narragansett Bay Campus, 215 South Ferry Road',
+    },
+    {
+        'alias': 'cacs',
+        'name': 'URI Ocean Robotics Laboratory Construction - Facing North',
+        'lat': 41.4905483,
+        'lon': -71.423211,
+        'direction': 'N',
+        'category': 'campus',
+        'location_evidence': 'Center for Atmospheric Chemistry Studies, Bay Campus',
+    },
+    {
+        'alias': 'osec',
+        'name': 'URI Ocean Robotics Laboratory Construction - Facing South',
+        'lat': 41.4919504,
+        'lon': -71.4231717,
+        'direction': 'S',
+        'category': 'campus',
+        'location_evidence': 'Ocean Science and Exploration Center, Bay Campus',
+    },
+)
+
+
+def fetch_rhode_island_uri_quadcams():
+    source_page = 'https://www.uri.edu/about/quadcams/'
+    resolved = {}
+    rejected = []
+    for item in RHODE_ISLAND_URI_QUADCAMS:
+        try:
+            resolved[item['alias']] = _resolve_ipcamlive_player(
+                source_page, item['alias']
+            )
+        except ValueError as exc:
+            rejected.append({
+                'provider_camera_id': item['alias'],
+                'failure_class': f'unsupported_embed:{exc}',
+            })
+    if len(resolved) != len(RHODE_ISLAND_URI_QUADCAMS):
+        atomic_write_json(
+            DATA_DIR / 'rhode_island_uri_discovery_report.json',
+            {
+                'generated_at': utc_now_iso(),
+                'provider': 'University of Rhode Island / IPCamLive',
+                'source_url': source_page,
+                'verified_live': 0,
+                'rejected': rejected,
+            },
+            indent=2,
+        )
+        raise IncompleteProviderError(
+            f'truncated_player_inventory:{len(resolved)}<{len(RHODE_ISLAND_URI_QUADCAMS)}'
+        )
+
+    hls_by_alias = {alias: value[1] for alias, value in resolved.items()}
+    verified_hls, hls_errors = verify_live_hls(
+        list(hls_by_alias.values()), probe_interval=6.0, workers=4, referer=source_page
+    )
+    for item in RHODE_ISLAND_URI_QUADCAMS:
+        alias = item['alias']
+        hls_url = hls_by_alias[alias]
+        if hls_url not in verified_hls:
+            rejected.append({
+                'provider_camera_id': alias,
+                'failure_class': hls_errors.get(
+                    hls_url, 'transient_network:verification_incomplete'
+                ),
+            })
+            continue
+        player_url = resolved[alias][0]
+        add_camera(
+            item['name'], item['lat'], item['lon'], player_url, 'embed',
+            'Rhode Island', 'Washington County', item['direction'], 'ipcamlive',
+            source_page, 10,
+        )
+        cameras[-1]['provider_camera_id'] = alias
+        cameras[-1]['category'] = item['category']
+
+    count = len(verified_hls)
+    atomic_write_json(
+        DATA_DIR / 'rhode_island_uri_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'University of Rhode Island / IPCamLive',
+            'source_url': source_page,
+            'geographic_scope': 'Kingston and Narragansett Bay campuses, Rhode Island',
+            'location_evidence': [
+                {
+                    'provider_camera_id': item['alias'],
+                    'evidence': item['location_evidence'],
+                    'lat': item['lat'],
+                    'lon': item['lon'],
+                }
+                for item in RHODE_ISLAND_URI_QUADCAMS
+            ],
+            'attribution': 'University of Rhode Island; IPCamLive',
+            'license_or_usage_terms': (
+                'URI deliberately publishes each domain-unlocked IPCamLive player. '
+                'StormScope stores the original player URL and does not proxy media.'
+            ),
+            'verified_live': count,
+            'rejected': rejected,
+            'refresh_cadence_seconds': 10,
+        },
+        indent=2,
+    )
+    if count != len(RHODE_ISLAND_URI_QUADCAMS):
+        raise IncompleteProviderError(
+            f'truncated_verified_inventory:{count}<{len(RHODE_ISLAND_URI_QUADCAMS)}'
+        )
+    print(f'  URI Quadcam HLS verification: {count}/{len(RHODE_ISLAND_URI_QUADCAMS)} advancing')
+    return count
+
+
 def fetch_smithsonian_national_zoo():
     source_root = 'https://nationalzoo.si.edu/webcams'
     candidates = [
@@ -4543,6 +5071,7 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
         ('Wisconsin (WI511)', lambda: fetch_511_mapicons('https://511wi.gov', 'Wisconsin')),
         ('Utah DOT', fetch_utah),
         ('Nevada (NV511)', lambda: fetch_511_mapicons('https://nvroads.com', 'Nevada')),
+        ('New Jersey Turnpike Authority', fetch_njta),
         ('New England 511 (ME/NH/VT)', fetch_newengland511),
         ('Connecticut (CT511)', lambda: fetch_511_mapicons('https://www.ctroads.org', 'Connecticut')),
         ('Idaho (ID511)', lambda: fetch_511_mapicons('https://511.idaho.gov', 'Idaho')),
@@ -4554,6 +5083,7 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
         ('Massachusetts NPS verified', fetch_massachusetts_nps_verified),
         ('Massachusetts MWRA', fetch_massachusetts_mwra),
         ('Montana (Iteris)', lambda: fetch_iteris_geojson('MT', 'Montana')),
+        ('Montana NPS verified', fetch_montana_nps_verified),
         ('South Dakota (Iteris)', lambda: fetch_iteris_geojson('SD', 'South Dakota')),
         ('Missouri DOT', fetch_missouri),
         ('Delaware (live HLS)', fetch_delaware_live),
@@ -4572,6 +5102,7 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
         ('Puerto Rico (ACT/ITS)', fetch_pr_act),
         ('Guam (GNTF/IPCamLive)', fetch_guam_gntf),
         ('American Samoa (Clipper Oil/IPCamLive)', fetch_american_samoa_clipper),
+        ('Rhode Island URI Quadcams', fetch_rhode_island_uri_quadcams),
         ('Smithsonian National Zoo', fetch_smithsonian_national_zoo),
         ('Arkansas (Cobblestone/RTSP.me)', fetch_arkansas_cobblestone),
         ('Florida (ArcGIS)', fetch_fl_arcgis),

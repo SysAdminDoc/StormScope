@@ -42,6 +42,9 @@ data/minnesota_511_discovery_report*.json
 data/minnesota_usgs_discovery_report*.json
 data/hawaii_usgs_discovery_report*.json
 data/american_samoa_clipper_discovery_report*.json
+data/montana_nps_discovery_report*.json
+data/new_jersey_njta_discovery_report*.json
+data/rhode_island_uri_discovery_report*.json
 ROADMAP.md
 Roadmap_Blocked.md
 RESEARCH.md

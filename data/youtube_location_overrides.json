@@ -2370,5 +2370,50 @@
     "county": "Hawaii County",
     "source_url": "https://www.cfht.hawaii.edu/",
     "refresh_cadence_seconds": 300
+  },
+  "7yYAwq5b6cc": {
+    "name": "Barnegat Light Osprey Cam",
+    "lat": 39.753715,
+    "lon": -74.108819,
+    "state": "New Jersey",
+    "county": "Ocean County",
+    "source_url": "https://conservewildlifenj.org/wildlife-cams/ospreycam/",
+    "refresh_cadence_seconds": 300
+  },
+  "-qvYCbvbeN8": {
+    "name": "Hellgate Ospreys Nest Cam",
+    "lat": 46.86427,
+    "lon": -113.97558,
+    "state": "Montana",
+    "county": "Missoula County",
+    "source_url": "https://www.umt.edu/osprey/nest-cam/",
+    "refresh_cadence_seconds": 30
+  },
+  "8BqjxaC2fzg": {
+    "name": "Rikert Outdoor Center Nordic Cam",
+    "lat": 43.954787,
+    "lon": -72.991087,
+    "state": "Vermont",
+    "county": "Addison County",
+    "source_url": "https://rikertoutdoor.com/webcams/",
+    "refresh_cadence_seconds": 300
+  },
+  "DWDl1riEgr0": {
+    "name": "Sugarbush Allyn's Lodge Gadd Peak Scenic Cam",
+    "lat": 44.12834,
+    "lon": -72.9158,
+    "state": "Vermont",
+    "county": "Washington County",
+    "source_url": "https://www.sugarbush.com/mountain/webcams",
+    "refresh_cadence_seconds": 300
+  },
+  "E_dnBJd6OZQ": {
+    "name": "Sugarbush Allyn's Lodge Snow Stake Cam",
+    "lat": 44.12834,
+    "lon": -72.9158,
+    "state": "Vermont",
+    "county": "Washington County",
+    "source_url": "https://www.sugarbush.com/mountain/webcams",
+    "refresh_cadence_seconds": 300
   }
 }
