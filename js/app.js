@@ -2,6 +2,7 @@
   'use strict';
 
   var MAP_CENTER = [39.5, -98.5];
+  var APP_VERSION = '0.73.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -72,6 +73,7 @@
   var savedStore = null;
   var saveLastViewTimer = null;
   var cameraDataTimestamp = null;
+  var diagnostics = StormScopeDiagnostics.create();
   var radarWasPlaying = false;
   var feedPausedForVisibility = false;
   var reloadForUpdate = false;
@@ -2913,6 +2915,66 @@
     });
   }
 
+  function showFatalRecovery() {
+    var banner = document.getElementById('fatal-recovery');
+    document.getElementById('fatal-recovery-message').textContent = tr('diagnostics.fatal');
+    banner.classList.remove('hidden');
+  }
+
+  async function cacheDiagnosticSummary() {
+    var names = typeof caches === 'undefined' ? [] : await caches.keys();
+    var counts = await Promise.all(names.filter(function (name) {
+      return name.indexOf('stormscope-') === 0;
+    }).map(function (name) {
+      return caches.open(name).then(function (cache) { return cache.keys(); }).then(function (keys) {
+        return { category: name.replace(/-v\d+$/, ''), entries: keys.length };
+      });
+    }));
+    var estimate = navigator.storage && navigator.storage.estimate
+      ? await navigator.storage.estimate().catch(function () { return {}; })
+      : {};
+    return { caches: counts, usage: estimate.usage || null, quota: estimate.quota || null };
+  }
+
+  async function exportDiagnostics() {
+    var report = diagnostics.report({
+      appVersion: APP_VERSION,
+      corpusGeneration: cameraLoadMetrics.index && cameraLoadMetrics.index.generated_at,
+      providers: {
+        radar: radarProviderId,
+        radarStatus: radarProviderSelection && radarProviderSelection.degradationReason || 'ready',
+        alerts: { status: activeAlerts.length ? 'ready' : 'none', count: activeAlerts.length },
+        lightning: lightningStatusState,
+        wildfires: wildfireStatusState
+      },
+      cache: await cacheDiagnosticSummary()
+    });
+    var blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+    var href = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = href;
+    link.download = 'stormscope-diagnostics.json';
+    link.click();
+    setTimeout(function () { URL.revokeObjectURL(href); }, 0);
+  }
+
+  function initDiagnostics() {
+    diagnostics.install(window, showFatalRecovery);
+    document.getElementById('fatal-reload').addEventListener('click', function () { location.reload(); });
+    document.getElementById('fatal-clear-cache').addEventListener('click', async function () {
+      if (typeof caches !== 'undefined') {
+        var names = await caches.keys();
+        await Promise.all(names.filter(function (name) {
+          return name.indexOf('stormscope-data-') === 0 || name.indexOf('stormscope-tiles-') === 0;
+        }).map(function (name) { return caches.delete(name); }));
+      }
+      location.reload();
+    });
+    document.getElementById('export-diagnostics').addEventListener('click', function () {
+      exportDiagnostics().catch(function (error) { diagnostics.capture(error, 'diagnostics-export'); });
+    });
+  }
+
   function initWeatherUnits() {
     var saved = null;
     try { saved = localStorage.getItem('stormscope-weather-units'); } catch (error) { /* optional */ }
@@ -2949,19 +3011,25 @@
 
   // ── Boot ──
 
-  initLocale();
-  initTheme();
-  initMap();
-  initWeatherUnits();
-  initRadarPreferences();
-  initSavedState();
-  bindUI();
-  updateMonitorSelectionUi();
-  initRadar();
-  loadCameras();
-  fetchNwsAlerts();
-  registerServiceWorker();
-  initLifecycle();
+  initDiagnostics();
+  try {
+    initLocale();
+    initTheme();
+    initMap();
+    initWeatherUnits();
+    initRadarPreferences();
+    initSavedState();
+    bindUI();
+    updateMonitorSelectionUi();
+    initRadar();
+    loadCameras();
+    fetchNwsAlerts();
+    registerServiceWorker();
+    initLifecycle();
+  } catch (bootError) {
+    diagnostics.capture(bootError, 'boot');
+    showFatalRecovery();
+  }
 
   window._stormscope = {
     getMap: function () { return map; },

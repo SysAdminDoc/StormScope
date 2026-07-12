@@ -597,6 +597,24 @@ async function main() {
     assert.ok(cacheNames.some((name) => name.startsWith('stormscope-shell-')));
     assert.ok(!cacheNames.some((name) => name.startsWith('stormscope-data-')), 'runtime data cache should be cleared: ' + cacheNames.join(', '));
 
+    await page.evaluate(() => setTimeout(() => {
+      throw new Error('feed https://camera.example/private?token=secret at 40.12345,-75.98765');
+    }, 0));
+    await page.locator('#fatal-recovery').waitFor({ state: 'visible' });
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Export diagnostics' }).click();
+    const diagnosticsDownload = await downloadPromise;
+    const diagnosticsReport = JSON.parse(fs.readFileSync(await diagnosticsDownload.path(), 'utf8'));
+    const serializedDiagnostics = JSON.stringify(diagnosticsReport);
+    assert.equal(diagnosticsReport.schema, 1);
+    assert.match(serializedDiagnostics, /\[url\]/);
+    assert.doesNotMatch(serializedDiagnostics, /camera\.example|token=secret|40\.12345|-75\.98765/);
+    assert.equal(Object.hasOwn(diagnosticsReport, 'favorites'), false);
+    assert.equal(Object.hasOwn(diagnosticsReport, 'savedViews'), false);
+    const expectedDiagnosticError = errors.findIndex(message => message.includes('camera.example/private'));
+    assert.ok(expectedDiagnosticError >= 0, 'the injected runtime failure must reach the page error channel');
+    errors.splice(expectedDiagnosticError, 1);
+
     const mobile = await context.newPage();
     mobile.baseURL = baseURL;
     await mobile.setViewportSize({ width: 390, height: 844 });

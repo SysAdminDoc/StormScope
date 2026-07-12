@@ -136,6 +136,14 @@ test('PWA update and page lifecycle work are explicit and recoverable', () => {
   assert.match(i18n.catalogs.en['camera.paused'], /Feed paused/);
 });
 
+test('fatal recovery keeps shell cache and exports redacted diagnostics', () => {
+  assert.match(app, /StormScopeDiagnostics\.create/);
+  assert.match(app, /diagnostics\.install\(window/);
+  assert.match(app, /stormscope-data-/);
+  assert.match(app, /stormscope-tiles-/);
+  assert.match(app, /stormscope-diagnostics\.json/);
+});
+
 test('radar failover, coverage semantics, and NWS alerts are wired into the UI', () => {
   assert.match(html, /js\/radar-providers\.js/);
   assert.match(html, /js\/nws-alerts\.js/);

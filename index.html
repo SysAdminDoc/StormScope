@@ -50,6 +50,12 @@
     <span>A StormScope update is ready.</span>
     <button id="apply-update" type="button">Apply update</button>
   </div>
+  <div id="fatal-recovery" class="fatal-recovery hidden" role="alert" aria-live="assertive">
+    <span id="fatal-recovery-message" data-i18n="diagnostics.fatal">StormScope encountered an error.</span>
+    <button id="fatal-reload" type="button" data-i18n="diagnostics.reload">Reload</button>
+    <button id="fatal-clear-cache" type="button" data-i18n="diagnostics.reset">Reset cached data</button>
+    <button id="export-diagnostics" type="button" data-i18n="diagnostics.export">Export diagnostics</button>
+  </div>
 
   <div id="layers-panel" class="panel hidden" role="region" aria-label="Map layers">
     <h3>Layers</h3>
@@ -279,6 +285,7 @@
   <script src="js/saved-state.js"></script>
   <script src="js/multi-camera.js"></script>
   <script src="js/context-layers.js"></script>
+  <script src="js/diagnostics.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

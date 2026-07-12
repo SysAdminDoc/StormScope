@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.73.0 - 2026-07-12
+
+- Added a bounded 50-entry local diagnostics ring for `error` and `unhandledrejection`, with URL and coordinate redaction before persistence. Synchronous boot failures and uncaught runtime failures show a localized recovery banner with reload, runtime-cache reset, and diagnostics export actions.
+- Diagnostics JSON includes app version, corpus generation, provider states, aggregate cache/quota data, and redacted errors. It excludes cache keys, feed URLs, coordinates, favorites, saved views, and imported local state.
+- Runtime-cache recovery deletes only data/tile caches and preserves the offline shell. Added unit, Chromium download/redaction, and Firefox/WebKit shell regression coverage. Service-worker cache bumped to v46.
+
 ## v0.72.0 - 2026-07-12
 
 - Added reduced Firefox and WebKit browser contracts alongside the exhaustive Chromium smoke. Both engines now prove full-corpus boot, virtual search, modal open/cleanup, and a populated cached offline shell.
