@@ -22,6 +22,10 @@
   --text: #e4e4ec;
   --text-dim: #8888a0;
   --danger: #ff4757;
+  --bg-inset: rgba(0, 0, 0, 0.24);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.15);
+  --success-text: #86efac;
+  --danger-text: #ffb3bc;
   --radius: 10px;
   --blur: 16px;
 }
@@ -45,6 +49,10 @@
   --text: #14161d;
   --text-dim: #565b6b;
   --danger: #c62b3b;
+  --bg-inset: rgba(18, 22, 38, 0.05);
+  --scrollbar-thumb: rgba(18, 22, 38, 0.28);
+  --success-text: #1e874b;
+  --danger-text: #c62b3b;
 }
 
 html, body {
@@ -125,7 +133,7 @@ button:focus-visible {
   padding: 4px 9px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.24);
+  background: var(--bg-inset);
   color: var(--text-dim);
   font-size: 11px;
   white-space: nowrap;
@@ -134,7 +142,7 @@ button:focus-visible {
 .status-chip.offline,
 .status-chip.stale {
   border-color: rgba(255, 71, 87, 0.45);
-  color: #ffb3bc;
+  color: var(--danger-text);
 }
 
 .update-notice {
@@ -253,7 +261,7 @@ button:focus-visible {
   border: 1px solid var(--border);
   border-left: 4px solid var(--text-dim);
   border-radius: 7px;
-  background: rgba(0, 0, 0, 0.22);
+  background: var(--bg-inset);
   color: var(--text);
   text-align: left;
   cursor: pointer;
@@ -294,7 +302,7 @@ button:focus-visible {
   justify-content: center;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.24);
+  background: var(--bg-inset);
   color: var(--text-dim);
   font-size: 18px;
   line-height: 1;
@@ -750,13 +758,13 @@ button:focus-visible {
 
 .health-badge.health-healthy {
   border-color: rgba(46, 204, 113, 0.45);
-  color: #86efac;
+  color: var(--success-text);
 }
 
 .health-badge.health-degraded,
 .health-badge.health-offline {
   border-color: rgba(255, 71, 87, 0.5);
-  color: #ffb3bc;
+  color: var(--danger-text);
 }
 
 .modal-close-btn {
@@ -787,7 +795,7 @@ button:focus-visible {
   flex-direction: column;
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 .modal-body::-webkit-scrollbar {
@@ -795,7 +803,7 @@ button:focus-visible {
 }
 
 .modal-body::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
 

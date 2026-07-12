@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.64.1 - 2026-07-12
+
+- Fixed light-theme contrast on status surfaces. Status chips, camera health badges (healthy/degraded/offline), the alert-list inset buttons, and the camera-modal scrollbar previously used colors hardcoded for the dark theme — light-pink/light-green status text and a white scrollbar thumb — which were nearly invisible on light panels. Introduced four adaptive tokens (`--bg-inset`, `--scrollbar-thumb`, `--success-text`, `--danger-text`) with dark and light values; in light mode danger text now measures 5.51:1 and success text 4.54:1 on panels (both pass WCAG AA), while dark mode is pixel-identical to before.
+- Service-worker cache bumped to v40 (shell asset `css/style.css` changed).
+
 ## v0.64.0 - 2026-07-12
 
 - Added an optional light theme. A new **Appearance** control in the layers panel offers **Match system** (follows `prefers-color-scheme` and updates live when the OS setting changes), **Always dark**, and **Always light**; the choice persists in `localStorage`. Light mode swaps the CartoDB basemap to `light_all` and overrides the semantic color tokens (`--bg-*`, `--border*`, `--accent`, `--text*`, plus new `--on-accent`/`--bg-elevated`) — layout, spacing, and component rules are shared with dark. Verified in-browser: primary text 16.98:1 and secondary text 6.36:1 contrast on light panels (both pass WCAG AA). English/Spanish labels added.
