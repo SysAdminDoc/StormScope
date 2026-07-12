@@ -398,6 +398,58 @@ def fetch_511_mapicons(base_url, state_name):
         return 0
 
 
+# ── New England 511 (ME/NH/VT) — DataTables feed with correct per-state labels ──
+def fetch_newengland511():
+    base = 'https://www.newengland511.org'
+    all_rows = []
+    start = 0
+    while True:
+        raw = _http_bytes(
+            base + '/List/GetData/Cameras',
+            headers={'Accept': 'application/json',
+                     'Content-Type': 'application/x-www-form-urlencoded',
+                     'X-Requested-With': 'XMLHttpRequest',
+                     'Referer': base + '/cctv', 'Origin': base},
+            data=f'draw=1&start={start}&length=100&search[value]='.encode('ascii'),
+            method='POST', timeout=30)
+        payload = json.loads(raw)
+        rows = payload.get('data', [])
+        all_rows.extend(rows)
+        total = payload.get('recordsTotal', 0)
+        start += 100
+        if not rows or start >= total:
+            break
+    count = 0
+    for row in all_rows:
+        state_name = row.get('state', '') or ''
+        if state_name not in {'Maine', 'New Hampshire', 'Vermont'}:
+            continue
+        images = row.get('images') or []
+        image_id = None
+        for img in images:
+            if not img.get('disabled') and not img.get('blocked') and img.get('imageUrl'):
+                image_id = img['imageUrl']
+                break
+        if not image_id:
+            continue
+        img_url = base + image_id if image_id.startswith('/') else image_id
+        wkt = ''
+        try:
+            wkt = row.get('latLng', {}).get('geography', {}).get('wellKnownText', '')
+        except (AttributeError, TypeError):
+            continue
+        match = re.search(r'POINT\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*\)', wkt)
+        if not match:
+            continue
+        lon, lat = float(match.group(1)), float(match.group(2))
+        name = row.get('location', '') or row.get('roadway', '') or f'{state_name} Camera'
+        add_camera(name, lat, lon, img_url, 'image', state_name,
+                   row.get('county', '') or '', row.get('direction', '') or '', 'dot',
+                   base + '/cctv', 10)
+        count += 1
+    return count
+
+
 # ── 511 DataTables (Georgia, Florida detail) ──
 def fetch_511_datatables(base_url, state_name, referer=None):
     try:
@@ -1443,7 +1495,7 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
         ('Wisconsin (WI511)', lambda: fetch_511_mapicons('https://511wi.gov', 'Wisconsin')),
         ('Utah DOT', fetch_utah),
         ('Nevada (NV511)', lambda: fetch_511_mapicons('https://nvroads.com', 'Nevada')),
-        ('New Hampshire (NE511)', lambda: fetch_511_mapicons('https://www.newengland511.org', 'New Hampshire')),
+        ('New England 511 (ME/NH/VT)', fetch_newengland511),
         ('Connecticut (CT511)', lambda: fetch_511_mapicons('https://www.ctroads.org', 'Connecticut')),
         ('Idaho (ID511)', lambda: fetch_511_mapicons('https://511.idaho.gov', 'Idaho')),
         ('South Carolina (Iteris)', lambda: fetch_iteris_geojson('SC', 'South Carolina')),

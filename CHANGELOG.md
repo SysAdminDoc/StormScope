@@ -2,6 +2,11 @@
 
 ## v0.36.0 - 2026-07-11
 
+### New England 511 state-label correction (223 false geocodes fixed)
+- Corrected a systemic false-geocode bug: all 404 New England 511 traffic cameras were previously labeled "New Hampshire" regardless of their real state. Re-fetched the keyless DataTables feed and assigned each camera its authoritative `state`, `county`, and `direction`, fixing **134 Maine and 89 Vermont** cameras that were mislabeled New Hampshire (coordinates were already correct; only the state field was wrong).
+- Replaced the state-hardcoding `mapIcons` New England fetcher with a `fetch_newengland511()` DataTables reader (per-state labels, county, direction, WKT coordinate parse, 100-row pagination) so future refreshes stay correct. Maine now shows 141 cameras and Vermont 93 (up from 7 and 4 mislabeled remnants); New Hampshire correctly holds 185.
+- Migration removed the 404 mislabeled rows and re-inserted the corrected set transactionally (total corpus unchanged at 30,151); deterministic shards rebuilt.
+
 ### Eight new keyless official DOT providers (+5,259 cameras)
 - Closed near-zero state coverage gaps by adding eight first-party, keyless state DOT/511 camera providers, bringing the corpus from 24,892 to **30,151 cameras across 49 of 50 states plus Washington, D.C.** — West Virginia is now the only state-level gap.
 - **Virginia (VDOT 511)** — 1,672 cameras from the keyless GeoJSON layer, using the official absolute snapshot URL, jurisdiction as county, and provider direction; only `active` non-`problem_stream` feeds accepted.
