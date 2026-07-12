@@ -2,6 +2,7 @@
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
@@ -9,7 +10,51 @@ const vm = require('node:vm');
 const cameraStore = require('../js/camera-store.js');
 
 function response(value, ok = true) {
-  return { ok, json: async () => value };
+  return {
+    ok,
+    json: async () => value,
+    text: async () => typeof value === 'string' ? value : JSON.stringify(value)
+  };
+}
+
+function sha256(value) {
+  return crypto.createHash('sha256').update(value).digest('hex');
+}
+
+function generation(shards) {
+  const texts = shards.map(shard => JSON.stringify(shard));
+  const hashes = texts.map(text => sha256(Buffer.from(text)));
+  const datasetHash = sha256(Buffer.concat(hashes.map(hash => Buffer.from(hash, 'hex'))));
+  const cameras = shards.flat();
+  const totals = (field, fallback) => cameras.reduce((result, item) => {
+    const key = String(item[field] || fallback);
+    result[key] = (result[key] || 0) + 1;
+    return result;
+  }, {});
+  return {
+    texts,
+    index: {
+      index_version: 2,
+      camera_schema_version: 2,
+      generated_at: '2026-07-12T12:00:00Z',
+      total: cameras.length,
+      verified_total: cameras.filter(item => item.last_verified != null).length,
+      health_totals: totals('health', 'unknown'),
+      provider_totals: totals('provider', 'unattributed'),
+      shard_size: 2,
+      dataset_hash_algorithm: 'sha256-concat-shard-digests-v1',
+      dataset_sha256: datasetHash,
+      shards: shards.map((shard, index) => ({
+        id: String(index + 1).padStart(4, '0'),
+        path: `camera-shards/${String(index + 1).padStart(4, '0')}.json?generation=${datasetHash}`,
+        count: shard.length,
+        first_id: shard[0].id,
+        last_id: shard[shard.length - 1].id,
+        bbox: [-75, 40, -75, 40],
+        sha256: hashes[index]
+      }))
+    }
+  };
 }
 
 function camera(id, overrides) {
@@ -39,16 +84,11 @@ test('exports the same camera-store API as a browser global', () => {
 test('loads bounded shards progressively and reports cumulative progress', async () => {
   const calls = [];
   const progress = [];
+  const fixture = generation([[camera(1), camera(2)], [camera(3)]]);
   const payloads = {
-    'data/cameras.index.json': {
-      total: 3,
-      shards: [
-        { id: '0001', path: 'camera-shards/0001.json', count: 2 },
-        { id: '0002', path: 'camera-shards/0002.json', count: 1 }
-      ]
-    },
-    'data/camera-shards/0001.json': [camera(1), camera(2)],
-    'data/camera-shards/0002.json': [camera(3)]
+    'data/cameras.index.json': fixture.index,
+    ['data/' + fixture.index.shards[0].path]: fixture.texts[0],
+    ['data/' + fixture.index.shards[1].path]: fixture.texts[1]
   };
   const store = new cameraStore.CameraStore({
     fetch: async url => {
@@ -62,18 +102,19 @@ test('loads bounded shards progressively and reports cumulative progress', async
   assert.deepEqual(result.cameras.map(item => item.id), [1, 2, 3]);
   assert.deepEqual(calls, [
     'data/cameras.index.json',
-    'data/camera-shards/0001.json',
-    'data/camera-shards/0002.json'
+    'data/' + fixture.index.shards[0].path,
+    'data/' + fixture.index.shards[1].path
   ]);
   assert.deepEqual(progress.map(item => [item.loaded, item.complete]), [[2, false], [3, false], [3, true]]);
 });
 
 test('falls back to the monolith after a shard failure', async () => {
   const monolith = [camera(10), camera(11)];
+  const fixture = generation([[camera(1)]]);
   const store = new cameraStore.CameraStore({
     fetch: async url => {
       if (url.endsWith('cameras.index.json')) {
-        return response({ total: 1, shards: [{ id: '0001', path: 'camera-shards/0001.json', count: 1 }] });
+        return response(fixture.index);
       }
       if (url.includes('camera-shards')) throw new Error('shard unavailable');
       return response(monolith);
@@ -82,6 +123,28 @@ test('falls back to the monolith after a shard failure', async () => {
   const result = await store.load();
   assert.equal(result.source, 'monolith');
   assert.deepEqual(result.cameras, monolith);
+});
+
+test('a byte-corrupt shard discards the generation and loads the monolith once', async () => {
+  const monolith = [camera(90)];
+  const fixture = generation([[camera(1)], [camera(2)]]);
+  let monolithLoads = 0;
+  const store = new cameraStore.CameraStore({
+    fetch: async url => {
+      if (url.endsWith('cameras.index.json')) return response(fixture.index);
+      if (url === 'data/' + fixture.index.shards[0].path) return response(fixture.texts[0]);
+      if (url === 'data/' + fixture.index.shards[1].path) return response(JSON.stringify([camera(22)]));
+      monolithLoads += 1;
+      return response(monolith);
+    }
+  });
+
+  const result = await store.load();
+
+  assert.equal(result.source, 'monolith');
+  assert.deepEqual(result.cameras, monolith);
+  assert.equal(monolithLoads, 1);
+  assert.deepEqual(store.getCameras(), monolith);
 });
 
 test('cancellation rejects without starting monolith fallback', async () => {

@@ -13,8 +13,8 @@
  */
 'use strict';
 
-var VERSION = 'v40';
-var RUNTIME_CACHE_VERSION = 'v1';
+var VERSION = 'v41';
+var RUNTIME_CACHE_VERSION = 'v2';
 var SHELL_CACHE = 'stormscope-shell-' + VERSION;
 var TILE_CACHE = 'stormscope-tiles-' + RUNTIME_CACHE_VERSION;
 var DATA_CACHE = 'stormscope-data-' + RUNTIME_CACHE_VERSION;
@@ -105,10 +105,16 @@ function isLiveApiRequest(url) {
     url.hostname === 'api.open-meteo.com';
 }
 
-function isCameraData(url) {
-  return url.pathname.indexOf('data/cameras.json') !== -1 ||
-    url.pathname.indexOf('data/cameras.index.json') !== -1 ||
-    url.pathname.indexOf('data/camera-shards/') !== -1;
+function isCameraIndex(url) {
+  return url.pathname.indexOf('data/cameras.index.json') !== -1;
+}
+
+function isCameraShard(url) {
+  return url.pathname.indexOf('data/camera-shards/') !== -1 && url.searchParams.has('generation');
+}
+
+function isCameraMonolith(url) {
+  return url.pathname.indexOf('data/cameras.json') !== -1;
 }
 
 // Bound a cache to a max entry count (approximate LRU via insertion order).
@@ -186,7 +192,10 @@ function fetchTile(request) {
 
 // Cache-first for immutable-ish assets (tiles, shell).
 function cacheFirst(request, cacheName, limit) {
-  if (cacheName === TILE_CACHE && (runtimeClearing || runtimeCachingPaused)) return fetchTile(request);
+  if ((cacheName === TILE_CACHE || cacheName === DATA_CACHE) &&
+      (runtimeClearing || runtimeCachingPaused)) {
+    return cacheName === TILE_CACHE ? fetchTile(request) : fetch(request);
+  }
   var operation = caches.open(cacheName).then(function (cache) {
     return cache.match(request).then(function (cached) {
       if (cached) return cached;
@@ -204,7 +213,7 @@ function cacheFirst(request, cacheName, limit) {
       });
     });
   });
-  return cacheName === TILE_CACHE ? trackRuntimeWrite(operation) : operation;
+  return cacheName === TILE_CACHE || cacheName === DATA_CACHE ? trackRuntimeWrite(operation) : operation;
 }
 
 // Stale-while-revalidate for the camera dataset.
@@ -411,8 +420,17 @@ self.addEventListener('fetch', function (event) {
   }
 
   // Camera dataset: stale-while-revalidate.
-  if (isCameraData(url)) {
+  if (isCameraIndex(url)) {
+    event.respondWith(networkFirstWithCache(request, DATA_CACHE));
+    return;
+  }
+  if (isCameraShard(url)) {
+    event.respondWith(cacheFirst(request, DATA_CACHE));
+    return;
+  }
+  if (isCameraMonolith(url)) {
     event.respondWith(staleWhileRevalidate(request, DATA_CACHE, event));
+    return;
     return;
   }
 

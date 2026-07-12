@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.66.0 - 2026-07-12
+
+- Published camera index v2 with an authoritative UTC generation time, exact health/provider/verification totals, exact on-disk shard byte hashes, and an ordered aggregate generation hash. The UI now reports indexed, verified healthy, degraded, and unverified counts instead of calling the entire corpus live, and offline freshness uses the cached generation timestamp rather than page-load time.
+- Camera shards now load through generation-keyed URLs and are validated for index/schema version, descriptor totals, SHA-256 bytes, strictly increasing IDs, ranges, aggregate hash, and summary counts. A corrupt or mixed generation is discarded and replaced by the complete monolith recovery dataset.
+- Changed service-worker camera routing: the root index is network-first with offline fallback, immutable generation shards are cache-first without background replacement, and only the monolith recovery path remains stale-while-revalidate. Service-worker cache bumped to v41 and runtime data cache to v2.
+
 ## v0.65.0 - 2026-07-12
 
 - Camera IDs are now durable across provider refreshes. Explicit replacements, provider-owned camera IDs, and unchanged canonical feeds retain the existing numeric ID; ambiguous identity claims fail closed instead of silently retargeting saved favorites.

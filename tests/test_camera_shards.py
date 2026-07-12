@@ -40,14 +40,16 @@ class CameraShardBuilderTests(unittest.TestCase):
             data_file.write_text(json.dumps([camera(3), camera(1), camera(5), camera(2), camera(4)]), encoding="utf-8")
 
             manifest = build_camera_shards.build_shards(
-                data_file, index_file, shard_dir, shard_size=2
+                data_file, index_file, shard_dir, shard_size=2,
+                generated_at="2026-07-12T00:00:00Z",
             )
             first_bytes = {
                 path.relative_to(root).as_posix(): path.read_bytes()
                 for path in [index_file, *sorted(shard_dir.glob("*.json"))]
             }
             second_manifest = build_camera_shards.build_shards(
-                data_file, index_file, shard_dir, shard_size=2
+                data_file, index_file, shard_dir, shard_size=2,
+                generated_at="2026-07-12T00:00:00Z",
             )
             second_bytes = {
                 path.relative_to(root).as_posix(): path.read_bytes()
@@ -60,8 +62,20 @@ class CameraShardBuilderTests(unittest.TestCase):
             self.assertTrue(all(descriptor["count"] <= 2 for descriptor in manifest["shards"]))
             rebuilt = []
             for descriptor in manifest["shards"]:
-                rebuilt.extend(json.loads((index_file.parent / descriptor["path"]).read_text(encoding="utf-8")))
+                shard_path = descriptor["path"].split("?", 1)[0]
+                shard_file = index_file.parent / shard_path
+                self.assertEqual(descriptor["sha256"], build_camera_shards.hashlib.sha256(shard_file.read_bytes()).hexdigest())
+                rebuilt.extend(json.loads(shard_file.read_text(encoding="utf-8")))
             self.assertEqual([1, 2, 3, 4, 5], [item["id"] for item in rebuilt])
+            self.assertEqual("2026-07-12T00:00:00Z", manifest["generated_at"])
+            self.assertEqual({"unknown": 5}, manifest["health_totals"])
+            self.assertEqual({"unattributed": 5}, manifest["provider_totals"])
+            self.assertEqual(0, manifest["verified_total"])
+            aggregate = b"".join(bytes.fromhex(item["sha256"]) for item in manifest["shards"])
+            self.assertEqual(
+                build_camera_shards.hashlib.sha256(aggregate).hexdigest(),
+                manifest["dataset_sha256"],
+            )
             camera_data.validate_camera_data(rebuilt)
 
     def test_checked_in_manifest_and_shards_cover_the_schema_v2_dataset(self):
@@ -71,11 +85,16 @@ class CameraShardBuilderTests(unittest.TestCase):
         self.assertTrue(all(descriptor["count"] <= build_camera_shards.MAX_SHARD_SIZE for descriptor in manifest["shards"]))
         ids = []
         for descriptor in manifest["shards"]:
-            shard = json.loads((ROOT / "data" / descriptor["path"]).read_text(encoding="utf-8"))
+            shard_path = descriptor["path"].split("?", 1)[0]
+            shard_file = ROOT / "data" / shard_path
+            self.assertEqual(descriptor["sha256"], build_camera_shards.hashlib.sha256(shard_file.read_bytes()).hexdigest())
+            shard = json.loads(shard_file.read_text(encoding="utf-8"))
             self.assertEqual(descriptor["count"], len(shard))
             ids.extend(camera["id"] for camera in shard)
         monolith = json.loads((ROOT / "data" / "cameras.json").read_text(encoding="utf-8"))
         self.assertEqual(sorted(camera["id"] for camera in monolith), ids)
+        self.assertEqual(len(monolith), sum(manifest["health_totals"].values()))
+        self.assertEqual(len(monolith), sum(manifest["provider_totals"].values()))
 
 
 if __name__ == "__main__":

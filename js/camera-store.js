@@ -142,6 +142,44 @@
     return response.json();
   }
 
+  function isSha256(value) {
+    return typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+  }
+
+  function hexBytes(value) {
+    var bytes = new Uint8Array(value.length / 2);
+    for (var index = 0; index < bytes.length; index += 1) {
+      bytes[index] = parseInt(value.slice(index * 2, index * 2 + 2), 16);
+    }
+    return bytes;
+  }
+
+  function sumTotals(totals) {
+    if (!totals || typeof totals !== 'object' || Array.isArray(totals)) return NaN;
+    return Object.keys(totals).reduce(function (sum, key) {
+      var value = totals[key];
+      return sum + (Number.isInteger(value) && value >= 0 ? value : NaN);
+    }, 0);
+  }
+
+  function totalsEqual(actual, expected) {
+    var actualKeys = Object.keys(actual).sort();
+    var expectedKeys = Object.keys(expected).sort();
+    return actualKeys.length === expectedKeys.length && actualKeys.every(function (key, index) {
+      return key === expectedKeys[index] && actual[key] === expected[key];
+    });
+  }
+
+  async function defaultSha256(bytes) {
+    if (!globalObject.crypto || !globalObject.crypto.subtle) {
+      throw new Error('SHA-256 validation is unavailable');
+    }
+    var digest = new Uint8Array(await globalObject.crypto.subtle.digest('SHA-256', bytes));
+    return Array.from(digest).map(function (value) {
+      return value.toString(16).padStart(2, '0');
+    }).join('');
+  }
+
   function CameraStore(options) {
     options = options || {};
     this.fetch = options.fetch || (
@@ -151,6 +189,7 @@
     this.indexUrl = options.indexUrl || 'data/cameras.index.json';
     this.monolithUrl = options.monolithUrl || 'data/cameras.json';
     this.onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
+    this.sha256 = options.sha256 || defaultSha256;
     this._cameras = [];
     this._controller = null;
     this._requestId = 0;
@@ -178,6 +217,44 @@
     return responseJson(response, url);
   };
 
+  CameraStore.prototype._fetchText = async function (url, signal) {
+    var response = await this.fetch(url, { signal: signal });
+    if (!response || response.ok === false || typeof response.text !== 'function') {
+      throw new Error('Unable to load camera data: ' + url);
+    }
+    return response.text();
+  };
+
+  CameraStore.prototype._validateIndex = function (index) {
+    if (!index || index.index_version !== 2 || index.camera_schema_version !== 2 ||
+        !Number.isInteger(index.total) || index.total < 0 || !Array.isArray(index.shards) ||
+        !isSha256(index.dataset_sha256) ||
+        index.dataset_hash_algorithm !== 'sha256-concat-shard-digests-v1' ||
+        typeof index.generated_at !== 'string' || !Number.isFinite(Date.parse(index.generated_at)) ||
+        sumTotals(index.health_totals) !== index.total ||
+        sumTotals(index.provider_totals) !== index.total ||
+        !Number.isInteger(index.verified_total) || index.verified_total < 0 ||
+        index.verified_total > index.total) {
+      throw new Error('Camera index is invalid');
+    }
+    var describedTotal = 0;
+    var previousLastId = 0;
+    index.shards.forEach(function (descriptor, position) {
+      if (!descriptor || descriptor.id !== String(position + 1).padStart(4, '0') ||
+          typeof descriptor.path !== 'string' ||
+          descriptor.path.indexOf('?generation=' + index.dataset_sha256) === -1 ||
+          !Number.isInteger(descriptor.count) || descriptor.count <= 0 ||
+          !Number.isInteger(descriptor.first_id) || !Number.isInteger(descriptor.last_id) ||
+          descriptor.first_id <= previousLastId || descriptor.last_id < descriptor.first_id ||
+          !isSha256(descriptor.sha256)) {
+        throw new Error('Camera shard descriptor is invalid: ' + (descriptor && descriptor.id || position));
+      }
+      describedTotal += descriptor.count;
+      previousLastId = descriptor.last_id;
+    });
+    if (describedTotal !== index.total) throw new Error('Camera shard descriptors do not match index total');
+  };
+
   CameraStore.prototype._loadMonolith = async function (requestId, signal, callback, cause) {
     this._assertActive(requestId, signal);
     var cameras = await this._fetchJson(this.monolithUrl, signal);
@@ -202,23 +279,45 @@
     try {
       var index = await this._fetchJson(this.indexUrl, signal);
       this._assertActive(requestId, signal);
-      if (!index || !Array.isArray(index.shards) || !Number.isInteger(index.total)) {
-        throw new Error('Camera index is invalid');
-      }
+      this._validateIndex(index);
       var seenIds = new Set();
+      var healthTotals = {};
+      var providerTotals = {};
+      var verifiedTotal = 0;
+      var shardHashes = [];
+      var previousId = 0;
       for (var shardIndex = 0; shardIndex < index.shards.length; shardIndex += 1) {
         this._assertActive(requestId, signal);
         var descriptor = index.shards[shardIndex];
         var shardUrl = relativeUrl(this.indexUrl, descriptor.path);
-        var shard = await this._fetchJson(shardUrl, signal);
+        var shardText = await this._fetchText(shardUrl, signal);
         this._assertActive(requestId, signal);
+        var shardBytes = new TextEncoder().encode(shardText);
+        var shardHash = await this.sha256(shardBytes);
+        this._assertActive(requestId, signal);
+        if (shardHash !== descriptor.sha256) {
+          throw new Error('Camera shard hash mismatch: ' + descriptor.id);
+        }
+        var shard = JSON.parse(shardText);
         if (!Array.isArray(shard) || shard.length !== descriptor.count) {
           throw new Error('Camera shard is invalid: ' + descriptor.id);
         }
         shard.forEach(function (camera) {
-          if (seenIds.has(camera.id)) throw new Error('Duplicate camera ID across shards: ' + camera.id);
+          if (!Number.isInteger(camera.id) || camera.id <= previousId || seenIds.has(camera.id)) {
+            throw new Error('Camera IDs are not strictly increasing: ' + camera.id);
+          }
+          previousId = camera.id;
           seenIds.add(camera.id);
+          var health = String(camera.health || 'unknown');
+          var provider = String(camera.provider || 'unattributed');
+          healthTotals[health] = (healthTotals[health] || 0) + 1;
+          providerTotals[provider] = (providerTotals[provider] || 0) + 1;
+          if (camera.last_verified != null) verifiedTotal += 1;
         });
+        if (shard[0].id !== descriptor.first_id || shard[shard.length - 1].id !== descriptor.last_id) {
+          throw new Error('Camera shard ID range mismatch: ' + descriptor.id);
+        }
+        shardHashes.push(hexBytes(shardHash));
         this._cameras.push.apply(this._cameras, shard);
         this._progress(options.onProgress, {
           source: 'shards', loaded: this._cameras.length, total: index.total,
@@ -226,6 +325,16 @@
         });
       }
       if (this._cameras.length !== index.total) throw new Error('Camera shard total does not match index');
+      var aggregateBytes = new Uint8Array(shardHashes.length * 32);
+      shardHashes.forEach(function (hash, position) { aggregateBytes.set(hash, position * 32); });
+      if (await this.sha256(aggregateBytes) !== index.dataset_sha256) {
+        throw new Error('Camera dataset hash mismatch');
+      }
+      if (!totalsEqual(healthTotals, index.health_totals) ||
+          !totalsEqual(providerTotals, index.provider_totals) ||
+          verifiedTotal !== index.verified_total) {
+        throw new Error('Camera verification summaries do not match the generation');
+      }
       this._progress(options.onProgress, {
         source: 'shards', loaded: this._cameras.length, total: index.total,
         shardsLoaded: index.shards.length, shardsTotal: index.shards.length, complete: true

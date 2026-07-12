@@ -254,6 +254,32 @@ test('cached camera response keeps revalidation alive until cache put completes'
   assert.equal(await background, fresh);
 });
 
+test('generation-keyed camera shards are immutable cache-first entries', async () => {
+  const cached = response({ size: 2 });
+  let networkCalls = 0;
+  const worker = loadWorker({
+    cachesByName: {
+      [dataCache]: { match: () => Promise.resolve(cached) }
+    },
+    fetch: () => {
+      networkCalls += 1;
+      return Promise.reject(new Error('generation shard must not revalidate'));
+    }
+  });
+  const shardUrl = 'https://example.test/data/camera-shards/0001.json?generation=' + 'a'.repeat(64);
+
+  assert.equal(worker.context.isCameraShard(new URL(shardUrl)), true);
+  assert.equal(await worker.context.cacheFirst(request(shardUrl), dataCache), cached);
+  assert.equal(networkCalls, 0);
+});
+
+test('camera index is distinct from immutable shards and monolith recovery', () => {
+  const worker = loadWorker();
+  assert.equal(worker.context.isCameraIndex(new URL('https://example.test/data/cameras.index.json')), true);
+  assert.equal(worker.context.isCameraMonolith(new URL('https://example.test/data/cameras.json')), true);
+  assert.equal(worker.context.isCameraShard(new URL('https://example.test/data/camera-shards/0001.json')), false);
+});
+
 test('clearing runtime caches waits for camera revalidation writes', async () => {
   const cached = response({ size: 1 });
   const fresh = response({ size: 2 });

@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.65.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.66.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
 [![Cameras](https://img.shields.io/badge/cameras-36%2C592-cyan)]()
@@ -16,7 +16,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 - **Accessible Radar Timeline** — Direct frame scrubbing, manual-only/0.5×/1×/2× playback, explicit frame age and light/moderate/heavy scale text, plus standard, color-vision-friendly, and high-contrast presentations
 - **Official Weather Alerts** — Viewport-scoped NWS watches, warnings, and advisories with severity polygons and accessible details
 - **Optional Hazard Context** — Keyless NOAA lightning density and viewport-bounded NIFC wildfire perimeters start off, show freshness and attribution, fail independently, and stay below warnings and cameras
-- **36,592 Live Cameras** — Traffic, FAA, NOAA/NWS, USGS, NRAO, national/state park, university/NSF NEON PhenoCam, MWRA, Smithsonian, AngelCam, Hazcams, EarthCam, IPCamLive, RTSP.me, LiveBeaches, and webcam feeds across all 50 US states plus Washington, D.C., territories, and international locations
+- **36,592 Indexed Cameras** — 13,071 verified healthy, 1 degraded, and 23,520 not yet verified across traffic, FAA, NOAA/NWS, USGS, NRAO, park, university, provider, and webcam sources
 - **Fast Camera Discovery** — Progressive state shards make the map interactive before the full corpus loads; accessible search, health/source/type filters, health-first name/distance sorting, and a virtualized result list stay synchronized with the map
 - **Local Favorites and Views** — Favorite cameras, restore the last map/layer/opacity state, save named views, and validate portable JSON imports/exports without an account
 - **English and Spanish UI** — Live language switching covers controls, recovery states, weather/radar labels, WMO conditions, alerts, dates, numbers, and units with deterministic English fallback
@@ -33,7 +33,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 
 ## Camera Coverage
 
-36,592 cameras across all 50 US states plus Washington, D.C.:
+36,592 indexed cameras across all 50 US states plus Washington, D.C. The generated manifest records 13,071 verified healthy, 1 degraded, 0 offline, and 23,520 unverified feeds:
 
 | State | Cameras | | State | Cameras |
 |-------|--------:|-|-------|--------:|

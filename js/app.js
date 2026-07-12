@@ -54,7 +54,7 @@
   var cameraIconCache = Object.create(null);
   var cameraHealthOverrides = Object.create(null);
   var cameraStore = null;
-  var cameraLoadMetrics = { startedAt: 0, firstBatchMs: null, completeMs: null, source: null };
+  var cameraLoadMetrics = { startedAt: 0, firstBatchMs: null, completeMs: null, source: null, index: null };
   var cameraLoadProcessed = 0;
   var currentCameraResults = [];
   var searchRenderTimer = null;
@@ -903,7 +903,7 @@
   async function loadCameras() {
     try {
       document.getElementById('camera-count').textContent = tr('camera.loadingCount');
-      cameraDataTimestamp = new Date();
+      cameraDataTimestamp = null;
       cameraHealthOverrides = loadCameraHealthOverrides();
       cameraCluster = L.markerClusterGroup({
         maxClusterRadius: 50,
@@ -926,7 +926,7 @@
       if (document.getElementById('toggle-cameras').checked) map.addLayer(cameraCluster);
       allCameras = [];
       cameraLoadProcessed = 0;
-      cameraLoadMetrics = { startedAt: performance.now(), firstBatchMs: null, completeMs: null, source: null };
+      cameraLoadMetrics = { startedAt: performance.now(), firstBatchMs: null, completeMs: null, source: null, index: null };
       cameraStore = new StormScopeCameraStore.CameraStore({
         indexUrl: 'data/cameras.index.json',
         monolithUrl: 'data/cameras.json'
@@ -962,7 +962,9 @@
       });
       cameraLoadMetrics.completeMs = performance.now() - cameraLoadMetrics.startedAt;
       cameraLoadMetrics.source = result.source;
-      document.getElementById('camera-count').textContent = tr('camera.count', { count: localNumber(allCameras.length) });
+      cameraLoadMetrics.index = result.index;
+      cameraDataTimestamp = result.index ? new Date(result.index.generated_at) : null;
+      document.getElementById('camera-count').textContent = cameraCountLabel();
       document.getElementById('search-progress').textContent = tr('camera.firstBatch', {
         count: localNumber(allCameras.length), milliseconds: localNumber(Math.round(cameraLoadMetrics.firstBatchMs || 0))
       });
@@ -1309,6 +1311,11 @@
       return;
     }
     var offline = !navigator.onLine;
+    if (!cameraDataTimestamp) {
+      status.textContent = tr('camera.generationUnknown');
+      if (offline) status.classList.add('offline');
+      return;
+    }
     var stale = cameraDataTimestamp && Date.now() - cameraDataTimestamp.getTime() > 24 * 60 * 60 * 1000;
     var timestamp = cameraDataTimestamp
       ? StormScopeI18n.formatDateTime(cameraDataTimestamp, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }, appLocale)
@@ -1318,9 +1325,20 @@
     if (stale) status.classList.add('stale');
   }
 
+  function cameraCountLabel() {
+    var index = cameraLoadMetrics.index;
+    if (!index) return tr('camera.count', { count: localNumber(allCameras.length) });
+    return tr('camera.countSummary', {
+      count: localNumber(index.total),
+      healthy: localNumber(index.health_totals.healthy || 0),
+      degraded: localNumber(index.health_totals.degraded || 0),
+      unverified: localNumber(index.health_totals.unknown || 0)
+    });
+  }
+
   function refreshCameraLoadLabels() {
     if (cameraLoadMetrics.completeMs == null || !allCameras.length) return;
-    document.getElementById('camera-count').textContent = tr('camera.count', { count: localNumber(allCameras.length) });
+    document.getElementById('camera-count').textContent = cameraCountLabel();
     document.getElementById('search-progress').textContent = tr('camera.firstBatch', {
       count: localNumber(allCameras.length), milliseconds: localNumber(Math.round(cameraLoadMetrics.firstBatchMs || 0))
     });
@@ -1330,7 +1348,7 @@
     var status = document.getElementById('connection-state');
     status.textContent = tr(navigator.onLine ? 'connection.online' : 'connection.offline');
     status.classList.toggle('offline', !navigator.onLine);
-    if (cameraDataTimestamp) updateDataFreshness(false);
+    if (allCameras.length) updateDataFreshness(false);
   }
 
   function onMarkerHover(e) {

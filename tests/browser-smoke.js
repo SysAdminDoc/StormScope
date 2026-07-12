@@ -297,7 +297,10 @@ async function main() {
     assert.equal(await page.locator('html').getAttribute('lang'), 'es');
     assert.equal(await page.locator('label[for="app-locale"]').textContent(), 'Idioma');
     assert.equal(await page.locator('#search-heading').textContent(), 'Buscar cámaras');
-    assert.match(await page.locator('#camera-count').textContent(), /^36\.592 cámaras$/);
+    assert.match(
+      await page.locator('#camera-count').textContent(),
+      /^36\.592 indexadas .* 13\.071 saludables .* 1 degradadas .* 23\.520 sin verificar$/
+    );
     assert.match(await page.locator('#radar-frame-position').textContent(), /^Fotograma /);
     assert.match(await page.locator('#radar-time').textContent(), /hace|ahora mismo/);
     await page.locator('#app-locale').selectOption('en');
@@ -440,11 +443,13 @@ async function main() {
 
     await page.evaluate(() => navigator.serviceWorker.ready);
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.locator('#camera-count').filter({ hasText: '36,592 cameras' }).waitFor({ state: 'visible' });
+    await page.locator('#camera-count').filter({ hasText: '36,592 indexed' }).waitFor({ state: 'visible' });
+    const onlineGeneration = await page.evaluate(() => window._stormscope.getCameraLoadMetrics().index.generated_at);
+    assert.match(onlineGeneration, /^2026-07-12T/);
     assert.equal(await page.locator('#saved-views option', { hasText: 'Smoke view' }).count(), 1);
     await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
     await page.waitForFunction(async () => {
-      const cache = await caches.open('stormscope-data-v1');
+      const cache = await caches.open('stormscope-data-v2');
       const keys = (await cache.keys()).map((request) => new URL(request.url).pathname);
       return keys.includes('/data/cameras.index.json') &&
         keys.filter((pathname) => pathname.includes('/data/camera-shards/')).length === 49;
@@ -452,10 +457,15 @@ async function main() {
     await context.setOffline(true);
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.getByRole('heading', { name: 'StormScope' }).waitFor({ state: 'visible' });
-    await page.waitForFunction(() => /cameras|cámaras/.test(document.querySelector('#camera-count').textContent));
+    await page.locator('#camera-count').filter({ hasText: 'indexed' }).waitFor({ state: 'visible' });
     assert.match(
       await page.locator('#camera-count').textContent(),
-      /^(?:[\d,.]+ (?:of|de) )?36[,.]592 (?:cameras|cámaras)$/
+      /^36[,.]592 indexed .* 13[,.]071 healthy .* 1 degraded .* 23[,.]520 unverified$/
+    );
+    assert.equal(
+      await page.evaluate(() => window._stormscope.getCameraLoadMetrics().index.generated_at),
+      onlineGeneration,
+      'offline reload must preserve the authoritative generation timestamp'
     );
     await context.setOffline(false);
 

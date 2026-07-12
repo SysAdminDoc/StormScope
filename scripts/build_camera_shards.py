@@ -5,15 +5,15 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import json
 import os
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
 try:
-    from camera_data import CAMERA_SCHEMA_VERSION, atomic_write_json, load_camera_data
+    from camera_data import CAMERA_SCHEMA_VERSION, atomic_write_json, load_camera_data, utc_now_iso
 except ModuleNotFoundError:  # pragma: no cover - package import during tests
-    from scripts.camera_data import CAMERA_SCHEMA_VERSION, atomic_write_json, load_camera_data
+    from scripts.camera_data import CAMERA_SCHEMA_VERSION, atomic_write_json, load_camera_data, utc_now_iso
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -22,11 +22,8 @@ DEFAULT_INDEX = ROOT / "data" / "cameras.index.json"
 DEFAULT_SHARD_DIR = ROOT / "data" / "camera-shards"
 DEFAULT_SHARD_SIZE = 750
 MAX_SHARD_SIZE = 1000
-INDEX_VERSION = 1
-
-
-def canonical_json_bytes(value: Any) -> bytes:
-    return json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode("utf-8")
+INDEX_VERSION = 2
+DATASET_HASH_ALGORITHM = "sha256-concat-shard-digests-v1"
 
 
 def camera_bbox(cameras: list[dict[str, Any]]) -> list[float]:
@@ -41,6 +38,7 @@ def build_shards(
     shard_dir: Path,
     *,
     shard_size: int = DEFAULT_SHARD_SIZE,
+    generated_at: str | None = None,
 ) -> dict[str, Any]:
     if not 1 <= shard_size <= MAX_SHARD_SIZE:
         raise ValueError(f"shard_size must be between 1 and {MAX_SHARD_SIZE}")
@@ -51,6 +49,7 @@ def build_shards(
 
     shard_dir.mkdir(parents=True, exist_ok=True)
     descriptors = []
+    shard_digests: list[bytes] = []
     expected_files: set[Path] = set()
     for offset in range(0, len(cameras), shard_size):
         shard = cameras[offset: offset + shard_size]
@@ -59,6 +58,8 @@ def build_shards(
         shard_file = shard_dir / f"{shard_id}.json"
         expected_files.add(shard_file.resolve())
         atomic_write_json(shard_file, shard, indent=None)
+        digest = hashlib.sha256(shard_file.read_bytes()).digest()
+        shard_digests.append(digest)
         relative_path = os.path.relpath(shard_file, index_file.parent).replace("\\", "/")
         descriptors.append(
             {
@@ -68,16 +69,26 @@ def build_shards(
                 "first_id": int(shard[0]["id"]),
                 "last_id": int(shard[-1]["id"]),
                 "bbox": camera_bbox(shard),
-                "sha256": hashlib.sha256(canonical_json_bytes(shard)).hexdigest(),
+                "sha256": digest.hex(),
             }
         )
 
+    dataset_sha256 = hashlib.sha256(b"".join(shard_digests)).hexdigest()
+    for descriptor in descriptors:
+        descriptor["path"] += f"?generation={dataset_sha256}"
+    health_totals = dict(sorted(Counter(str(camera.get("health") or "unknown") for camera in cameras).items()))
+    provider_totals = dict(sorted(Counter(str(camera.get("provider") or "unattributed") for camera in cameras).items()))
     manifest = {
         "index_version": INDEX_VERSION,
         "camera_schema_version": CAMERA_SCHEMA_VERSION,
+        "generated_at": generated_at or utc_now_iso(),
         "total": len(cameras),
+        "verified_total": sum(camera.get("last_verified") is not None for camera in cameras),
+        "health_totals": health_totals,
+        "provider_totals": provider_totals,
         "shard_size": shard_size,
-        "dataset_sha256": hashlib.sha256(canonical_json_bytes(cameras)).hexdigest(),
+        "dataset_hash_algorithm": DATASET_HASH_ALGORITHM,
+        "dataset_sha256": dataset_sha256,
         "shards": descriptors,
     }
     atomic_write_json(index_file, manifest, indent=None)
