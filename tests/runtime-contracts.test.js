@@ -40,6 +40,7 @@ test('embed trust uses exact host-or-subdomain matching', () => {
 
   assert.match(app, /'abbeyroad\.com'/);
   assert.match(app, /'esbnyc\.com'/);
+  assert.match(app, /'ipcamlive\.com'/);
   assert.doesNotMatch(app, /hostname\.indexOf/);
   assert.doesNotMatch(app, /'511'/);
   assert.match(app, /parsed\.protocol !== 'https:'/);
@@ -80,6 +81,7 @@ test('static CSP removes inline script execution and mirrors trusted frame hosts
   assert.match(csp[1], /worker-src 'self' blob:/);
   assert.match(csp[1], /https:\/\/\*\.abbeyroad\.com/);
   assert.match(csp[1], /https:\/\/\*\.esbnyc\.com/);
+  assert.match(csp[1], /https:\/\/\*\.ipcamlive\.com/);
   assert.doesNotMatch(html, /<script(?![^>]*\bsrc=)[^>]*>/i);
   assert.match(app, /navigator\.serviceWorker\.register\('sw\.js'\)/);
 

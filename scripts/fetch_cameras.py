@@ -1886,6 +1886,113 @@ def fetch_pr_act():
     return count
 
 
+# ── Guam (GNTF/IPCamLive) — first-party fixed destination camera embed ──
+def fetch_guam_gntf():
+    source_page = 'https://gntf.org/'
+    alias = '62737dba77480'
+    player_url = (
+        'https://g3.ipcamlive.com/player/player.php?alias=62737dba77480'
+        '&autoplay=1&disableautofullscreen=1&disablefullscreen=1&mute=1'
+    )
+    homepage = _http_bytes(source_page, timeout=30).decode('utf-8', 'replace')
+    if not re.search(
+            rf'https://g3\.ipcamlive\.com/player/player\.php\?alias={alias}\b',
+            homepage,
+            re.IGNORECASE):
+        raise IncompleteProviderError('GNTF first-party camera link is missing')
+    player = _http_bytes(
+        player_url, headers={'Referer': source_page}, timeout=30
+    ).decode('utf-8', 'replace')
+    available = re.search(r'\bvar\s+available\s*=\s*1\s*;', player)
+    domain_unlocked = re.search(r'\bvar\s+domainlockenabled\s*=\s*0\s*;', player)
+    address_match = re.search(
+        r"\bvar\s+address\s*=\s*'https?://(s\d+\.ipcamlive\.com)/'\s*;",
+        player,
+        re.IGNORECASE,
+    )
+    stream_match = re.search(
+        r"\bvar\s+streamid\s*=\s*'([A-Za-z0-9]+)'\s*;", player
+    )
+    alias_match = re.search(
+        r"\bvar\s+alias\s*=\s*'([^']+)'\s*;", player
+    )
+    if (not available or not domain_unlocked or not address_match or not stream_match
+            or not alias_match or alias_match.group(1) != alias):
+        raise IncompleteProviderError('GNTF IPCamLive player is unavailable or changed')
+    hls_url = (
+        f'https://{address_match.group(1).lower()}/streams/'
+        f'{stream_match.group(1)}/master.m3u8'
+    )
+    verified, errors = verify_live_hls(
+        [hls_url], probe_interval=6.0, workers=1, referer=player_url
+    )
+    if hls_url not in verified:
+        reason = errors.get(hls_url, 'confirmed_not_live:verification_failed')
+        atomic_write_json(
+            DATA_DIR / 'ipcamlive_discovery_report.json',
+            {
+                'generated_at': utc_now_iso(),
+                'provider': 'Guam (GNTF/IPCamLive)',
+                'source_url': source_page,
+                'verified_live': 0,
+                'rejected': 1,
+                'rejections': [{
+                    'provider_camera_id': alias,
+                    'failure_class': reason.split(':', 1)[0],
+                    'detail': reason,
+                }],
+            },
+        )
+        if reason.startswith(('transient_network:', 'rate_limited:',
+                              'authentication_required:')):
+            raise IncompleteProviderError(f'GNTF camera retryable failure: {reason}')
+        return 0
+
+    add_camera(
+        'Guam National Tennis Center Court',
+        13.509444,
+        144.826667,
+        player_url,
+        'embed',
+        'Guam',
+        'Dededo',
+        '',
+        'ipcamlive',
+        source_page,
+        10,
+    )
+    cameras[-1]['provider_camera_id'] = alias
+    cameras[-1]['category'] = 'sports'
+    atomic_write_json(
+        DATA_DIR / 'ipcamlive_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'Guam (GNTF/IPCamLive)',
+            'source_url': source_page,
+            'player_url': player_url,
+            'verification_stream_url': hls_url,
+            'geographic_scope': 'Guam National Tennis Center, Dededo, Guam',
+            'location_evidence_urls': [
+                'https://gntf.org/contact-us/',
+                ('https://governor.guam.gov/press_release/'
+                 'leon-guerrero-tenorio-administration-celebrates-146k-in-'
+                 'guam-national-tennis-center-improvements/'),
+            ],
+            'attribution': 'Guam National Tennis Federation; IPCamLive player',
+            'license_or_usage_terms': (
+                'The first-party operator publishes the IPCamLive player and its '
+                'domain lock is disabled. IPCamLive viewer terms permit viewing '
+                'through an owner-provided embed; StormScope stores only that player URL.'
+            ),
+            'verified_live': 1,
+            'rejected': 0,
+            'refresh_cadence_seconds': 10,
+        },
+    )
+    print('  Guam GNTF IPCamLive verification: 1/1 advancing')
+    return 1
+
+
 # ── West Virginia (WV511) — official map inventory + per-camera live HLS ──
 WV511_COUNTIES = {
     'BER': 'Berkeley',
@@ -2377,6 +2484,7 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
         ('Maryland (CHART)', fetch_maryland_chart),
         ('West Virginia (WV511)', fetch_wv511),
         ('Puerto Rico (ACT/ITS)', fetch_pr_act),
+        ('Guam (GNTF/IPCamLive)', fetch_guam_gntf),
         ('Florida (ArcGIS)', fetch_fl_arcgis),
         ('Georgia DOT (DataTables)', lambda: fetch_511_datatables(
             'https://511ga.org', 'Georgia', 'https://511ga.org/cctv')),
@@ -2502,7 +2610,9 @@ def main(argv=None):
             source = camera['source']
             source_counts[source] = source_counts.get(source, 0) + 1
         minimum_sources = {
-            source: count if source in {'earthcam', 'livebeaches', 'youtube'} else int(count * 0.9)
+            source: count
+            if source in {'earthcam', 'ipcamlive', 'livebeaches', 'youtube'}
+            else int(count * 0.9)
             for source, count in source_counts.items()
         }
         validate_camera_data(

@@ -423,6 +423,57 @@ class FetchMergeTests(unittest.TestCase):
             row["source_url"],
         )
 
+    def test_guam_gntf_accepts_only_the_first_party_unlocked_advancing_embed(self):
+        hls_url = "https://s116.ipcamlive.com/streams/currentstream/master.m3u8"
+        homepage = (
+            '<a href="https://g3.ipcamlive.com/player/player.php?'
+            'alias=62737dba77480&mute=1">Camera</a>'
+        ).encode()
+        player = b"""
+            var alias = '62737dba77480';
+            var available = 1;
+            var address = 'http://s116.ipcamlive.com/';
+            var streamid = 'currentstream';
+            var domainlockenabled = 0;
+        """
+
+        def response(url, **_kwargs):
+            if url == "https://gntf.org/":
+                return homepage
+            if "g3.ipcamlive.com/player/player.php" in url:
+                return player
+            raise AssertionError(url)
+
+        with (
+            mock.patch.object(fetch_cameras, "_http_bytes", side_effect=response),
+            mock.patch.object(
+                fetch_cameras, "verify_live_hls", return_value=({hls_url}, {})
+            ) as verifier,
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Guam (GNTF/IPCamLive)", fetch_cameras.fetch_guam_gntf
+            )
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual(1, len(result.cameras))
+        row = result.cameras[0]
+        self.assertEqual("Guam", row["state"])
+        self.assertEqual("Dededo", row["county"])
+        self.assertEqual("ipcamlive", row["source"])
+        self.assertEqual("embed", row["type"])
+        self.assertEqual("62737dba77480", row["provider_camera_id"])
+        self.assertEqual("sports", row["category"])
+        self.assertEqual(13.509444, row["lat"])
+        self.assertEqual(144.826667, row["lon"])
+        self.assertEqual("https://gntf.org/", row["source_url"])
+        verifier.assert_called_once_with(
+            [hls_url],
+            probe_interval=6.0,
+            workers=1,
+            referer=row["url"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

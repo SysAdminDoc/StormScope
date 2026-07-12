@@ -22,7 +22,9 @@ from urllib.parse import urlsplit, urlunsplit
 
 CAMERA_SCHEMA_VERSION = 2
 ALLOWED_TYPES = frozenset({"embed", "hls", "image", "mjpeg", "youtube"})
-ALLOWED_SOURCES = frozenset({"dot", "earthcam", "livebeaches", "nps", "youtube"})
+ALLOWED_SOURCES = frozenset(
+    {"dot", "earthcam", "ipcamlive", "livebeaches", "nps", "youtube"}
+)
 ALLOWED_STATUSES = frozenset({"Active", "Offline", "Unknown"})
 ALLOWED_HEALTH = frozenset({"unknown", "healthy", "degraded", "offline"})
 ALLOWED_FAILURE_CLASSES = frozenset(
@@ -33,6 +35,7 @@ EMBED_HOST_SUFFIXES = frozenset(
         "abbeyroad.com",
         "earthcam.com",
         "esbnyc.com",
+        "ipcamlive.com",
         "myearthcam.com",
         "nps.gov",
         "player.brownrice.com",

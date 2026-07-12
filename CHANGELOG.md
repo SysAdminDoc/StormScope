@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.46.0 - 2026-07-12
+
+### First verified Guam camera: Guam National Tennis Center
+- Added the Guam National Tennis Federation's fixed Dededo court camera from its first-party homepage. The provider resolves the stable IPCamLive alias to the current rotating HLS stream, requires an available/domain-unlocked player, valid advancing media playlists and current segments, then stores only the stable authorized embed URL.
+- Used the operator and Government of Guam venue evidence for the exact `13.509444, 144.826667` location. The record is classified as an `ipcamlive` sports/destination source rather than being mislabeled DOT, EarthCam, or YouTube.
+- Added the `ipcamlive` schema/source contract, exact embed-host trust policy and CSP frame permission, while retaining the existing hostile-lookalike checks. The ignored report records source, location evidence, attribution, viewer terms, current resolved stream, and cadence.
+- Pacific-territory research rejected Saipan EarthCam (provider offline and repeat HLS 404), Guam GCIC (offline/upcoming), American Samoa NPS weather station (offline/no camera), and 603 broad YouTube results that were archived, mobile, news/storm coverage, or not fixed live cameras. Corpus **33,634 → 33,635**; Guam **0 → 1**; provider embeds **451 → 452**; service-worker cache bumped to v23.
+
 ## v0.45.0 - 2026-07-12
 
 ### +19 verified official Puerto Rico ACT traffic cameras

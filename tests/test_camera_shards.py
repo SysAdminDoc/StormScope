@@ -67,14 +67,14 @@ class CameraShardBuilderTests(unittest.TestCase):
     def test_checked_in_manifest_and_shards_cover_the_schema_v2_dataset(self):
         manifest = json.loads((ROOT / "data" / "cameras.index.json").read_text(encoding="utf-8"))
         self.assertEqual(camera_data.CAMERA_SCHEMA_VERSION, manifest["camera_schema_version"])
-        self.assertEqual(33_634, manifest["total"])
+        self.assertEqual(33_635, manifest["total"])
         self.assertTrue(all(descriptor["count"] <= build_camera_shards.MAX_SHARD_SIZE for descriptor in manifest["shards"]))
         ids = []
         for descriptor in manifest["shards"]:
             shard = json.loads((ROOT / "data" / descriptor["path"]).read_text(encoding="utf-8"))
             self.assertEqual(descriptor["count"], len(shard))
             ids.extend(camera["id"] for camera in shard)
-        self.assertEqual(list(range(1, 33_635)), ids)
+        self.assertEqual(list(range(1, 33_636)), ids)
 
 
 if __name__ == "__main__":

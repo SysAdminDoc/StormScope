@@ -12,7 +12,8 @@
     'nps.gov',
     'brownrice.com',
     'abbeyroad.com',
-    'esbnyc.com'
+    'esbnyc.com',
+    'ipcamlive.com'
   ]);
   var RAINVIEWER_API_URL = 'https://api.rainviewer.com/public/weather-maps.json';
   var RAINVIEWER_COLOR_SCHEME = 2;
