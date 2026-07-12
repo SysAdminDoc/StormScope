@@ -96,6 +96,29 @@ async function addNetworkFixtures(page) {
       });
       return;
     }
+    if (url.startsWith('https://mapservices.weather.noaa.gov/') && url.includes('WMSServer')) {
+      await route.fulfill({ contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: pixel });
+      return;
+    }
+    if (url.startsWith('https://mapservices.weather.noaa.gov/') && url.includes('/query')) {
+      const now = Date.now();
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ features: [
+        { attributes: { objectid: 1, idp_subset: 'CONUS', idp_validtime: now - 600000,
+          idp_validendtime: now - 540000, idp_filedate: now - 600000, idp_ingestdate: now - 590000 } },
+        { attributes: { objectid: 2, idp_subset: 'CONUS', idp_validtime: now - 300000,
+          idp_validendtime: now - 240000, idp_filedate: now - 300000, idp_ingestdate: now - 290000 } }
+      ] }) });
+      return;
+    }
+    if (url.startsWith('https://mapservices.weather.noaa.gov/')) {
+      const now = Date.now();
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+        timeInfo: { timeExtent: [now - 3600000, now - 60000] },
+        fullExtent: { xmin: -20037508, ymin: -20037508, xmax: 20037508, ymax: 20037508,
+          spatialReference: { wkid: 102100 } }
+      }) });
+      return;
+    }
     if (url.includes('tilecache.rainviewer.com') || url.includes('basemaps.cartocdn.com')) {
       await route.fulfill({ contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: pixel });
       return;
@@ -174,7 +197,7 @@ async function addNetworkFixtures(page) {
 
 async function waitForApp(page, requireRadar = true) {
   await page.goto(page.baseURL, { waitUntil: 'domcontentloaded' });
-  await page.locator('#camera-count').filter({ hasText: '30,665 cameras' }).waitFor({ state: 'visible' });
+  await page.locator('#camera-count').filter({ hasText: '31,788 cameras' }).waitFor({ state: 'visible' });
   if (requireRadar) {
     await page.waitForFunction(() => /RainViewer|NOAA\/NWS MRMS/.test(document.querySelector('#radar-meta').textContent));
   }
@@ -274,7 +297,7 @@ async function main() {
     assert.equal(await page.locator('html').getAttribute('lang'), 'es');
     assert.equal(await page.locator('label[for="app-locale"]').textContent(), 'Idioma');
     assert.equal(await page.locator('#search-heading').textContent(), 'Buscar cámaras');
-    assert.match(await page.locator('#camera-count').textContent(), /^30\.665 cámaras$/);
+    assert.match(await page.locator('#camera-count').textContent(), /^31\.788 cámaras$/);
     assert.match(await page.locator('#radar-frame-position').textContent(), /^Fotograma /);
     assert.match(await page.locator('#radar-time').textContent(), /hace|ahora mismo/);
     await page.locator('#app-locale').selectOption('en');
@@ -353,12 +376,12 @@ async function main() {
 
     await page.evaluate(() => navigator.serviceWorker.ready);
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.locator('#camera-count').filter({ hasText: '30,665 cameras' }).waitFor({ state: 'visible' });
+    await page.locator('#camera-count').filter({ hasText: '31,788 cameras' }).waitFor({ state: 'visible' });
     assert.equal(await page.locator('#saved-views option', { hasText: 'Smoke view' }).count(), 1);
     await context.setOffline(true);
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.getByRole('heading', { name: 'StormScope' }).waitFor({ state: 'visible' });
-    await page.locator('#camera-count').filter({ hasText: '30,665 cameras' }).waitFor({ state: 'visible' });
+    await page.locator('#camera-count').filter({ hasText: '31,788 cameras' }).waitFor({ state: 'visible' });
     await context.setOffline(false);
 
     await page.getByRole('button', { name: 'Toggle layers panel' }).click();

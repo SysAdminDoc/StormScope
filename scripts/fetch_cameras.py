@@ -1125,6 +1125,98 @@ def fetch_mn_iris():
 
 
 # ── Iowa (IRIS) ──
+_IMAGE_MAGIC = (b'\xff\xd8\xff', b'\x89PNG\r\n\x1a\n', b'GIF87a', b'GIF89a', b'RIFF')
+
+
+def _image_is_live(url, timeout=15):
+    try:
+        request = urllib.request.Request(
+            url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0',
+                          'Accept': 'image/*,*/*'})
+        response = urllib.request.urlopen(request, timeout=timeout, context=ctx)
+        content_type = (response.headers.get('Content-Type') or '').lower()
+        head = response.read(64)
+        if 'image' not in content_type and not any(head.startswith(sig) for sig in _IMAGE_MAGIC):
+            return url, 'placeholder:not_an_image'
+        if not any(head.startswith(sig) for sig in _IMAGE_MAGIC):
+            return url, 'placeholder:unrecognized_body'
+        return url, None
+    except urllib.error.HTTPError as exc:
+        if exc.code in {404, 410}:
+            return url, f'confirmed_dead:http_{exc.code}'
+        if exc.code == 429:
+            return url, 'rate_limited:http_429'
+        if exc.code in {401, 403}:
+            return url, f'authentication_required:http_{exc.code}'
+        return url, f'transient_network:http_{exc.code}'
+    except Exception as exc:  # noqa: BLE001
+        return url, f'transient_network:{exc}'
+
+
+def verify_live_images(urls, workers=16):
+    verified = set()
+    errors = {}
+    unique = list(dict.fromkeys(urls))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+        for url, error in executor.map(_image_is_live, unique):
+            if error is None:
+                verified.add(url)
+            else:
+                errors[url] = error
+    return verified, errors
+
+
+# ── Iowa DOT (keyless ArcGIS FeatureServer, verified live snapshots) ──
+def fetch_iowa_dot():
+    query = ('https://services.arcgis.com/8lRhdTsQyJpO52F1/arcgis/rest/services/'
+             'Traffic_Cameras_View/FeatureServer/0/query?where=1%3D1'
+             '&outFields=Desc_,ImageURL,REGION,latitude,longitude&f=json'
+             '&resultRecordCount=3000')
+    data = json.loads(_http_bytes(query, headers={'Accept': 'application/json'}, timeout=40))
+    candidates = []
+    seen = set()
+    for feat in data.get('features', []):
+        attrs = feat.get('attributes', {})
+        img_url = str(attrs.get('ImageURL', '')).strip()
+        if not img_url.startswith('https://') or img_url in seen:
+            continue
+        lat, lon = attrs.get('latitude'), attrs.get('longitude')
+        if not lat or not lon:
+            continue
+        seen.add(img_url)
+        candidates.append({
+            'name': str(attrs.get('Desc_', '') or 'Iowa Camera').strip(),
+            'lat': lat, 'lon': lon, 'url': img_url,
+            'county': str(attrs.get('REGION', '') or ''),
+        })
+    verified, errors = verify_live_images([c['url'] for c in candidates])
+    count = 0
+    rejected = []
+    for cam in candidates:
+        if cam['url'] not in verified:
+            rejected.append({'name': cam['name'], 'url': cam['url'],
+                             'failure_class': errors.get(cam['url'], 'transient_network:incomplete')})
+            continue
+        add_camera(cam['name'], cam['lat'], cam['lon'], cam['url'], 'image', 'Iowa',
+                   cam['county'], '', 'dot', 'https://511ia.org/', 60)
+        count += 1
+    atomic_write_json(
+        DATA_DIR / 'iowa_dot_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'Iowa DOT',
+            'source_url': 'https://public-iowadot.opendata.arcgis.com/datasets/traffic-cameras-3',
+            'attribution': 'Iowa Department of Transportation',
+            'candidates': len(candidates),
+            'verified_live': count,
+            'rejected': rejected,
+        },
+        indent=2,
+    )
+    print(f'  Iowa DOT image verification: {count}/{len(candidates)} live')
+    return count
+
+
 def fetch_ia_iris():
     try:
         data = fetch_json('https://tr.511ia.org/tgcameras/api/cameras', timeout=20)
@@ -1557,7 +1649,7 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
         ('Delaware (live HLS)', fetch_delaware_live),
         ('New Mexico DOT', fetch_newmexico),
         ('Minnesota (IRIS)', fetch_mn_iris),
-        ('Iowa (IRIS)', fetch_ia_iris),
+        ('Iowa DOT', fetch_iowa_dot),
         ('Wyoming DOT', fetch_wyoming),
         ('Maryland (CHART)', fetch_maryland_chart),
         ('Florida (ArcGIS)', fetch_fl_arcgis),

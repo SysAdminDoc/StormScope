@@ -1,0 +1,605 @@
+{
+  "generated_at": "2026-07-12T01:39:19Z",
+  "provider": "Iowa DOT",
+  "source_url": "https://public-iowadot.opendata.arcgis.com/datasets/traffic-cameras-3",
+  "attribution": "Iowa Department of Transportation",
+  "candidates": 1242,
+  "verified_live": 1123,
+  "rejected": [
+    {
+      "name": "DQ - US 20 @ MM 297.2 (JFK Rd - West)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv17lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "Rest Area: I-80 EB MM 300 near Davenport",
+      "url": "https://atmsqf.iowadot.gov/snapshots/Public/RestAreas/RA80EB300-01-CENTER.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "Rest Area: I-80 EB MM 300 near Davenport",
+      "url": "https://atmsqf.iowadot.gov/snapshots/Public/RestAreas/RA80EB300-01-ENTRY.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "Rest Area: I-80 EB MM 300 near Davenport",
+      "url": "https://atmsqf.iowadot.gov/snapshots/Public/RestAreas/RA80EB300-01-EXIT.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "Rest Area: I-35 SB MM 98 near Elkhart",
+      "url": "https://atmsqf.iowadot.gov/snapshots/Public/RestAreas/RA35SB98-02-CENTER.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "Rest Area: I-35 SB MM 98 near Elkhart",
+      "url": "https://atmsqf.iowadot.gov/snapshots/Public/RestAreas/RA35SB98-02-EXIT.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "Rest Area: I-35 SB MM 98 near Elkhart",
+      "url": "https://atmsqf.iowadot.gov/snapshots/Public/RestAreas/RA35SB98-02-ENTRY.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 20 @ MM 295.9 (NW Arterial - North)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv12lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - IA 2 MM 119 @ Leon",
+      "url": "https://atmsqf.iowadot.gov/snapshots/Public/RWIS/RWIS_26-00.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - IA 2 MM 119 @ Leon",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_26-01.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - IA 2 MM 119 @ Leon",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_26-02.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - IA 2 MM 119 @ Leon",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_26-03.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - IA 2 MM 119 @ Leon",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_26-04.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - IA 2 MM 119 @ Leon",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_26-05.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - IA 2 MM 119 @ Leon",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_26-06.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - IA 2 MM 119 @ Leon",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_26-07.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "WL - US 63 @ MM 166 (E Mullan Ave @ Newell St - N) - C",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/wltv210clb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "Rest Area: I-80 WB MM 208 near Victor",
+      "url": "https://atmsqf.iowadot.gov/snapshots/Public/RestAreas/RA80WB208-01-CENTER.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 61 @ MM 189.2 (Grandview Truss - South)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv27lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - US 20 MM 181 @ Steamboat Rock",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_50-00.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - US 20 MM 181 @ Steamboat Rock",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_50-01.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - US 20 MM 181 @ Steamboat Rock",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_50-02.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - US 20 MM 181 @ Steamboat Rock",
+      "url": "https://atmsqf.iowadot.gov/snapshots/Public/RWIS/RWIS_50-03.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - US 20 MM 181 @ Steamboat Rock",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_50-04.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - US 20 MM 181 @ Steamboat Rock",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_50-05.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - US 20 MM 181 @ Steamboat Rock",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_50-06.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - US 20 MM 181 @ Steamboat Rock",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_50-07.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "WL - US 63 @ MM 166 (E Mullan Ave @ Newell St - S) - C",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/wltv211clb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - IA 21 MM 62 @ Tama",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_57-00.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "WL - US 63 @ MM 165.3 (E 1st St @ Franklin St - S) - C",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/wltv202clb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 61 @ MM 190.3 (Locust Conn - South)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv03lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "D2 - I-35 @ MM 160 near Dows (D2TV08)",
+      "url": "https://atmsqf.iowadot.gov/snapshots/Public/Rural/D2TV08.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DM - I-35 @ MM 70.4 (Mills Civic Pkwy)-Q",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dmtv050qlb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 20 @ MM 300.3 (E Mississippi River Bridge - West)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv24lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - IA 9 MM 91 @ Estherville",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_64-00.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 61 @ MM 190.4 (1st St - North)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv04lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "WWD - US 30 @ MM 135.6 (Quill Ave)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/wwdtv100hd.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - US 71 MM 177 @ Storm Lake",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_43-05.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 20 @ MM 299.8 (Locust St - West Zoom)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv18lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DM - I-35/80 @ MM 136.4",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dmtv020hd.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - IA 92 MM 199 @ Sigourney",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_40-00.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - IA 92 MM 199 @ Sigourney",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_40-01.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - IA 92 MM 199 @ Sigourney",
+      "url": "https://atmsqf.iowadot.gov/snapshots/Public/RWIS/RWIS_40-02.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - IA 92 MM 199 @ Sigourney",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_40-03.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - IA 92 MM 199 @ Sigourney",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_40-04.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "WL - US 63 @ MM 166.6 (Logan Ave @ Esther St - S) - C",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/wltv215clb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 151 @ MM 94.4 (US 61 - North)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv37lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 151 @ MM 94.4 (US 61 - West)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv38lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 20 @ MM 295.9 (NW Arterial - East)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv15lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "WL - US 63 @ MM 164.8 (W Mullan Ave @ Commercial St - N) - C",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/wltv203clb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 151 @ MM 94.4 (US 61 - North Wide Angle)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv40lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "D2 - IA Ferry Queue @ Lansing (11)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/d2tv11hd.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 151 @ MM 94.4 (US 61 - South)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv36lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 61 @ MM 192.4 (Mississippi River Bridge - East)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv05lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "WL - US 63 @ MM 165.4 (E Mullan Ave @ Almond St - N) - C",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/wltv208clb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - US 34 MM 49 @ Red Oak",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_38-00.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - US 34 MM 49 @ Red Oak",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_38-01.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - US 34 MM 49 @ Red Oak",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_38-02.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - US 34 MM 49 @ Red Oak",
+      "url": "https://atmsqf.iowadot.gov/snapshots/Public/RWIS/RWIS_38-03.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - US 34 MM 49 @ Red Oak",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_38-04.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - US 34 MM 49 @ Red Oak",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_38-05.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - US 34 MM 49 @ Red Oak",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_38-06.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - US 34 MM 49 @ Red Oak",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_38-07.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - Locust St @ Locust Conn - East (26)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv26lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "Rest Area: I-29 NB MM 37 near Pacific Junction",
+      "url": "https://atmsqf.iowadot.gov/snapshots/Public/RestAreas/RA29NB37-01-ENTRY.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "Rest Area: I-29 NB MM 37 near Pacific Junction",
+      "url": "https://atmsqf.iowadot.gov/snapshots/Public/RestAreas/RA29NB37-01-EXIT.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "Rest Area: I-29 NB MM 37 near Pacific Junction",
+      "url": "https://atmsqf.iowadot.gov/snapshots/Public/RestAreas/RA29NB37-01-CENTER.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "WL - US 63 @ MM 166.6 (Logan Ave @ Esther St - N) - C",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/wltv214clb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 20 @ MM 299.8 (Locust St - East)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv20lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 20 @ MM 295.9 (NW Arterial - East Wide Angle)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv11lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 20 @ MM 300.1 (W Mississippi River Bridge - West)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv22lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 20 @ MM 297.2 (JFK Rd)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv16lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - US 218 S MM 135 @ Van Horne",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_78-05.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - US 218 S MM 135 @ Van Horne",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_78-06.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 151 @ MM 94.4 (US 61 - East)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv39lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 61 @ MM 192.4 (Mississippi River Bridge - West)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv06lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 61 @ MM 187.6 (Maquoketa Dr - South)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv28lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "WL - US 63 @ MM 167 (Logan Ave @ Donald St - S) - C",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/wltv219clb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 20 @ MM 299.2 (Catfish Creek DMS - North)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv01lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "WL - US 63 @ MM 164.2 (Sergeant Rd @ University Ave - S) - C",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/wltv207clb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 61 @ MM 187.6 (Twin Valley Dr)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv30lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "WL - US 63 @ MM 164.8 (W Mullan Ave @ Jefferson St - N) - C",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/wltv204clb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "QC - I-74 @ MM 5.4 (WB Mississippi River)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/qctv35hd.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - I-80 MM 205 @ Victor",
+      "url": "https://atmsqf.iowadot.gov/snapshots/Public/RWIS/RWIS_72-00.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - I-80 MM 205 @ Victor",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_72-01.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - I-80 MM 205 @ Victor",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_72-02.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - I-80 MM 205 @ Victor",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_72-03.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "WL - US 63 @ MM 167 (Logan Ave @ Donald St - N) - C",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/wltv218clb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 61 @ MM 187.7 (Twin Valley Dr - South)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv29lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 20 @ MM 300.1 (W Mississippi River Bridge - East)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv23lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 20 @ MM 299.1 (Bryant St - East)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv33lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "6DX - IA 965 @ 120th St (IWZ 3197)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/iwz3197lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "WL - US 63 @ MM 166.9 (Logan Ave @ Dale St - N) - C",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/wltv216clb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - US 18 MM 257 @ Hawkeye",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_70-07.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 20 @ MM 295.9 (NW Arterial - West Zoom)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv14lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "WL - US 63 @ MM 166.9 (Logan Ave @ Dale St - S) - C",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/wltv217clb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - IA 2 MM 164 @ Centerville",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_11-00.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - IA 2 MM 164 @ Centerville",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_11-01.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - IA 2 MM 164 @ Centerville",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_11-02.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - IA 2 MM 164 @ Centerville",
+      "url": "https://atmsqf.iowadot.gov/snapshots/Public/RWIS/RWIS_11-03.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - IA 2 MM 164 @ Centerville",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_11-04.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "RWIS - IA 2 MM 164 @ Centerville",
+      "url": "https://atmsqf.iowadot.gov/snapshots/public/RWIS/RWIS_11-05.jpg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "WL - US 63 @ MM 165.6 (E Mullan Ave @ Dane St - N) - C",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/wltv209clb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "WL - US 63 @ MM 233 (E 1st St @ Lafayette St - S) - C",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/wltv201clb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DM - I-35/80 @ MM 134.54 (NW 6th Dr.)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dmtv100hd.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 61 @ MM 188.1 (Catfish Creek DMS - South)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv02lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "WL - US 63 @ MM 166.3 (Logan Ave @ Parker St - S) - C",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/wltv213clb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "WL - US 63 @ MM 166.3 (Logan Ave @ Parker St - N) - C",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/wltv212clb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 20 @ MM 295.9 (NW Arterial - West)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv13lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 20 @ MM 294.3 (SW Arterial Bridge - East)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv08lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 20 @ MM 295 (Menards Hill - South)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv10lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "SC - I-29 @ MM 141.8 (8th St - Sergeant Bluff)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/sctv03hd.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 20 @ MM 300.3 (E Mississippi River Bridge - East)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv25lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "CB - I-80 @ MM 5.5",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/cbtv09hd.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 20 @ MM 294.3 (SW Arterial West Ramp Terminal - East)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv07lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 20 @ MM 299.8 (Locust St - North)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv21lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 20 @ MM 299.8 (Locust St - West)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv19lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "WWD - I-80 @ MM 141.7 (Hubbell Ave - S of I-80)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/wwdtv081hd.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "name": "DQ - US 20 @ MM 294.3 (SW Arterial - EB Exit Ramp - West)",
+      "url": "https://atmsqf.iowadot.gov/SNAPSHOTS/PUBLIC/Metro/dqtv09lb.jpeg",
+      "failure_class": "confirmed_dead:http_404"
+    }
+  ]
+}

@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.38.0 - 2026-07-11
+
+### Recovered Iowa DOT with per-image live verification (+1,123 cameras)
+- Replaced the dead Iowa IRIS fetcher (`tr.511ia.org` is now an Angular SPA) with the keyless Iowa DOT ArcGIS FeatureServer (`Traffic_Cameras_View`), which exposes 1,244 cameras with absolute HTTPS snapshot URLs and WGS84 coordinates.
+- Added a concurrent image verifier: each candidate snapshot is fetched and accepted only if it returns a real image body (JPEG/PNG/GIF/WebP magic), rejecting `confirmed_dead` 404s, HTML placeholders, and offline frames. **1,123 of 1,242 verified live**, 119 offline/dead rejected to the ignored report. Iowa grows from 4 remnant rows to 1,127; corpus 30,665 → **31,788**.
+- Rebuilt the deterministic shards (now 43), bumped the service-worker cache version, and synced localized counts/tests.
+- Made the radar-timeline smoke test hermetic: it previously mocked the NOAA lightning and wildfire services but left the NOAA MRMS radar *fallback* on real network. Under the larger corpus, RainViewer radar tiles occasionally error from browser connection-pool pressure and trigger the NOAA fallback, whose real-network timing made the timeline assertion flaky. Added deterministic NOAA MRMS ImageServer/query/WMS fixtures so the fallback is reproducible at any dataset size (product behavior unchanged; radar degrades gracefully to NOAA exactly as in production).
+- Researched Minnesota, Massachusetts, and Hawaii: MnDOT's IRIS `camera_pub` feed and MassDOT's `Assets/CCTV` FeatureServer expose keyless coordinates but no keyless media URL (image/stream URLs moved behind SPA/TrafficLand); Hawaii's GoAkamai list endpoint is Akamai-WAF/TLS-fingerprint gated. All recorded as blocked/retryable. South Carolina (761) and Montana (38) confirmed already complete via their Iteris feeds.
+
 ## v0.37.0 - 2026-07-11
 
 ### Recovered Maryland CHART live cameras (+514 verified HLS)
