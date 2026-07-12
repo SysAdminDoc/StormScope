@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.48.0 - 2026-07-12
+
+### Prevent Census-city false geocodes for state-name collisions
+- Hardened the dedicated Census-city YouTube location gate so a city whose name is also a different state name must appear with its explicit target state in the verified title. This prevents `Washington, DC` from accepting live cameras in Leavenworth, Washington merely because their titles contain “Washington.”
+- Added a focused regression proving Leavenworth, Washington is rejected for the District while an explicit Washington DC camera title remains eligible. Re-ran the District search through eight continuation pages: the three live Leavenworth streams that previously reached the location stage are now rejected before verification, with no dataset or checkpoint write.
+- Corpus remains **33,661**; the ignored report preserves the five remaining candidates, zero verified-live accepts, and 193 content rejections for continued DC research.
+
 ## v0.47.0 - 2026-07-12
 
 ### +26 verified U.S. Virgin Islands destination cameras

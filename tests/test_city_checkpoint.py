@@ -37,6 +37,25 @@ def city_record(geoid: str, name: str):
 
 
 class CityCheckpointTests(unittest.TestCase):
+    def test_state_name_city_requires_explicit_target_state(self):
+        washington_dc = city.CityRecord(
+            "1150000", "Washington, DC", "Washington", "Washington city",
+            "DC", "DC", 38.904243, -77.016524, "25", "N",
+        )
+        leavenworth = youtube.Candidate(
+            video_id="AAAAAAAAAAA",
+            title="Leavenworth Washington Live Webcam from Downtown",
+            channel="Visit Leavenworth",
+        )
+        district = youtube.Candidate(
+            video_id="BBBBBBBBBBB",
+            title="Washington DC Live Capitol Webcam",
+            channel="District Camera",
+        )
+
+        self.assertFalse(city.title_matches_city(leavenworth, washington_dc))
+        self.assertTrue(city.title_matches_city(district, washington_dc))
+
     def run_batch(
         self,
         directory: Path,

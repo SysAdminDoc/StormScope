@@ -563,10 +563,10 @@ def title_matches_city(candidate: Any, city: CityRecord) -> bool:
         return any(hint in lowered for hint in NEW_YORK_CITY_HINTS)
     city_tokens = token_set(city.name)
     title_tokens = token_set(title)
+    if city_tokens_require_phrase(city, city_tokens):
+        return title_has_city_state(title, city)
     if contains_phrase(title, city.name):
         return True
-    if city_tokens_require_phrase(city, city_tokens):
-        return False
     return bool(city_tokens and city_tokens <= title_tokens)
 
 
