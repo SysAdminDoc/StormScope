@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 import urllib.error
+import urllib.parse
 from pathlib import Path
 from unittest import mock
 
@@ -447,6 +448,205 @@ class FetchMergeTests(unittest.TestCase):
         self.assertEqual({"I-40@Test"}, verified)
         self.assertEqual({}, errors)
         self.assertEqual(second, snapshots["I-40@Test"])
+
+    def test_tennessee_smartway_uses_current_public_config_and_advancing_hls(self):
+        config = {
+            "apiBaseUrl": "https://www.tdot.tn.gov/opendata/api/public/",
+            "apiKey": "published-key",
+            "cameras": "RoadwayCameras",
+        }
+        inventory = [{
+            "id": 3165,
+            "title": "I-40/75 @ West Hills",
+            "active": "true",
+            "jurisdiction": "Knoxville",
+            "lat": 35.928889,
+            "lng": -84.039167,
+            "httpsVideoUrl": (
+                "https://mcleansfs1.us-east-1.skyvdn.com:443/"
+                "rtplive/R1_010/playlist.m3u8"
+            ),
+        }]
+        stream_url = inventory[0]["httpsVideoUrl"]
+        with (
+            mock.patch.object(
+                fetch_cameras, "fetch_json", side_effect=[config, inventory]
+            ) as json_fetcher,
+            mock.patch.object(
+                fetch_cameras, "verify_tennessee_hls", return_value=({stream_url}, {})
+            ) as verifier,
+            mock.patch.object(fetch_cameras, "atomic_write_json") as report_writer,
+            mock.patch.object(fetch_cameras, "TENNESSEE_DOT_MINIMUM_INVENTORY", 1),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Tennessee DOT (SmartWay)", fetch_cameras.fetch_tndot
+            )
+        self.assertTrue(result.succeeded)
+        self.assertEqual(1, len(result.cameras))
+        row = result.cameras[0]
+        self.assertEqual("Tennessee", row["state"])
+        self.assertEqual("dot", row["source"])
+        self.assertEqual("hls", row["type"])
+        self.assertEqual("3165", row["provider_camera_id"])
+        self.assertEqual(stream_url, row["url"])
+        self.assertEqual(fetch_cameras.TENNESSEE_DOT_SOURCE, row["source_url"])
+        self.assertEqual(
+            {"ApiKey": "published-key"}, json_fetcher.call_args_list[1].kwargs["headers"]
+        )
+        verifier.assert_called_once_with([stream_url])
+        self.assertEqual(1, report_writer.call_args.args[1]["verified_live"])
+
+    def test_tennessee_smartway_excludes_mobile_duplicate_and_placeholder_rows(self):
+        self.assertEqual(
+            {
+                3309, 3325, 4242, 4243, 4244, 4245, 4672, 6162, 6169,
+            },
+            set(fetch_cameras.TENNESSEE_DOT_EXCLUSIONS),
+        )
+        self.assertTrue(
+            fetch_cameras.TENNESSEE_DOT_EXCLUSIONS[6162].startswith(
+                "location_ambiguous:"
+            )
+        )
+        self.assertTrue(
+            fetch_cameras.TENNESSEE_DOT_EXCLUSIONS[4242].startswith("duplicate:")
+        )
+        self.assertTrue(
+            fetch_cameras.TENNESSEE_DOT_EXCLUSIONS[3309].startswith("placeholder:")
+        )
+
+    def test_tennessee_hls_limits_each_media_host_and_retries_transients(self):
+        hosts = [
+            "https://one.skyvdn.com/a.m3u8",
+            "https://one.skyvdn.com/b.m3u8",
+            "https://two.skyvdn.com/c.m3u8",
+        ]
+        attempts = {url: 0 for url in hosts}
+
+        def verify_group(urls, **_kwargs):
+            for url in urls:
+                attempts[url] += 1
+            if urls == hosts[:2] and attempts[hosts[1]] == 1:
+                return {hosts[0]}, {hosts[1]: "transient_network:http_503"}
+            return set(urls), {}
+
+        with (
+            mock.patch.object(
+                fetch_cameras, "verify_live_hls", side_effect=verify_group
+            ) as verifier,
+            mock.patch.object(fetch_cameras.time, "sleep") as sleeper,
+        ):
+            verified, errors = fetch_cameras.verify_tennessee_hls(
+                hosts, probe_interval=0, retry_delay=15
+            )
+        self.assertEqual(set(hosts), verified)
+        self.assertEqual({}, errors)
+        self.assertEqual(3, verifier.call_count)
+        self.assertTrue(all(
+            call.kwargs == {"probe_interval": 0, "workers": 1}
+            for call in verifier.call_args_list
+        ))
+        sleeper.assert_called_once_with(15)
+
+    def test_tennessee_nps_uses_exact_sites_and_replaces_legacy_embeds(self):
+        camera_ids = {
+            item["provider_camera_id"] for item in fetch_cameras.TENNESSEE_NPS_FEEDS
+        }
+        snapshots = {
+            camera_id: ("hash", 200000, "2026-07-12T09:55:13+00:00")
+            for camera_id in camera_ids
+        }
+        with (
+            mock.patch.object(
+                fetch_cameras,
+                "verify_current_jpeg_images",
+                return_value=(camera_ids, {}, snapshots),
+            ),
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Tennessee NPS verified",
+                fetch_cameras.fetch_tennessee_nps_verified,
+            )
+        self.assertTrue(result.succeeded)
+        self.assertEqual(2, len(result.cameras))
+        self.assertTrue(all(row["state"] == "Tennessee" for row in result.cameras))
+        self.assertTrue(all(row["source"] == "nps" for row in result.cameras))
+        self.assertTrue(all(row["type"] == "image" for row in result.cameras))
+        self.assertTrue(all(row["_replace_source_page"] for row in result.cameras))
+        self.assertEqual({"Blount County", "Sevier County"}, {
+            row["county"] for row in result.cameras
+        })
+
+    def test_clarksville_accepts_only_official_unlocked_advancing_players(self):
+        candidate = fetch_cameras.TENNESSEE_CLARKSVILLE_FEEDS[0]
+        alias, _name, _lat, _lon, source_page = candidate
+        player_url = (
+            f"https://g1.ipcamlive.com/player/player.php?alias={alias}"
+            "&autoplay=1&mute=1"
+        )
+        hls_url = "https://s69.ipcamlive.com/streams/streamid/stream.m3u8"
+
+        def response(url, **_kwargs):
+            if url == fetch_cameras.TENNESSEE_CLARKSVILLE_SOURCE:
+                return urllib.parse.urlsplit(source_page).path.encode()
+            if url == source_page:
+                return f'<iframe src="{player_url.replace("&", "&amp;")}"></iframe>'.encode()
+            if url == player_url:
+                return (
+                    "var available = 1; var domainlockenabled = 0; "
+                    "var address = 'http://s69.ipcamlive.com/'; "
+                    "var streamid = 'streamid'; "
+                    f"var alias = '{alias}';"
+                ).encode()
+            raise AssertionError(url)
+
+        with (
+            mock.patch.object(fetch_cameras, "_http_bytes", side_effect=response),
+            mock.patch.object(
+                fetch_cameras, "verify_live_hls", return_value=({hls_url}, {})
+            ) as verifier,
+            mock.patch.object(fetch_cameras, "atomic_write_json") as report_writer,
+            mock.patch.object(
+                fetch_cameras, "TENNESSEE_CLARKSVILLE_FEEDS", (candidate,)
+            ),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Tennessee Clarksville IPCamLive",
+                fetch_cameras.fetch_tennessee_clarksville,
+            )
+        self.assertTrue(result.succeeded)
+        self.assertEqual(1, len(result.cameras))
+        row = result.cameras[0]
+        self.assertEqual("ipcamlive", row["source"])
+        self.assertEqual("embed", row["type"])
+        self.assertEqual("Tennessee", row["state"])
+        self.assertEqual("Montgomery County", row["county"])
+        self.assertEqual(player_url, row["url"])
+        verifier.assert_called_once_with([hls_url], probe_interval=6.0, workers=5)
+        self.assertEqual(1, report_writer.call_args.args[1]["verified_live"])
+
+    def test_ipcamlive_domain_lock_is_not_bypassed(self):
+        source_page = "https://example.gov/camera"
+        alias = "lockedalias"
+        player_url = (
+            "https://g1.ipcamlive.com/player/player.php?"
+            f"alias={alias}&autoplay=1"
+        )
+
+        def response(url, **_kwargs):
+            if url == source_page:
+                return f'<iframe src="{player_url.replace("&", "&amp;")}"></iframe>'.encode()
+            return (
+                "var available = 1; var domainlockenabled = 1; "
+                "var address = 'http://s69.ipcamlive.com/'; "
+                "var streamid = 'streamid'; "
+                f"var alias = '{alias}';"
+            ).encode()
+
+        with mock.patch.object(fetch_cameras, "_http_bytes", side_effect=response):
+            with self.assertRaisesRegex(ValueError, "domain_locked"):
+                fetch_cameras._resolve_ipcamlive_player(source_page, alias)
 
     def test_new_mexico_nws_accepts_three_current_official_views(self):
         camera_ids = {

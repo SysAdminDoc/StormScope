@@ -1665,5 +1665,189 @@
     "state": "New Mexico",
     "county": "Chaves County",
     "source_url": "https://share.earthcam.net/RoswellNewMexico"
+  },
+  "z8HYmP_gOhY": {
+    "name": "Putnam County Courthouse and Veterans Memorial Live Cam",
+    "lat": 36.162372560316,
+    "lon": -85.499769051326,
+    "state": "Tennessee",
+    "county": "Putnam County",
+    "refresh_cadence_seconds": 300
+  },
+  "NIultPoJuaE": {
+    "name": "Sweetwater Depot Live Train Camera",
+    "lat": 35.5994011,
+    "lon": -84.4615089,
+    "state": "Tennessee",
+    "county": "Monroe County",
+    "refresh_cadence_seconds": 300
+  },
+  "HSZDWRE5m2o": {
+    "name": "Tennessee Valley Railroad Museum PTZ Live Cam",
+    "lat": 35.0678885,
+    "lon": -85.2061671,
+    "state": "Tennessee",
+    "county": "Hamilton County",
+    "refresh_cadence_seconds": 300
+  },
+  "geu9bc_M-kA": {
+    "name": "Jonesborough Chuckey Depot East Rail Camera",
+    "lat": 36.292089,
+    "lon": -82.4758042,
+    "state": "Tennessee",
+    "county": "Washington County",
+    "direction": "E",
+    "refresh_cadence_seconds": 300
+  },
+  "4DkMy1__nV4": {
+    "name": "Cowan Railroad Museum North Rail Camera",
+    "lat": 35.163667288219,
+    "lon": -86.010272636083,
+    "state": "Tennessee",
+    "county": "Franklin County",
+    "direction": "N",
+    "refresh_cadence_seconds": 300
+  },
+  "td55JeRkesE": {
+    "name": "Moonshine Mountain Coaster Live Camera",
+    "lat": 35.720065355171,
+    "lon": -83.50984086446,
+    "state": "Tennessee",
+    "county": "Sevier County",
+    "source_url": "https://www.moonshinemountaincoaster.com/live-feed/",
+    "refresh_cadence_seconds": 300
+  },
+  "3gOv-CBoq_g": {
+    "name": "Downtown Morristown Live Camera",
+    "lat": 36.209662377932,
+    "lon": -83.303311440769,
+    "state": "Tennessee",
+    "county": "Hamblen County",
+    "refresh_cadence_seconds": 300
+  },
+  "ATbtGvbExP4": {
+    "name": "Downtown Nashville from Nissan Stadium",
+    "lat": 36.166546873826,
+    "lon": -86.771353132451,
+    "state": "Tennessee",
+    "county": "Davidson County",
+    "refresh_cadence_seconds": 300
+  },
+  "s3ObT04gzlo": {
+    "name": "Downtown Nashville South View from Renaissance Hotel",
+    "lat": 36.1605958483,
+    "lon": -86.781304044082,
+    "state": "Tennessee",
+    "county": "Davidson County",
+    "direction": "S",
+    "refresh_cadence_seconds": 300
+  },
+  "Gw0FXKfyBno": {
+    "name": "Downtown Nashville Northeast View from Renaissance Hotel",
+    "lat": 36.1605958483,
+    "lon": -86.781304044082,
+    "state": "Tennessee",
+    "county": "Davidson County",
+    "direction": "NE",
+    "refresh_cadence_seconds": 300
+  },
+  "Yud9avj4NQA": {
+    "name": "Lebanon - S Cumberland St at E Gay St",
+    "lat": 36.206853979364,
+    "lon": -86.29126898306,
+    "state": "Tennessee",
+    "county": "Wilson County",
+    "source_url": "https://www.lebanontn.org/775/Live-Traffic-Cameras",
+    "refresh_cadence_seconds": 300
+  },
+  "10LSNoGeEHE": {
+    "name": "Lebanon - S Cumberland St at I-40 WB",
+    "lat": 36.182349820706,
+    "lon": -86.299063733918,
+    "state": "Tennessee",
+    "county": "Wilson County",
+    "source_url": "https://www.lebanontn.org/775/Live-Traffic-Cameras",
+    "refresh_cadence_seconds": 300
+  },
+  "DBdcpvjlypw": {
+    "name": "Lebanon - W Main St at W Baddour Pkwy",
+    "lat": 36.217901998301,
+    "lon": -86.33495202583,
+    "state": "Tennessee",
+    "county": "Wilson County",
+    "source_url": "https://www.lebanontn.org/775/Live-Traffic-Cameras",
+    "refresh_cadence_seconds": 300
+  },
+  "xakwwj05HA4": {
+    "name": "Lebanon - W Main St at Maple Hill Rd",
+    "lat": 36.222106905757,
+    "lon": -86.346637572323,
+    "state": "Tennessee",
+    "county": "Wilson County",
+    "source_url": "https://www.lebanontn.org/775/Live-Traffic-Cameras",
+    "refresh_cadence_seconds": 300
+  },
+  "AnvzzZnlUtk": {
+    "name": "Lebanon - S Cumberland St at Walmart",
+    "lat": 36.191807,
+    "lon": -86.29124,
+    "state": "Tennessee",
+    "county": "Wilson County",
+    "source_url": "https://www.lebanontn.org/775/Live-Traffic-Cameras",
+    "refresh_cadence_seconds": 300
+  },
+  "k3ZpqfybsQE": {
+    "name": "Lebanon - Hwy 109 at I-40 WB Ramp",
+    "lat": 36.185049003076,
+    "lon": -86.407360018421,
+    "state": "Tennessee",
+    "county": "Wilson County",
+    "source_url": "https://www.lebanontn.org/775/Live-Traffic-Cameras",
+    "refresh_cadence_seconds": 300
+  },
+  "KV31TChYhxg": {
+    "name": "Lebanon - S Cumberland St at Tennessee Blvd",
+    "lat": 36.200079012755,
+    "lon": -86.292208007673,
+    "state": "Tennessee",
+    "county": "Wilson County",
+    "source_url": "https://www.lebanontn.org/775/Live-Traffic-Cameras",
+    "refresh_cadence_seconds": 300
+  },
+  "JxAeRK743fg": {
+    "name": "Lebanon - S Cumberland St at Holloway Dr",
+    "lat": 36.187035681767,
+    "lon": -86.296868429657,
+    "state": "Tennessee",
+    "county": "Wilson County",
+    "source_url": "https://www.lebanontn.org/775/Live-Traffic-Cameras",
+    "refresh_cadence_seconds": 300
+  },
+  "iYlIqcnmwH8": {
+    "name": "Lebanon - W Main St at N Maple St",
+    "lat": 36.20811298313,
+    "lon": -86.292482012088,
+    "state": "Tennessee",
+    "county": "Wilson County",
+    "source_url": "https://www.lebanontn.org/775/Live-Traffic-Cameras",
+    "refresh_cadence_seconds": 300
+  },
+  "o3N6_HqFLgU": {
+    "name": "Lebanon - Coles Ferry Pike at N Castle Heights Ave",
+    "lat": 36.219332998721,
+    "lon": -86.298446993483,
+    "state": "Tennessee",
+    "county": "Wilson County",
+    "source_url": "https://www.lebanontn.org/775/Live-Traffic-Cameras",
+    "refresh_cadence_seconds": 300
+  },
+  "zbqKgyyqg-I": {
+    "name": "Lebanon - Murfreesboro Rd at S Hartmann Dr",
+    "lat": 36.173951991915,
+    "lon": -86.302537026956,
+    "state": "Tennessee",
+    "county": "Wilson County",
+    "source_url": "https://www.lebanontn.org/775/Live-Traffic-Cameras",
+    "refresh_cadence_seconds": 300
   }
 }

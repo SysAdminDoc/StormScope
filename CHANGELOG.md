@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.53.0 - 2026-07-12
+
+- Expanded Tennessee from **6 to 677** accurately located cameras. Added **635** current TDOT SmartWay HLS views from the production public RoadwayCameras API after grouping probes by the five SkyVDN hosts, requiring advancing live playlists and segments, and manually reviewing every accepted frame. Rejected four duplicated legacy IDs, three maintenance/offline placeholders, two movable trailer cameras, one dead endpoint, and 22 transient rows that remain retryable.
+- Added all **13** active City of Clarksville intersection cameras from its first-party traffic page. Each stable IPCamLive alias had to be available, domain-unlocked, exact-location matched, and backed by advancing HLS; the inactive 2nd/Riverside player was rejected. Franklin's 39 technically live cameras remain excluded because every player is domain-locked and direct HLS use would bypass that restriction.
+- Replaced the stale Look Rock NPS page embed with its current public-domain 15-minute JPEG and added the current Kuwohi NPS still. Public-land research also held six temporarily stale NEON feeds and excluded inaccessible, ambiguous, or reuse-restricted aquarium, river, weather, and park candidates.
+- Searched all **182 Tennessee Census cities** with five-page-equivalent YouTube result depth plus **36** statewide, operator, transportation, rail, landmark, weather, and wildlife query families. Added **21** exact-location fixed cameras, all rechecked live, public, embed-enabled, and backed by active HLS; 20 candidates were rejected for duplicates, composites, moving/mobile views, ambiguous/private or sensitive locations, and transient final playback.
+- Corpus **33,871 -> 34,541**; Tennessee **6 -> 677**; DOT **32,920 -> 33,555**; YouTube **485 -> 506**; NPS **174 -> 175**; IPCamLive **1 -> 14**; provider embeds **447 -> 459**; deterministic shards **46 -> 47**; service-worker cache v29.
+
 ## v0.52.0 - 2026-07-12
 
 - Expanded New Mexico from **6 to 199** accurately located cameras. The production NMRoads v5 inventory now uses its HTTPS image proxy and authoritative provider epochs; **174 of 183** enabled records passed repeated current-JPEG and 65-second advancement probes. Four empty feeds were classified `confirmed_dead`, two stale/reconnecting frames `placeholder`, and three non-advancing rows were withheld for retry.

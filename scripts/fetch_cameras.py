@@ -711,7 +711,7 @@ def fetch_txdot():
 def fetch_nps():
     try:
         url = 'https://developer.nps.gov/api/v1/webcams?api_key=DEMO_KEY&limit=500'
-        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.35.0'})
+        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.53.0'})
         count = 0
         for cam in data.get('data', []):
             if str(cam.get('status') or '').lower() == 'inactive':
@@ -839,7 +839,7 @@ def _current_jpeg_snapshot(url, require_provider_timestamp=True):
     request = urllib.request.Request(
         url,
         headers={
-            'User-Agent': 'StormScope/0.52.0',
+            'User-Agent': 'StormScope/0.53.0',
             'Accept': 'image/jpeg,image/*,*/*',
             'Cache-Control': 'no-cache',
         },
@@ -1135,25 +1135,379 @@ def fetch_scdot():
 
 
 # ── Tennessee DOT ──
+TENNESSEE_DOT_CONFIG = 'https://smartway.tn.gov/config/config.prod.json'
+TENNESSEE_DOT_SOURCE = 'https://smartway.tn.gov/traffic'
+TENNESSEE_DOT_MINIMUM_INVENTORY = 600
+TENNESSEE_DOT_EXCLUSIONS = {
+    3309: 'placeholder:maintenance_frame',
+    3325: 'placeholder:black_frame',
+    4242: 'duplicate:6057',
+    4243: 'duplicate:6058',
+    4244: 'duplicate:6059',
+    4245: 'duplicate:6060',
+    4672: 'placeholder:maintenance_frame',
+    6162: 'location_ambiguous:movable_trailer_camera',
+    6169: 'location_ambiguous:movable_trailer_camera',
+}
+
+
+def verify_tennessee_hls(urls, probe_interval=8.0, retry_delay=15.0):
+    def verify_groups(targets):
+        groups = {}
+        for url in targets:
+            hostname = urllib.parse.urlsplit(url).hostname or ''
+            groups.setdefault(hostname, []).append(url)
+
+        verified = set()
+        errors = {}
+
+        def verify_group(group_urls):
+            return verify_live_hls(
+                group_urls, probe_interval=probe_interval, workers=1
+            )
+
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=max(1, min(5, len(groups)))
+        ) as executor:
+            for group_verified, group_errors in executor.map(
+                verify_group, groups.values()
+            ):
+                verified.update(group_verified)
+                errors.update(group_errors)
+        return verified, errors
+
+    verified, errors = verify_groups(urls)
+    retryable = [
+        url for url in urls
+        if url not in verified
+        and str(errors.get(url) or '').startswith('transient_network:')
+    ]
+    if retryable:
+        time.sleep(retry_delay)
+        retry_verified, retry_errors = verify_groups(retryable)
+        verified.update(retry_verified)
+        for url in retryable:
+            if url in retry_verified:
+                errors.pop(url, None)
+            elif url in retry_errors:
+                errors[url] = retry_errors[url]
+    return verified, errors
+
+
 def fetch_tndot():
-    try:
-        url = 'https://smartway.tn.gov/map/mapIcons/Cameras'
-        data = fetch_json(url, headers={'Accept': '*/*'})
-        items = data.get('item2', []) if isinstance(data, dict) else data
-        count = 0
-        for item in items:
-            loc = item.get('location', [0, 0])
-            if not isinstance(loc, list) or len(loc) < 2:
-                continue
-            item_id = item.get('itemId', '')
-            name = item.get('title', '') or f'TN Camera {item_id}'
-            img_url = f'https://smartway.tn.gov/map/Cctv/{item_id}'
-            add_camera(name, loc[0], loc[1], img_url, 'image', 'Tennessee', '', '', 'dot')
-            count += 1
-        return count
-    except Exception as e:
-        print(f'  TN DOT: {e}')
-        return 0
+    config = fetch_json(TENNESSEE_DOT_CONFIG, timeout=20)
+    api_base = str(config.get('apiBaseUrl') or '').strip()
+    api_key = str(config.get('apiKey') or '').strip()
+    camera_path = str(config.get('cameras') or '').strip()
+    if not api_base.startswith('https://') or not api_key or not camera_path:
+        raise IncompleteProviderError('provider_error:invalid_SmartWay_public_config')
+    api_url = urllib.parse.urljoin(api_base, camera_path)
+    items = fetch_json(api_url, headers={'ApiKey': api_key}, timeout=40)
+    if not isinstance(items, list) or len(items) < TENNESSEE_DOT_MINIMUM_INVENTORY:
+        raise IncompleteProviderError(
+            f'truncated_inventory:{len(items) if isinstance(items, list) else 0}'
+        )
+    active = [
+        camera for camera in items
+        if str(camera.get('active')).lower() == 'true'
+        and str(camera.get('httpsVideoUrl') or '').startswith('https://')
+        and camera.get('lat') is not None
+        and camera.get('lng') is not None
+    ]
+    candidates = [
+        camera for camera in active
+        if int(camera.get('id') or 0) not in TENNESSEE_DOT_EXCLUSIONS
+    ]
+    urls = [camera['httpsVideoUrl'] for camera in candidates]
+    verified, errors = verify_tennessee_hls(urls)
+    rejected = [
+        {
+            'provider_camera_id': str(camera.get('id') or ''),
+            'name': camera.get('title') or camera.get('description') or '',
+            'jurisdiction': camera.get('jurisdiction') or '',
+            'failure_class': TENNESSEE_DOT_EXCLUSIONS[int(camera['id'])],
+        }
+        for camera in active
+        if int(camera.get('id') or 0) in TENNESSEE_DOT_EXCLUSIONS
+    ]
+    count = 0
+    for camera in candidates:
+        stream_url = camera['httpsVideoUrl']
+        if stream_url not in verified:
+            rejected.append({
+                'provider_camera_id': str(camera.get('id') or ''),
+                'name': camera.get('title') or camera.get('description') or '',
+                'jurisdiction': camera.get('jurisdiction') or '',
+                'failure_class': errors.get(stream_url, 'transient_network:incomplete'),
+            })
+            continue
+        add_camera(
+            camera.get('title') or camera.get('description') or f"TDOT Camera {camera['id']}",
+            camera['lat'], camera['lng'], stream_url, 'hls', 'Tennessee', '', '',
+            'dot', TENNESSEE_DOT_SOURCE, 10,
+        )
+        cameras[-1]['provider_camera_id'] = str(camera['id'])
+        count += 1
+
+    minimum_verified = int(len(candidates) * 0.85)
+    atomic_write_json(
+        DATA_DIR / 'tennessee_dot_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'Tennessee Department of Transportation SmartWay',
+            'source_url': TENNESSEE_DOT_SOURCE,
+            'api_url': api_url,
+            'attribution': 'Tennessee Department of Transportation / SmartWay',
+            'usage_terms': (
+                'Public real-time traveler-information service; '
+                'no express reuse license located'
+            ),
+            'refresh_cadence_seconds': 10,
+            'inventory_total': len(items),
+            'active_with_https_hls': len(active),
+            'verification_candidates': len(candidates),
+            'verified_live': count,
+            'rejected': rejected,
+        },
+        indent=2,
+    )
+    if count < minimum_verified:
+        raise IncompleteProviderError(
+            f'truncated_verified_inventory:{count}<{minimum_verified}'
+        )
+    print(f'  Tennessee DOT HLS verification: {count}/{len(candidates)} advancing')
+    return count
+
+
+TENNESSEE_NPS_FEEDS = (
+    {
+        'provider_camera_id': 'grsm-look-rock-air-quality',
+        'name': 'Great Smoky Mountains NP - Look Rock Air Quality',
+        'lat': 35.633482,
+        'lon': -83.941606,
+        'url': 'https://www.nps.gov/featurecontent/ard/webcams/images/grsm.jpg',
+        'county': 'Blount County',
+        'direction': 'E',
+        'source_url': ('https://www.nps.gov/media/webcam/view.htm?'
+                       'id=6878C635-B83A-8F41-A6E3B0160539BEAA'),
+    },
+    {
+        'provider_camera_id': 'grsm-kuwohi-air-quality',
+        'name': 'Great Smoky Mountains NP - Kuwohi Air Quality',
+        'lat': 35.562778,
+        'lon': -83.4981,
+        'url': 'https://www.nps.gov/featurecontent/ard/webcams/images/grcd.jpg',
+        'county': 'Sevier County',
+        'direction': '',
+        'source_url': ('https://www.nps.gov/media/webcam/view.htm?'
+                       'id=C3DE0FD2-1DD8-B71B-0B7029E73676D939'),
+    },
+)
+
+
+def fetch_tennessee_nps_verified():
+    candidates = [dict(item) for item in TENNESSEE_NPS_FEEDS]
+    verified, errors, snapshots = verify_current_jpeg_images(
+        candidates, probe_interval=2.0, workers=2
+    )
+    rejected = []
+    count = 0
+    for camera in candidates:
+        camera_id = camera['provider_camera_id']
+        if camera_id not in verified:
+            rejected.append({
+                'provider_camera_id': camera_id,
+                'name': camera['name'],
+                'failure_class': errors.get(camera_id, 'transient_network:incomplete'),
+            })
+            continue
+        add_camera(
+            camera['name'], camera['lat'], camera['lon'], camera['url'], 'image',
+            'Tennessee', camera['county'], camera['direction'], 'nps',
+            camera['source_url'], 900,
+        )
+        cameras[-1]['provider_camera_id'] = camera_id
+        cameras[-1]['provider_timestamp'] = snapshots[camera_id][2]
+        cameras[-1]['_replace_source_page'] = True
+        count += 1
+
+    atomic_write_json(
+        DATA_DIR / 'tennessee_nps_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'National Park Service',
+            'source_url': 'https://www.nps.gov/grsm/learn/photosmultimedia/webcams.htm',
+            'attribution': 'National Park Service',
+            'usage_terms': 'NPS-created website material is generally public domain',
+            'usage_terms_url': 'https://www.nps.gov/aboutus/disclaimer.htm',
+            'geographic_scope': 'Great Smoky Mountains National Park, Tennessee',
+            'refresh_cadence_seconds': 900,
+            'candidates': len(candidates),
+            'verified_live': count,
+            'rejected': rejected,
+        },
+        indent=2,
+    )
+    print(f'  Tennessee NPS image verification: {count}/{len(candidates)} current')
+    return count
+
+
+TENNESSEE_CLARKSVILLE_SOURCE = 'https://www.clarksvilletn.gov/189/Traffic-Cameras'
+TENNESSEE_CLARKSVILLE_FEEDS = (
+    ('61310c11c88f4', 'Forrest Hills/Wilma Rudolph Camera', 36.576396, -87.301625,
+     'https://www.clarksvilletn.gov/1109/Forrest-HillsWilma-Rudolph-Camera'),
+    ('61310bc852732', 'Terminal/Wilma Rudolph Camera', 36.588047, -87.293666,
+     'https://www.clarksvilletn.gov/1110/TerminalWilma-Rudolph-Camera'),
+    ('61310cec8872e', 'Exit 11 Camera', 36.525337, -87.221567,
+     'https://www.clarksvilletn.gov/1112/Exit-11-Camera'),
+    ('613a762a8184d', 'Exit 4 Camera', 36.599925, -87.28259,
+     'https://www.clarksvilletn.gov/1116/Exit-4-Camera'),
+    ('614a400064a41', 'Peachers Mill/101st Camera', 36.586005, -87.391051,
+     'https://www.clarksvilletn.gov/1121/Peachers-Mill101st-Camera'),
+    ('654bec1f29e78', 'Trenton Road/Spring Creek Parkway Camera',
+     36.611557, -87.320324,
+     'https://www.clarksvilletn.gov/1254/13108/Trenton-Spring-Creek-Parkway'),
+    ('68396965be373', 'Peachers Mill/Tiny Town Camera', 36.625424, -87.369947,
+     'https://www.clarksvilletn.gov/1390/Peachers-Mill-Tiny-Town-Camera'),
+    ('61310c8c412d5', 'Peachers Mill/Providence Camera', 36.550166, -87.382655,
+     'https://www.clarksvilletn.gov/1111/Peachers-MillProvidence-Camera'),
+    ('6138e5bb22549', 'Madison/Hwy 76 Camera', 36.508674, -87.273053,
+     'https://www.clarksvilletn.gov/1115/9588/MadisonHwy-76-Camera'),
+    ('64f77b13b6139', 'Fire Station Road/Hwy 76 Camera', 36.520803, -87.235445,
+     'https://www.clarksvilletn.gov/1244/12726/Fire-Station-Rd-Hwy-76'),
+    ('654becee17d17', 'Whitfield/101st Parkway Camera', 36.580856, -87.336436,
+     'https://www.clarksvilletn.gov/1253/Whitfield-101st-Parkway-Camera'),
+    ('6839cd98c0e23', 'Fort Campbell/Tiny Town Camera', 36.629532, -87.433943,
+     'https://www.clarksvilletn.gov/1385/Fort-Campbell-Tiny-Town'),
+    ('6839ce06c0b9c', 'Trenton Road/Tiny Town Camera', 36.624594, -87.317871,
+     'https://www.clarksvilletn.gov/1391/Trenton-Road-Tiny-Town-Camera'),
+)
+
+
+def _resolve_ipcamlive_player(source_page, expected_alias):
+    page = _http_bytes(source_page, timeout=30).decode('utf-8', 'replace')
+    player_matches = re.findall(
+        r'https://g\d+\.ipcamlive\.com/player/player\.php\?[^"\'< >]+',
+        page,
+        re.IGNORECASE,
+    )
+    player_url = next((
+        html.unescape(url) for url in player_matches
+        if re.search(rf'[?&]alias={re.escape(expected_alias)}(?:&|$)', html.unescape(url))
+    ), None)
+    if not player_url:
+        raise ValueError('unsupported_embed:first_party_player_missing')
+    player = _http_bytes(
+        player_url, headers={'Referer': source_page}, timeout=30
+    ).decode('utf-8', 'replace')
+    if not re.search(r'\bvar\s+available\s*=\s*1\s*;', player):
+        raise ValueError('confirmed_not_live:player_unavailable')
+    if not re.search(r'\bvar\s+domainlockenabled\s*=\s*0\s*;', player):
+        raise ValueError('unsupported_embed:domain_locked')
+    address_match = re.search(
+        r"\bvar\s+address\s*=\s*'https?://(s\d+\.ipcamlive\.com)/'\s*;",
+        player,
+        re.IGNORECASE,
+    )
+    stream_match = re.search(r"\bvar\s+streamid\s*=\s*'([A-Za-z0-9]+)'\s*;", player)
+    alias_match = re.search(r"\bvar\s+alias\s*=\s*'([^']+)'\s*;", player)
+    if (
+        not address_match or not stream_match or not alias_match
+        or alias_match.group(1) != expected_alias
+    ):
+        raise ValueError('unsupported_embed:player_contract_changed')
+    hls_url = (
+        f'https://{address_match.group(1).lower()}/streams/'
+        f'{stream_match.group(1)}/stream.m3u8'
+    )
+    return player_url, hls_url
+
+
+def fetch_tennessee_clarksville():
+    index_html = _http_bytes(TENNESSEE_CLARKSVILLE_SOURCE, timeout=30).decode(
+        'utf-8', 'replace'
+    )
+    resolved = []
+    rejected = []
+    for alias, name, lat, lon, source_page in TENNESSEE_CLARKSVILLE_FEEDS:
+        if urllib.parse.urlsplit(source_page).path not in index_html:
+            rejected.append({
+                'provider_camera_id': alias,
+                'name': name,
+                'failure_class': 'unsupported_embed:camera_removed_from_official_index',
+            })
+            continue
+        try:
+            player_url, hls_url = _resolve_ipcamlive_player(source_page, alias)
+        except Exception as exc:  # noqa: BLE001
+            rejected.append({
+                'provider_camera_id': alias,
+                'name': name,
+                'failure_class': str(exc),
+            })
+            continue
+        resolved.append({
+            'provider_camera_id': alias,
+            'name': name,
+            'lat': lat,
+            'lon': lon,
+            'source_url': source_page,
+            'player_url': player_url,
+            'hls_url': hls_url,
+        })
+
+    hls_urls = [camera['hls_url'] for camera in resolved]
+    verified, errors = verify_live_hls(
+        hls_urls, probe_interval=6.0, workers=5
+    )
+    count = 0
+    for camera in resolved:
+        if camera['hls_url'] not in verified:
+            rejected.append({
+                'provider_camera_id': camera['provider_camera_id'],
+                'name': camera['name'],
+                'failure_class': errors.get(
+                    camera['hls_url'], 'transient_network:incomplete'
+                ),
+            })
+            continue
+        add_camera(
+            camera['name'], camera['lat'], camera['lon'], camera['player_url'],
+            'embed', 'Tennessee', 'Montgomery County', '', 'ipcamlive',
+            camera['source_url'], 10,
+        )
+        cameras[-1]['provider_camera_id'] = camera['provider_camera_id']
+        cameras[-1]['category'] = 'traffic'
+        count += 1
+
+    atomic_write_json(
+        DATA_DIR / 'tennessee_clarksville_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'City of Clarksville Street Department / IPCamLive',
+            'source_url': TENNESSEE_CLARKSVILLE_SOURCE,
+            'location_evidence_url': (
+                'https://gis.mcgtn.org/arcgis/rest/services/'
+                'ERINGStreetNames/MapServer/0'
+            ),
+            'attribution': 'City of Clarksville Street Department; IPCamLive',
+            'usage_terms': (
+                'City-published public 24/7 traffic/weather players with '
+                'IPCamLive domain locking disabled'
+            ),
+            'candidates': len(TENNESSEE_CLARKSVILLE_FEEDS),
+            'verified_live': count,
+            'rejected': rejected,
+        },
+        indent=2,
+    )
+    if count != len(TENNESSEE_CLARKSVILLE_FEEDS):
+        raise IncompleteProviderError(
+            f'incomplete_Clarksville_snapshot:{count}/'
+            f'{len(TENNESSEE_CLARKSVILLE_FEEDS)}'
+        )
+    print(f'  Clarksville IPCamLive verification: {count}/{len(resolved)} advancing')
+    return count
 
 
 # ── Maryland (CHART) ──
@@ -3358,6 +3712,9 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
         ('Idaho (ID511)', lambda: fetch_511_mapicons('https://511.idaho.gov', 'Idaho')),
         ('South Carolina (SkyVDN)', lambda: fetch_skyvdn_hls(
             'SC', 'South Carolina', 'https://www.511sc.org/', 'scdot_skyvdn_discovery_report.json')),
+        ('Tennessee DOT (SmartWay)', fetch_tndot),
+        ('Tennessee NPS verified', fetch_tennessee_nps_verified),
+        ('Tennessee Clarksville IPCamLive', fetch_tennessee_clarksville),
         ('Montana (Iteris)', lambda: fetch_iteris_geojson('MT', 'Montana')),
         ('South Dakota (Iteris)', lambda: fetch_iteris_geojson('SD', 'South Dakota')),
         ('Missouri DOT', fetch_missouri),

@@ -31,6 +31,9 @@ data/new_mexico_nws_discovery_report*.json
 data/new_mexico_nps_discovery_report*.json
 data/new_mexico_usgs_discovery_report*.json
 data/new_mexico_nrao_discovery_report*.json
+data/tennessee_dot_discovery_report*.json
+data/tennessee_nps_discovery_report*.json
+data/tennessee_clarksville_discovery_report*.json
 ROADMAP.md
 Roadmap_Blocked.md
 RESEARCH.md
