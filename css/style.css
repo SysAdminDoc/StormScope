@@ -505,6 +505,7 @@ button:focus-visible {
 .camera-results { margin: 0; padding: 0; list-style: none; }
 .camera-result { display: grid; grid-template-columns: 1fr auto auto; align-items: center; min-height: 68px; border-bottom: 1px solid var(--border); }
 .camera-result-open { min-width: 0; padding: 9px 6px; border: 0; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.camera-result-open:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 6px; }
 .camera-result-open strong, .camera-result-open span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .camera-result-open span { margin-top: 3px; color: var(--text-dim); font-size: 11px; }
 .favorite-result, .monitor-result, .favorite-camera { min-width: 44px; min-height: 44px; border: 1px solid var(--border); border-radius: 7px; background: transparent; color: var(--text-dim); cursor: pointer; }

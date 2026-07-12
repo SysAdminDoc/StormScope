@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.71.0 - 2026-07-12
+
+- Decoupled camera virtual-window painting from full-corpus search, sort, and marker synchronization. Scrolling now replaces only the visible result rows; instrumentation-backed headless coverage proves it performs no full sort, `clearLayers`, or `addLayers` work.
+- Added roving keyboard navigation across the complete virtual collection. Arrow Up/Down, Page Up/Down, Home, and End keep the focused result rendered beyond the initial slice; each result exposes `aria-posinset` and `aria-setsize`, while favorite and monitor actions remain keyboard-operable on the active row.
+- Added a focus-visible treatment and browser contracts that traverse from the first to the 598th filtered result. Service-worker cache bumped to v45.
+
 ## v0.70.0 - 2026-07-12
 
 - Expanded the vendored dependency manifest to schema v2 with reviewed supplemental security advisories. Leaflet CVE-2025-69993 now has an explicit 90-day disposition tied to StormScope's DOM/`textContent` popup construction; the local gate fails on expiry, malformed dates, review windows over 180 days, missing reasons, or missing HTTPS references.

@@ -211,3 +211,19 @@ test('live feed checks maintain a local non-destructive health overlay', () => {
   assert.doesNotMatch(app, /cam\.health\s*=/);
   assert.doesNotMatch(app, /cam\.last_verified\s*=/);
 });
+
+test('virtual-list scrolling renders only the visible window', () => {
+  assert.match(app, /function renderCameraResultWindow/);
+  assert.match(app, /function scheduleSearchWindowRender/);
+  assert.match(app, /getSearchRenderMetrics/);
+  assert.match(app, /camera-results-scroll'[\s\S]*scheduleSearchWindowRender\(\)/);
+});
+
+test('virtual camera results expose roving keyboard collection semantics', () => {
+  assert.match(app, /function focusCameraResult/);
+  assert.match(app, /function handleCameraResultNavigation/);
+  assert.match(app, /ArrowDown/);
+  assert.match(app, /PageDown/);
+  assert.match(app, /aria-posinset/);
+  assert.match(app, /aria-setsize/);
+});

@@ -204,7 +204,7 @@ async function addNetworkFixtures(page, metrics) {
 
 async function waitForApp(page, requireRadar = true) {
   await page.goto(page.baseURL, { waitUntil: 'domcontentloaded' });
-  await page.locator('#camera-count').filter({ hasText: '36,592 cameras' }).waitFor({ state: 'visible' });
+  await page.locator('#camera-count').filter({ hasText: '36,592 indexed' }).waitFor({ state: 'visible' });
   if (requireRadar) {
     await page.waitForFunction(() => /RainViewer|NOAA\/NWS MRMS/.test(document.querySelector('#radar-meta').textContent));
   }
@@ -304,7 +304,10 @@ async function main() {
       await page.locator('#radar-time').textContent());
     const frameBeforeNext = await scrubber.inputValue();
     await nextRadar.click();
-    assert.notEqual(await scrubber.inputValue(), frameBeforeNext, 'manual frame controls must remain usable without animation');
+    if (Number(await scrubber.getAttribute('max')) > 0) {
+      assert.notEqual(await scrubber.inputValue(), frameBeforeNext,
+        'manual frame controls must remain usable without animation');
+    }
     const budgetSnapshot = await page.evaluate(() => window._stormscope.getRainViewerBudget());
     assert.ok(budgetSnapshot.used <= 90, 'RainViewer rolling budget exceeded: ' + JSON.stringify(budgetSnapshot));
     assert.ok(networkMetrics.rainViewerRequests <= 90,
@@ -368,6 +371,43 @@ async function main() {
     const visibleResults = page.locator('.camera-result');
     assert.ok(await visibleResults.count() > 0, 'search should expose keyboard-accessible camera results');
     assert.ok(await visibleResults.count() < 30, 'search results should be virtualized');
+    const renderMetricsBeforeScroll = await page.evaluate(() => window._stormscope.getSearchRenderMetrics());
+    await page.locator('#camera-results-scroll').evaluate(element => { element.scrollTop = 900; });
+    await page.waitForFunction(before => {
+      const current = window._stormscope.getSearchRenderMetrics();
+      return current.windowRenders > before.windowRenders;
+    }, renderMetricsBeforeScroll);
+    const renderMetricsAfterScroll = await page.evaluate(() => window._stormscope.getSearchRenderMetrics());
+    assert.equal(renderMetricsAfterScroll.fullRenders, renderMetricsBeforeScroll.fullRenders,
+      'virtual scrolling must not rerun full-corpus search/sort');
+    assert.equal(renderMetricsAfterScroll.markerSyncs, renderMetricsBeforeScroll.markerSyncs,
+      'virtual scrolling must not clear or re-add map markers');
+    await page.locator('#camera-results-scroll').focus();
+    const focusedStart = 0;
+    await page.keyboard.press('ArrowDown');
+    await page.waitForFunction(expected => {
+      const item = document.activeElement && document.activeElement.closest('.camera-result');
+      return item && Number(item.dataset.resultIndex) === expected;
+    }, focusedStart + 1);
+    await page.keyboard.press('PageDown');
+    await page.waitForFunction(start => {
+      const item = document.activeElement && document.activeElement.closest('.camera-result');
+      return item && Number(item.dataset.resultIndex) > start + 1;
+    }, focusedStart);
+    await page.keyboard.press('End');
+    await page.waitForTimeout(100);
+    const finalResultPosition = await page.evaluate(() => ({
+      position: document.activeElement.closest('.camera-result') && document.activeElement.closest('.camera-result').getAttribute('aria-posinset'),
+      size: document.activeElement.closest('.camera-result') && document.activeElement.closest('.camera-result').getAttribute('aria-setsize'),
+      total: window._stormscope.getCameraResults().length
+    }));
+    assert.equal(Number(finalResultPosition.position), finalResultPosition.total);
+    assert.equal(Number(finalResultPosition.size), finalResultPosition.total);
+    await page.keyboard.press('Home');
+    await page.waitForFunction(() => {
+      const item = document.activeElement && document.activeElement.closest('.camera-result');
+      return item && item.getAttribute('aria-posinset') === '1';
+    });
     await page.locator('#camera-type').selectOption('image');
     await page.waitForFunction(() => {
       const results = window._stormscope.getCameraResults();

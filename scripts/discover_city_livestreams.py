@@ -79,7 +79,7 @@ CENSUS_GAZETTEER_URL = (
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 "
-    "StormScope/0.70.0"
+    "StormScope/0.71.0"
 )
 
 STATE_NAMES = {

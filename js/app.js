@@ -64,7 +64,11 @@
   var cameraLoadMetrics = { startedAt: 0, firstBatchMs: null, completeMs: null, source: null, index: null };
   var cameraLoadProcessed = 0;
   var currentCameraResults = [];
+  var cameraResultFocusIndex = 0;
+  var suppressNextCameraResultScroll = false;
+  var cameraResultKeyboardMode = false;
   var searchRenderTimer = null;
+  var searchRenderMetrics = { fullRenders: 0, windowRenders: 0, markerSyncs: 0 };
   var savedStore = null;
   var saveLastViewTimer = null;
   var cameraDataTimestamp = null;
@@ -1107,6 +1111,7 @@
 
   function syncCameraMarkers(results, filtered) {
     if (!cameraCluster) return;
+    searchRenderMetrics.markerSyncs += 1;
     cameraCluster.clearLayers();
     var cameras = filtered ? results : allCameras;
     cameraCluster.addLayers(cameras.map(function (camera) { return camera._marker; }).filter(Boolean));
@@ -1130,7 +1135,8 @@
     try {
       savedStore.toggleFavorite(camera.id);
       updateFavoriteButton(camera);
-      renderCameraResults();
+      if (document.getElementById('camera-favorites').checked) renderCameraResults();
+      else renderCameraResultWindow();
     } catch (error) {
       document.getElementById('camera-results-status').textContent = tr('search.favoriteError', { error: error.message });
     }
@@ -1151,17 +1157,16 @@
     try {
       monitorSelection.toggle(camera);
       updateMonitorSelectionUi();
-      renderCameraResults();
+      renderCameraResultWindow();
     } catch (error) {
       updateMonitorSelectionUi(tr('monitor.maximum'));
     }
   }
 
   function renderCameraResults() {
-    var list = document.getElementById('camera-results');
-    var scroller = document.getElementById('camera-results-scroll');
-    list.replaceChildren();
+    searchRenderMetrics.fullRenders += 1;
     if (!cameraStore) {
+      document.getElementById('camera-results').replaceChildren();
       document.getElementById('camera-results-status').textContent = tr('search.indexPending');
       return;
     }
@@ -1185,24 +1190,49 @@
       map: filtered ? tr('search.shownOnMap') : ''
     });
 
+    renderCameraResultWindow();
+  }
+
+  function renderCameraResultWindow() {
+    searchRenderMetrics.windowRenders += 1;
+    var list = document.getElementById('camera-results');
+    var scroller = document.getElementById('camera-results-scroll');
+    list.replaceChildren();
+    var results = currentCameraResults;
+
     var virtual = StormScopeCameraStore.virtualize(results, {
       scrollTop: scroller.scrollTop,
       viewportHeight: scroller.clientHeight || 360,
       itemHeight: 68,
       overscan: 4
     });
+    if (cameraResultKeyboardMode &&
+        (cameraResultFocusIndex < virtual.start || cameraResultFocusIndex >= virtual.end)) {
+      virtual = StormScopeCameraStore.virtualize(results, {
+        scrollTop: cameraResultFocusIndex * 68,
+        viewportHeight: scroller.clientHeight || 360,
+        itemHeight: 68,
+        overscan: 4
+      });
+    }
     if (virtual.offsetTop) {
       var before = document.createElement('li');
       before.style.height = virtual.offsetTop + 'px';
       before.setAttribute('aria-hidden', 'true');
       list.appendChild(before);
     }
-    virtual.items.forEach(function (camera) {
+    virtual.items.forEach(function (camera, localIndex) {
+      var resultIndex = virtual.start + localIndex;
       var item = document.createElement('li');
       item.className = 'camera-result';
+      item.setAttribute('role', 'listitem');
+      item.dataset.resultIndex = String(resultIndex);
+      item.setAttribute('aria-posinset', String(resultIndex + 1));
+      item.setAttribute('aria-setsize', String(results.length));
       var openButton = document.createElement('button');
       openButton.type = 'button';
       openButton.className = 'camera-result-open';
+      openButton.tabIndex = resultIndex === cameraResultFocusIndex ? 0 : -1;
       var name = document.createElement('strong');
       name.textContent = camera.name;
       var summary = document.createElement('span');
@@ -1210,9 +1240,11 @@
       openButton.appendChild(name);
       openButton.appendChild(summary);
       openButton.addEventListener('click', function () { selectCameraResult(camera); });
+      openButton.addEventListener('focus', function () { cameraResultFocusIndex = resultIndex; });
       var favorite = document.createElement('button');
       favorite.type = 'button';
       favorite.className = 'favorite-result';
+      favorite.tabIndex = resultIndex === cameraResultFocusIndex ? 0 : -1;
       favorite.setAttribute('aria-label', tr(savedStore.isFavorite(camera.id) ? 'camera.favoriteRemove' : 'camera.favoriteAdd', {
         name: camera.name
       }));
@@ -1222,6 +1254,7 @@
       var monitor = document.createElement('button');
       monitor.type = 'button';
       monitor.className = 'monitor-result';
+      monitor.tabIndex = resultIndex === cameraResultFocusIndex ? 0 : -1;
       monitor.setAttribute('aria-pressed', String(monitorSelection.has(camera)));
       monitor.setAttribute('aria-label', tr(monitorSelection.has(camera) ? 'monitor.remove' : 'monitor.add', { name: camera.name }));
       monitor.textContent = monitorSelection.has(camera) ? '−' : '+';
@@ -1237,12 +1270,63 @@
       after.setAttribute('aria-hidden', 'true');
       list.appendChild(after);
     }
+    if (cameraResultKeyboardMode) {
+      var focusedButton = list.querySelector(
+        '.camera-result[data-result-index="' + cameraResultFocusIndex + '"] .camera-result-open'
+      );
+      if (focusedButton && document.activeElement !== focusedButton) focusedButton.focus();
+    }
+  }
+
+  function focusCameraResult(index) {
+    if (!currentCameraResults.length) return;
+    cameraResultFocusIndex = Math.max(0, Math.min(currentCameraResults.length - 1, index));
+    var scroller = document.getElementById('camera-results-scroll');
+    var itemTop = cameraResultFocusIndex * 68;
+    var nextScrollTop = scroller.scrollTop;
+    if (itemTop < scroller.scrollTop) nextScrollTop = itemTop;
+    else if (itemTop + 68 > scroller.scrollTop + scroller.clientHeight) {
+      nextScrollTop = itemTop + 68 - scroller.clientHeight;
+    }
+    if (nextScrollTop !== scroller.scrollTop) {
+      suppressNextCameraResultScroll = true;
+      scroller.scrollTop = nextScrollTop;
+    }
+    renderCameraResultWindow();
+    var button = document.querySelector(
+      '.camera-result[data-result-index="' + cameraResultFocusIndex + '"] .camera-result-open'
+    );
+    if (button) button.focus();
+  }
+
+  function handleCameraResultNavigation(event) {
+    var key = event.key;
+    var next = cameraResultFocusIndex;
+    if (key === 'ArrowDown') next += 1;
+    else if (key === 'ArrowUp') next -= 1;
+    else if (key === 'PageDown') next += Math.max(1, Math.floor(event.currentTarget.clientHeight / 68));
+    else if (key === 'PageUp') next -= Math.max(1, Math.floor(event.currentTarget.clientHeight / 68));
+    else if (key === 'Home') next = 0;
+    else if (key === 'End') next = currentCameraResults.length - 1;
+    else return;
+    event.preventDefault();
+    cameraResultKeyboardMode = true;
+    focusCameraResult(next);
   }
 
   function scheduleSearchRender(resetScroll) {
     clearTimeout(searchRenderTimer);
-    if (resetScroll) document.getElementById('camera-results-scroll').scrollTop = 0;
+    if (resetScroll) {
+      document.getElementById('camera-results-scroll').scrollTop = 0;
+      cameraResultFocusIndex = 0;
+      cameraResultKeyboardMode = false;
+    }
     searchRenderTimer = setTimeout(renderCameraResults, 100);
+  }
+
+  function scheduleSearchWindowRender() {
+    clearTimeout(searchRenderTimer);
+    searchRenderTimer = setTimeout(renderCameraResultWindow, 16);
   }
 
   function updateFavoriteButton(camera) {
@@ -2541,8 +2625,16 @@
       document.getElementById(id).addEventListener('change', function () { scheduleSearchRender(true); });
     });
     document.getElementById('camera-results-scroll').addEventListener('scroll', function () {
-      scheduleSearchRender(false);
+      if (suppressNextCameraResultScroll) {
+        suppressNextCameraResultScroll = false;
+        return;
+      }
+      scheduleSearchWindowRender();
     }, { passive: true });
+    document.getElementById('camera-results-scroll').addEventListener('keydown', handleCameraResultNavigation);
+    document.getElementById('camera-results-scroll').addEventListener('pointerdown', function () {
+      cameraResultKeyboardMode = false;
+    });
 
     document.getElementById('saved-views').addEventListener('change', function () {
       var hasSelection = Boolean(this.value);
@@ -2877,6 +2969,7 @@
     getRainViewerBudget: function () { return rainViewerBudget.snapshot(); },
     getCameraLoadMetrics: function () { return Object.assign({}, cameraLoadMetrics); },
     getCameraResults: function () { return currentCameraResults.slice(); },
+    getSearchRenderMetrics: function () { return Object.assign({}, searchRenderMetrics); },
     getMonitorState: function () {
       return { selected: monitorSelection.count(), players: monitorRegistry ? monitorRegistry.count() : 0 };
     },
