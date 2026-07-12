@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.72.0 - 2026-07-12
+
+- Added reduced Firefox and WebKit browser contracts alongside the exhaustive Chromium smoke. Both engines now prove full-corpus boot, virtual search, modal open/cleanup, and a populated cached offline shell.
+- Firefox verifies the real HLS.js/MSE capability path. The Windows Playwright WebKit port receives an explicit native-HLS capability shim so the app's native branch is exercised despite that port lacking the platform media stack.
+- Refactored the deterministic browser server/network fixtures for reuse and added `npm run smoke:browsers`; the complete local gate installs/runs all browser contracts without remote CI.
+
 ## v0.71.0 - 2026-07-12
 
 - Decoupled camera virtual-window painting from full-corpus search, sort, and marker synchronization. Scrolling now replaces only the visible result rows; instrumentation-backed headless coverage proves it performs no full sort, `clearLayers`, or `addLayers` work.

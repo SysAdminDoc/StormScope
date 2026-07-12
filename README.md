@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.71.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.72.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
 [![Cameras](https://img.shields.io/badge/cameras-36%2C592-cyan)]()
@@ -89,6 +89,8 @@ Run the complete local regression gate before changing or publishing the app:
 ```bash
 python scripts/check.py
 ```
+
+The gate uses Playwright Chromium for the exhaustive smoke and reduced Firefox/WebKit contracts for boot, search, modal cleanup, cached offline shell, and HLS branch behavior. Install all three local engines with `npx playwright install chromium firefox webkit`; the Windows WebKit port uses an injected native-HLS capability to exercise that branch because the port does not ship the platform media stack.
 
 It validates the camera corpus and deterministic shards, verifies vendored dependency/license hashes plus expiring supplemental CVE dispositions, runs Python units, lint, JavaScript syntax/contracts and service-worker tests, and enforces a real headless desktop/mobile/modal/offline/cache/accessibility smoke. The smoke requires the first camera shard to render within 2.5 seconds on the local Chromium test profile.
 

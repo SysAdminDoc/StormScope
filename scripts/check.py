@@ -31,6 +31,7 @@ def main() -> int:
     if node_tests:
         run("node", "--test", *node_tests)
     run("node", "tests/browser-smoke.js")
+    run("node", "tests/cross-browser-smoke.js")
 
     cameras = load_camera_data(ROOT / "data" / "cameras.json")
     validate_camera_data(cameras)
