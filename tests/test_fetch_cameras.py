@@ -4,6 +4,7 @@ import json
 import sys
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 from unittest import mock
 
@@ -60,6 +61,16 @@ class FetchMergeTests(unittest.TestCase):
         merged = merge_provider_results(existing, [ProviderResult("Provider A", [fresh])])
         self.assertEqual(
             ["https://dot.test/new.jpg", "https://dot.test/legacy.jpg"],
+            [row["url"] for row in merged],
+        )
+        self.assertEqual([1, 2], [row["id"] for row in merged])
+
+    def test_new_provider_is_appended_without_renumbering_existing_rows(self):
+        existing = [camera(1, "https://dot.test/legacy.jpg")]
+        fresh = camera(99, "https://dot.test/new.jpg", provider="Provider B")
+        merged = merge_provider_results(existing, [ProviderResult("Provider B", [fresh])])
+        self.assertEqual(
+            ["https://dot.test/legacy.jpg", "https://dot.test/new.jpg"],
             [row["url"] for row in merged],
         )
         self.assertEqual([1, 2], [row["id"] for row in merged])
@@ -134,6 +145,92 @@ class FetchMergeTests(unittest.TestCase):
             self.assertIsNotNone(dataset[0]["last_verified"])
             self.assertEqual("https://dot.test/fresh.jpg", dataset[0]["source_url"])
             self.assertEqual("unknown", dataset[1]["health"])
+
+    def test_hls_verification_requires_an_advancing_media_playlist(self):
+        with (
+            mock.patch.object(
+                fetch_cameras,
+                "_hls_snapshot",
+                side_effect=[(10, ("segment-10.ts",)), (11, ("segment-11.ts",))],
+            ),
+            mock.patch.object(fetch_cameras.time, "sleep"),
+        ):
+            verified, errors = fetch_cameras.verify_live_hls(
+                ["https://stream.test/live.m3u8"], probe_interval=0, workers=1
+            )
+        self.assertEqual({"https://stream.test/live.m3u8"}, verified)
+        self.assertEqual({}, errors)
+
+    def test_hls_verification_rejects_a_stale_media_playlist(self):
+        snapshot = (10, ("segment-10.ts",))
+        with (
+            mock.patch.object(fetch_cameras, "_hls_snapshot", side_effect=[snapshot, snapshot]),
+            mock.patch.object(fetch_cameras.time, "sleep"),
+        ):
+            verified, errors = fetch_cameras.verify_live_hls(
+                ["https://stream.test/stale.m3u8"], probe_interval=0, workers=1
+            )
+        self.assertEqual(set(), verified)
+        self.assertEqual(
+            "confirmed_not_live:not_advancing",
+            errors["https://stream.test/stale.m3u8"],
+        )
+
+    def test_hls_verification_classifies_missing_streams_as_confirmed_dead(self):
+        missing = urllib.error.HTTPError(
+            "https://stream.test/missing.m3u8", 404, "Not Found", {}, None
+        )
+        with mock.patch.object(fetch_cameras, "_hls_snapshot", side_effect=missing):
+            verified, errors = fetch_cameras.verify_live_hls(
+                ["https://stream.test/missing.m3u8"], probe_interval=0, workers=1
+            )
+        self.assertEqual(set(), verified)
+        self.assertEqual(
+            "confirmed_dead:http_404",
+            errors["https://stream.test/missing.m3u8"],
+        )
+
+    def test_oktraffic_uses_provider_coordinates_and_verified_hls(self):
+        payload = [
+            {
+                "id": 3,
+                "name": "I-44 & I-240",
+                "mapCameras": [
+                    {
+                        "id": 1103130967,
+                        "latitude": "35.39637",
+                        "longitude": "-97.57406",
+                        "location": "I-44 & I-240 N",
+                        "direction": "N",
+                        "city": "Oklahoma City",
+                        "recordTime": "2026-07-11 19:05:42",
+                        "streamDictionary": {
+                            "streamSrc": "https://stream.oktraffic.org/live/one.m3u8"
+                        },
+                    }
+                ],
+            }
+        ]
+        with (
+            mock.patch.object(fetch_cameras, "fetch_json", return_value=payload),
+            mock.patch.object(
+                fetch_cameras,
+                "verify_live_hls",
+                return_value=({"https://stream.oktraffic.org/live/one.m3u8"}, {}),
+            ),
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher("Oklahoma (OKTraffic)", fetch_cameras.fetch_oktraffic)
+        self.assertTrue(result.succeeded)
+        self.assertEqual(1, len(result.cameras))
+        row = result.cameras[0]
+        self.assertEqual("Oklahoma", row["state"])
+        self.assertEqual("Oklahoma City", row["county"])
+        self.assertEqual("1103130967", row["provider_camera_id"])
+        self.assertEqual("Oklahoma (OKTraffic)", row["provider"])
+        self.assertEqual(10, row["refresh_cadence_seconds"])
+        self.assertEqual("healthy", row["health"])
+        self.assertEqual("https://oktraffic.org/tcameras/camera.aspx?id=3", row["source_url"])
 
 
 if __name__ == "__main__":

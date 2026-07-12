@@ -5,11 +5,13 @@ Pulls cameras from multiple US state DOT APIs and merges into data/cameras.json.
 Usage: python scripts/fetch_cameras.py
 """
 import argparse
+import concurrent.futures
 import json
 import gzip
 import re
 import ssl
 import sys
+import time
 import urllib.request
 import urllib.error
 import urllib.parse
@@ -19,22 +21,26 @@ from typing import Callable
 
 try:
     from camera_data import (
+        atomic_write_json,
         canonical_source_url,
         feed_identity,
         healthy_metadata,
         restore_camera_data,
         unknown_metadata,
         update_camera_data,
+        utc_now_iso,
         validate_camera_data,
     )
 except ModuleNotFoundError:  # pragma: no cover - package import during tests
     from scripts.camera_data import (
+        atomic_write_json,
         canonical_source_url,
         feed_identity,
         healthy_metadata,
         restore_camera_data,
         unknown_metadata,
         update_camera_data,
+        utc_now_iso,
         validate_camera_data,
     )
 
@@ -74,7 +80,8 @@ def next_id():
 
 
 def add_camera(name, lat, lon, url, cam_type='image', state='', county='',
-               direction='', source='dot'):
+               direction='', source='dot', source_url=None,
+               refresh_cadence_seconds=None):
     if not url or not lat or not lon:
         return
     try:
@@ -101,11 +108,12 @@ def add_camera(name, lat, lon, url, cam_type='image', state='', county='',
     }
     if active_provider:
         camera['provider'] = active_provider
-    source_url = canonical_source_url(cam_type, str(url))
+    source_url = source_url or canonical_source_url(cam_type, str(url))
     if active_provider == 'OpenTrafficCamMap baseline':
         camera.update(unknown_metadata(source_url))
     else:
         camera.update(healthy_metadata(source_url))
+    camera['refresh_cadence_seconds'] = refresh_cadence_seconds
     cameras.append(camera)
 
 
@@ -146,6 +154,192 @@ def detect_type(url):
     if '.mjpg' in u or '.mjpeg' in u or 'mjpeg' in u:
         return 'mjpeg'
     return 'image'
+
+
+def _hls_manifest_text(url, timeout=20):
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0',
+        'Accept': 'application/vnd.apple.mpegurl, application/x-mpegURL, */*',
+        'Referer': 'https://oktraffic.org/',
+    }
+    request = urllib.request.Request(url, headers=headers)
+    response = urllib.request.urlopen(request, timeout=timeout, context=ctx)
+    payload = response.read()
+    text = payload.decode('utf-8', errors='replace')
+    if not text.lstrip().startswith('#EXTM3U'):
+        raise ValueError('confirmed_not_live:invalid_manifest')
+    return text, response.geturl()
+
+
+def _hls_snapshot(url, timeout=20):
+    text, manifest_url = _hls_manifest_text(url, timeout)
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if '#EXT-X-ENDLIST' in lines:
+        raise ValueError('confirmed_not_live:endlist')
+    if any(line.startswith('#EXT-X-STREAM-INF:') for line in lines):
+        variant = next((line for line in lines if not line.startswith('#')), '')
+        if not variant:
+            raise ValueError('confirmed_not_live:empty_master')
+        manifest_url = urllib.parse.urljoin(manifest_url, variant)
+        text, manifest_url = _hls_manifest_text(manifest_url, timeout)
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        if '#EXT-X-ENDLIST' in lines:
+            raise ValueError('confirmed_not_live:endlist')
+    sequence_match = re.search(r'^#EXT-X-MEDIA-SEQUENCE:(\d+)$', text, re.MULTILINE)
+    sequence = int(sequence_match.group(1)) if sequence_match else -1
+    segments = tuple(
+        urllib.parse.urljoin(manifest_url, line)
+        for line in lines
+        if not line.startswith('#')
+    )
+    if not segments:
+        raise ValueError('confirmed_not_live:no_segments')
+    segment_request = urllib.request.Request(
+        segments[-1],
+        headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0',
+            'Referer': 'https://oktraffic.org/',
+            'Range': 'bytes=0-1023',
+        },
+    )
+    segment_response = urllib.request.urlopen(segment_request, timeout=timeout, context=ctx)
+    content_type = (segment_response.headers.get('Content-Type') or '').lower()
+    if 'text/html' in content_type or 'json' in content_type or not segment_response.read(1024):
+        raise ValueError('confirmed_not_live:segment_unavailable')
+    return sequence, segments[-3:]
+
+
+def verify_live_hls(urls, probe_interval=6.0, workers=12):
+    unique_urls = list(dict.fromkeys(urls))
+
+    def probe_all():
+        snapshots = {}
+        errors = {}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {executor.submit(_hls_snapshot, url): url for url in unique_urls}
+            for future in concurrent.futures.as_completed(futures):
+                url = futures[future]
+                try:
+                    snapshots[url] = future.result()
+                except Exception as exc:
+                    message = str(exc)
+                    if isinstance(exc, urllib.error.HTTPError):
+                        if exc.code in {404, 410}:
+                            message = f'confirmed_dead:http_{exc.code}'
+                        elif exc.code == 429:
+                            message = 'rate_limited:http_429'
+                        elif exc.code in {401, 403}:
+                            message = f'authentication_required:http_{exc.code}'
+                        else:
+                            message = f'transient_network:http_{exc.code}'
+                    elif not message.startswith(('confirmed_not_live:', 'confirmed_dead:')):
+                        message = f'transient_network:{message}'
+                    errors[url] = message
+        return snapshots, errors
+
+    first, first_errors = probe_all()
+    if probe_interval:
+        time.sleep(probe_interval)
+    second, second_errors = probe_all()
+    verified = {
+        url for url in unique_urls
+        if url in first and url in second
+        and (second[url][0] > first[url][0] or second[url][1] != first[url][1])
+    }
+    errors = {**first_errors, **second_errors}
+    for url in unique_urls:
+        if url not in verified and url not in errors:
+            errors[url] = 'confirmed_not_live:not_advancing'
+    return verified, errors
+
+
+def fetch_oktraffic():
+    source_page = 'https://oktraffic.org/'
+    camera_filter = {
+        'include': {
+            'relation': 'mapCameras',
+            'scope': {
+                'include': 'streamDictionary',
+                'where': {
+                    'status': {'neq': 'Out Of Service'},
+                    'type': 'Web',
+                    'blockAtis': {'neq': '1'},
+                },
+            },
+        },
+    }
+    query = urllib.parse.quote(json.dumps(camera_filter, separators=(',', ':')))
+    poles = fetch_json(f'https://oktraffic.org/api/CameraPoles?filter={query}', timeout=30)
+    candidates = []
+    seen_urls = set()
+    for pole in poles:
+        pole_id = pole.get('id')
+        for camera in pole.get('mapCameras') or []:
+            stream = camera.get('streamDictionary') or {}
+            url = str(stream.get('streamSrc') or '').strip()
+            if not url.startswith('https://') or url in seen_urls:
+                continue
+            seen_urls.add(url)
+            candidates.append({
+                'pole_id': pole_id,
+                'camera_id': camera.get('id'),
+                'name': camera.get('location') or stream.get('streamName') or pole.get('name'),
+                'lat': camera.get('latitude'),
+                'lon': camera.get('longitude'),
+                'direction': camera.get('direction') or '',
+                'city': camera.get('city') or '',
+                'record_time': camera.get('recordTime'),
+                'url': url,
+            })
+    verified_urls, verification_errors = verify_live_hls([item['url'] for item in candidates])
+    rejected = []
+    added = 0
+    for item in candidates:
+        if item['url'] not in verified_urls:
+            rejected.append({
+                'provider_camera_id': item['camera_id'],
+                'name': item['name'],
+                'url': item['url'],
+                'failure_class': verification_errors.get(
+                    item['url'], 'transient_network:verification_incomplete'
+                ),
+            })
+            continue
+        before = len(cameras)
+        add_camera(
+            item['name'], item['lat'], item['lon'], item['url'],
+            'hls', 'Oklahoma', item['city'], item['direction'], 'dot',
+            f"https://oktraffic.org/tcameras/camera.aspx?id={item['pole_id']}",
+            10,
+        )
+        if len(cameras) == before:
+            rejected.append({
+                'provider_camera_id': item['camera_id'],
+                'name': item['name'],
+                'url': item['url'],
+                'failure_class': 'location_ambiguous:invalid_coordinates',
+            })
+            continue
+        cameras[-1]['provider_camera_id'] = str(item['camera_id'])
+        cameras[-1]['provider_record_time'] = item['record_time']
+        added += 1
+    atomic_write_json(
+        DATA_DIR / 'oktraffic_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'Oklahoma (OKTraffic)',
+            'source_url': source_page,
+            'attribution': 'OKTraffic',
+            'refresh_cadence_seconds': 10,
+            'poles': len(poles),
+            'candidates': len(candidates),
+            'verified_live': added,
+            'rejected': rejected,
+        },
+        indent=2,
+    )
+    print(f'  OKTraffic HLS verification: {added}/{len(candidates)} advancing')
+    return added
 
 
 # ── Caltrans (California) ──
@@ -440,7 +634,7 @@ def fetch_txdot():
 def fetch_nps():
     try:
         url = 'https://developer.nps.gov/api/v1/webcams?api_key=DEMO_KEY&limit=500'
-        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.33.0'})
+        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.34.0'})
         count = 0
         for cam in data.get('data', []):
             if str(cam.get('status') or '').lower() == 'inactive':
@@ -994,6 +1188,7 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
         ('Colorado DOT (live)', fetch_colorado),
         ('Austin TX', fetch_austin_tx),
         ('TxDOT (statewide)', fetch_txdot),
+        ('Oklahoma (OKTraffic)', fetch_oktraffic),
         ('Louisiana (LA511)', lambda: fetch_511_mapicons('https://www.511la.org', 'Louisiana')),
         ('Pennsylvania (PA511)', lambda: fetch_511_mapicons('https://511pa.com', 'Pennsylvania')),
         ('Wisconsin (WI511)', lambda: fetch_511_mapicons('https://511wi.gov', 'Wisconsin')),
@@ -1042,15 +1237,27 @@ def merge_provider_results(
         result.name for result in results
         if result.name not in successful
     }
-    retained = [camera for camera in existing if camera.get('provider') not in successful]
-    for camera in retained:
-        if camera.get('provider') in degraded_providers and camera.get('health') != 'offline':
+    fresh_by_provider = {result.name: result.cameras for result in accepted_results}
+    inserted_providers = set()
+    ordered = []
+    for camera in existing:
+        provider = camera.get('provider')
+        if provider in successful:
+            if provider not in inserted_providers:
+                ordered.extend(fresh_by_provider[provider])
+                inserted_providers.add(provider)
+            continue
+        if provider in degraded_providers and camera.get('health') != 'offline':
             camera['health'] = 'degraded'
             camera['failure_class'] = 'provider_error'
-    fresh = [camera for result in accepted_results for camera in result.cameras]
+        ordered.append(camera)
+    for result in accepted_results:
+        if result.name not in inserted_providers:
+            ordered.extend(result.cameras)
+            inserted_providers.add(result.name)
     merged = []
     seen = set()
-    for camera in [*fresh, *retained]:
+    for camera in ordered:
         identity = feed_identity(camera)
         if identity in seen:
             continue
@@ -1064,6 +1271,10 @@ def merge_provider_results(
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--rollback', action='store_true', help='restore the last-known-good camera dataset')
+    parser.add_argument(
+        '--provider', action='append', default=[],
+        help='fetch only the named provider; may be repeated',
+    )
     return parser.parse_args(argv)
 
 
@@ -1074,9 +1285,27 @@ def main(argv=None):
         print(f'Restored schema v{summary.schema_version} dataset with {summary.total} cameras')
         return 0
 
+    selected_fetchers = provider_fetchers()
+    if args.provider:
+        available_fetchers = selected_fetchers
+        selected_fetchers = []
+        missing = []
+        for requested_name in args.provider:
+            matches = [
+                item for item in available_fetchers
+                if requested_name.casefold() in item[0].casefold()
+            ]
+            if len(matches) == 1:
+                if matches[0] not in selected_fetchers:
+                    selected_fetchers.append(matches[0])
+            else:
+                missing.append(requested_name.casefold())
+        if missing:
+            raise ValueError(f"unknown or ambiguous provider(s): {', '.join(sorted(missing))}")
+
     print('StormScope Camera Data Fetcher')
     print('=' * 50)
-    results = [run_fetcher(name, fetcher) for name, fetcher in provider_fetchers()]
+    results = [run_fetcher(name, fetcher) for name, fetcher in selected_fetchers]
     if not any(result.succeeded for result in results):
         raise RuntimeError('all providers failed; dataset was not changed')
 

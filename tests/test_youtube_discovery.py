@@ -18,6 +18,10 @@ class YouTubeLocationExtractionTests(unittest.TestCase):
     def test_generic_skyline_view_is_not_a_location(self) -> None:
         self.assertEqual(youtube.extract_location_queries("Skyline View", ""), [])
 
+    def test_generic_village_label_is_not_a_location(self) -> None:
+        queries = youtube.extract_location_queries("Schweitzer Webcam: The Village", "")
+        self.assertNotIn("The Village", queries)
+
     def test_country_only_fallback_is_rejected_when_specific_place_is_present(self) -> None:
         queries = youtube.extract_location_queries(
             "LIVE 24/7 | Skiathos Bay & Port – Real-Time Ship Spotting from Greece",

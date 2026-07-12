@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.34.0 - 2026-07-11
+
+### Verified official-camera expansion
+- Added 360 provider-located Oklahoma DOT HLS views from the official OKTraffic inventory, bringing the corpus to 24,577 cameras; all accepted playlists exposed available media segments and advanced across two probes.
+- Rejected 15 OKTraffic candidates whose direct playlists reproducibly returned HTTP 404, while retaining them in the ignored discovery report as `confirmed_dead` evidence.
+- Added bounded provider-only refreshes, preserved existing row order and IDs when introducing a new provider, and recorded OKTraffic camera IDs, source pages, provider timestamps, attribution, and 10-second refresh cadence.
+
+### Location accuracy
+- Corrected the live Schweitzer Village camera from Oklahoma to its official Sandpoint, Idaho resort location and corrected the live Key West cruise-port camera from Darwin, Australia to its visually confirmed Mallory Square vantage.
+- Added curated location overrides for both streams and blocked generic `Village`/`The Village` geocoder queries that can resolve to unrelated places.
+
 ## v0.33.0 - 2026-07-11
 
 ### Live-camera discovery
