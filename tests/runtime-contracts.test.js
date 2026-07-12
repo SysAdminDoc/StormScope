@@ -202,6 +202,10 @@ test('weather routing, units, freshness, and accessibility contracts are integra
   assert.match(html, /id="weather-units"/);
   assert.match(html, /id="map" role="region"/);
   assert.match(app, /StormScopeWeather\.shouldUseNws/);
+  assert.match(app, /properties\.observationStations/);
+  assert.match(app, /Promise\.allSettled/);
+  assert.match(app, /observations\/latest\?require_qc=true/);
+  assert.match(app, /StormScopeWeather\.normalizeNwsObservation/);
   assert.match(app, /weather\.openMeteoFallback/);
   assert.equal(i18n.catalogs.en['weather.openMeteoFallback'], 'Open-Meteo fallback');
   assert.equal(i18n.catalogs.en['weather.forecastIssued'], 'Forecast issued');

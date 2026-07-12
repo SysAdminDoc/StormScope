@@ -2,7 +2,7 @@
   'use strict';
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.79.0';
+  var APP_VERSION = '0.80.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -2406,32 +2406,93 @@
     });
     if (!pointResp.ok) throw new Error('NWS point lookup failed');
     var pointData = await pointResp.json();
-    var forecastUrl = pointData.properties.forecastHourly;
-    if (!forecastUrl) throw new Error('No forecast URL');
-
-    var fcResp = await fetch(forecastUrl, {
-      headers: { 'Accept': 'application/geo+json' },
-      signal: signal
-    });
-    if (!fcResp.ok) throw new Error('NWS forecast failed');
-    var fcData = await fcResp.json();
-    var periods = fcData.properties.periods;
-    if (!periods || !periods.length) throw new Error('No forecast periods');
-    var current = periods[0];
-
+    var properties = pointData.properties || {};
+    var results = await Promise.allSettled([
+      fetchNwsForecast(properties.forecastHourly, signal),
+      fetchNwsObservation(properties.observationStations, lat, lon, signal)
+    ]);
+    var forecast = results[0].status === 'fulfilled' ? results[0].value : null;
+    var observation = results[1].status === 'fulfilled' ? results[1].value : null;
+    if (!forecast && !observation) throw results[0].reason || results[1].reason || new Error('NWS weather unavailable');
     if (activeCamera !== cam) return;
+    var sections = [];
+    if (observation) sections.push({ heading: tr('weather.observationHeading'), items: nwsObservationItems(observation) });
+    else sections.push({ heading: tr('weather.observationHeading'), status: tr('weather.observationUnavailable') });
+    if (forecast) sections.push({ heading: tr('weather.forecastHeading'), items: nwsForecastItems(forecast) });
+    else sections.push({ heading: tr('weather.forecastHeading'), status: tr('weather.forecastUnavailable') });
+    showWeatherSections(weatherLoading, weatherData, sections);
+  }
+
+  async function fetchNwsJson(url, signal, label) {
+    var trustedUrl = StormScopeWeather.trustedNwsUrl(url);
+    if (!trustedUrl) throw new Error('Untrusted NWS ' + label + ' URL');
+    var response = await fetch(trustedUrl, { headers: { Accept: 'application/geo+json' }, signal: signal });
+    if (!response.ok) throw new Error('NWS ' + label + ' failed');
+    return response.json();
+  }
+
+  async function fetchNwsForecast(url, signal) {
+    var data = await fetchNwsJson(url, signal, 'forecast');
+    var periods = data.properties && data.properties.periods;
+    if (!periods || !periods.length) throw new Error('No forecast periods');
+    return { period: periods[0], updatedAt: data.properties.updateTime };
+  }
+
+  async function fetchNwsObservation(stationsUrl, lat, lon, signal) {
+    var stationCollectionUrl = StormScopeWeather.trustedNwsUrl(stationsUrl);
+    if (!stationCollectionUrl) throw new Error('Untrusted NWS stations URL');
+    var stationParams = new URL(stationCollectionUrl);
+    stationParams.searchParams.set('limit', '5');
+    var collection = await fetchNwsJson(stationParams.toString(), signal, 'stations');
+    var stations = StormScopeWeather.rankObservationStations(collection, { lat: lat, lon: lon }, 5);
+    if (!stations.length) throw new Error('No observation stations');
+    for (var index = 0; index < stations.length; index++) {
+      try {
+        var payload = await fetchNwsJson(stations[index].url + '/observations/latest?require_qc=true', signal, 'observation');
+        var observation = StormScopeWeather.normalizeNwsObservation(payload, stations[index]);
+        if (observation) return observation;
+      } catch (error) {
+        if (error.name === 'AbortError') throw error;
+      }
+    }
+    throw new Error('No valid station observation');
+  }
+
+  function nwsObservationItems(observation) {
+    var ageMinutes = (Date.now() - new Date(observation.timestamp).getTime()) / 60000;
+    var station = observation.station;
+    var stationLabel = (station.name ? station.name + ' (' + station.id + ')' : station.id) +
+      ' • ' + tr('weather.distanceAway', {
+        distance: StormScopeWeather.distanceFromKm(station.distanceKm, weatherUnits) || tr('weather.unknown')
+      });
+    var wind = StormScopeWeather.windFromKmh(observation.windKmh, weatherUnits);
+    if (wind && observation.windDirection !== null) wind += ' ' + localizedWindDirection(observation.windDirection);
+    return [
+      [tr('weather.temperature'), StormScopeWeather.temperatureFromCelsius(observation.temperatureC, weatherUnits) || tr('weather.notAvailable')],
+      [tr('weather.conditionsProvider'), observation.conditions || tr('weather.notAvailable')],
+      [tr('weather.wind'), wind || tr('weather.notAvailable')],
+      [tr('weather.humidity'), observation.humidity !== null ? localNumber(Math.round(observation.humidity)) + '%' : tr('weather.notAvailable')],
+      [tr('weather.observed'), localTime(observation.timestamp) + ' • ' + StormScopeI18n.formatAge(ageMinutes, appLocale)],
+      [tr('weather.station'), stationLabel],
+      [tr('weather.source'), tr('weather.nwsObservation')]
+    ];
+  }
+
+  function nwsForecastItems(forecast) {
+    var current = forecast.period;
     var temperature = current.temperatureUnit === 'F'
       ? StormScopeWeather.temperatureFromFahrenheit(current.temperature, weatherUnits)
       : Math.round(current.temperature) + '°' + current.temperatureUnit;
-    showWeatherItems(weatherLoading, weatherData, [
+    return [
       [tr('weather.temperature'), temperature],
       [tr('weather.conditionsProvider'), current.shortForecast],
       [tr('weather.wind'), StormScopeWeather.windFromMph(current.windSpeed, weatherUnits) + ' ' + localizedWindDirection(current.windDirection)],
-      [tr('weather.humidity'), current.relativeHumidity ? localNumber(current.relativeHumidity.value) + '%' : tr('weather.notAvailable')],
-      [tr('weather.forecastIssued'), localTime(fcData.properties.updateTime)],
+      [tr('weather.humidity'), current.relativeHumidity && current.relativeHumidity.value != null
+        ? localNumber(current.relativeHumidity.value) + '%' : tr('weather.notAvailable')],
+      [tr('weather.forecastIssued'), localTime(forecast.updatedAt)],
       [tr('weather.forecastValid'), localTime(current.startTime)],
       [tr('weather.source'), tr('weather.nwsForecast')]
-    ]);
+    ];
   }
 
   async function fetchWeatherOpenMeteo(lat, lon, cam, signal, weatherLoading, weatherData, isFallback) {
@@ -2472,6 +2533,7 @@
 
   function showWeatherItems(loadingEl, dataEl, items) {
     dataEl.innerHTML = '';
+    dataEl.classList.add('weather-data-flat');
     for (var i = 0; i < items.length; i++) {
       var item = document.createElement('div');
       item.className = 'weather-item';
@@ -2485,6 +2547,44 @@
       item.appendChild(value);
       dataEl.appendChild(item);
     }
+    loadingEl.classList.add('hidden');
+    dataEl.classList.remove('hidden');
+  }
+
+  function showWeatherSections(loadingEl, dataEl, sections) {
+    dataEl.replaceChildren();
+    dataEl.classList.remove('weather-data-flat');
+    sections.forEach(function (section) {
+      var container = document.createElement('section');
+      container.className = 'weather-section';
+      var heading = document.createElement('h4');
+      heading.textContent = section.heading;
+      container.appendChild(heading);
+      if (section.status) {
+        var status = document.createElement('p');
+        status.className = 'weather-section-status';
+        status.textContent = section.status;
+        container.appendChild(status);
+      } else {
+        var grid = document.createElement('div');
+        grid.className = 'weather-section-grid';
+        section.items.forEach(function (row) {
+          var item = document.createElement('div');
+          item.className = 'weather-item';
+          var label = document.createElement('span');
+          label.className = 'weather-label';
+          label.textContent = row[0];
+          var value = document.createElement('span');
+          value.className = 'weather-value';
+          value.textContent = row[1];
+          item.appendChild(label);
+          item.appendChild(value);
+          grid.appendChild(item);
+        });
+        container.appendChild(grid);
+      }
+      dataEl.appendChild(container);
+    });
     loadingEl.classList.add('hidden');
     dataEl.classList.remove('hidden');
   }

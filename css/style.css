@@ -923,9 +923,33 @@ button:focus-visible {
 }
 
 .weather-data {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.weather-data-flat,
+.weather-section-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 12px;
+}
+
+.weather-section + .weather-section {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.weather-section h4 {
+  margin: 0 0 8px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.weather-section-status {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 12px;
 }
 
 .weather-item {
@@ -1233,7 +1257,8 @@ button:focus-visible {
     right: 8px;
   }
 
-  .weather-data {
+  .weather-data-flat,
+  .weather-section-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 }

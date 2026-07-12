@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.80.0 - 2026-07-12
+
+- Added a distinct current-observation section for US cameras using the nearest usable NWS station, including station identity/distance, observed timestamp and localized age, conditions, temperature, humidity, wind, selected units, and explicit source.
+- NWS station and hourly-forecast requests now recover independently: unusable nearer stations fall through a bounded distance-ranked list, either section can remain available when the other fails, and Open-Meteo is used only when both NWS branches fail. Added strict NWS URL/unit validation plus unit, fallback, and rendered browser coverage. Service-worker cache bumped to v53.
+
 ## v0.79.0 - 2026-07-12
 
 - Added bounded versioned scene links that restore map center/zoom, public layer state, radar opacity/palette/playback speed/nearest frame, alert severity, camera filters, and an active camera while excluding favorites, saved views, locale, theme, and unknown private fields.

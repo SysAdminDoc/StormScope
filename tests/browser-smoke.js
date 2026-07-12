@@ -243,20 +243,54 @@ async function addNetworkFixtures(page, metrics) {
     if (url.startsWith('https://api.weather.gov/points/')) {
       await route.fulfill({
         contentType: 'application/geo+json',
-        body: JSON.stringify({ properties: { forecastHourly: 'https://api.weather.gov/fixture/hourly' } })
+        body: JSON.stringify({ properties: {
+          forecastHourly: 'https://api.weather.gov/fixture/hourly',
+          observationStations: 'https://api.weather.gov/fixture/stations'
+        } })
       });
+      return;
+    }
+    if (url.startsWith('https://api.weather.gov/fixture/stations?')) {
+      await route.fulfill({ contentType: 'application/geo+json', body: JSON.stringify({ features: [
+        {
+          id: 'https://api.weather.gov/stations/KEMPTY', geometry: { type: 'Point', coordinates: [-97, 39] },
+          properties: { stationIdentifier: 'KEMPTY', name: 'Empty Test Station', distance: { value: 1000 } }
+        },
+        {
+          id: 'https://api.weather.gov/stations/KOBS', geometry: { type: 'Point', coordinates: [-97.1, 39.1] },
+          properties: { stationIdentifier: 'KOBS', name: 'Observed Test Station', distance: { value: 3200 } }
+        }
+      ] }) });
+      return;
+    }
+    if (url.startsWith('https://api.weather.gov/stations/KEMPTY/observations/latest')) {
+      await route.fulfill({ contentType: 'application/geo+json', body: JSON.stringify({ properties: {
+        timestamp: new Date(Date.now() - 10 * 60000).toISOString(), textDescription: '',
+        temperature: { value: null }, windSpeed: { value: null }, relativeHumidity: { value: null }
+      } }) });
+      return;
+    }
+    if (url.startsWith('https://api.weather.gov/stations/KOBS/observations/latest')) {
+      await route.fulfill({ contentType: 'application/geo+json', body: JSON.stringify({ properties: {
+        timestamp: new Date(Date.now() - 20 * 60000).toISOString(), textDescription: 'Mostly Clear',
+        temperature: { value: 20, unitCode: 'wmoUnit:degC' },
+        windSpeed: { value: 16.09344, unitCode: 'wmoUnit:km_h-1' },
+        windDirection: { value: 0, unitCode: 'wmoUnit:degree_(angle)' },
+        relativeHumidity: { value: 45, unitCode: 'wmoUnit:percent' }
+      } }) });
       return;
     }
     if (url === 'https://api.weather.gov/fixture/hourly') {
       await route.fulfill({
         contentType: 'application/geo+json',
-        body: JSON.stringify({ properties: { periods: [{
+        body: JSON.stringify({ properties: { updateTime: new Date(Date.now() - 5 * 60000).toISOString(), periods: [{
           temperature: 72,
           temperatureUnit: 'F',
           shortForecast: 'Clear',
           windSpeed: '5 mph',
           windDirection: 'N',
-          relativeHumidity: { value: 45 }
+          relativeHumidity: { value: 45 },
+          startTime: new Date(Date.now() + 55 * 60000).toISOString()
         }] } })
       });
       return;
@@ -519,6 +553,10 @@ async function main() {
     await visibleResults.nth(observedCamera.observedIndex).locator('.camera-result-open').click();
     await page.locator('#camera-modal').waitFor({ state: 'visible' });
     assert.equal(await page.locator('#camera-modal').getAttribute('role'), 'dialog');
+    await page.getByRole('heading', { name: 'Current observation' }).waitFor({ state: 'visible' });
+    assert.equal(await page.getByRole('heading', { name: 'Hourly forecast' }).count(), 1);
+    assert.match(await page.locator('#weather-data').textContent(), /68°F.*Mostly Clear.*10 mph N.*Observed Test Station \(KOBS\).*2 mi away.*NWS station observation/s);
+    assert.match(await page.locator('#weather-data').textContent(), /72°F.*Clear.*NWS hourly forecast/s);
     const modalImage = page.locator('#modal-feed img');
     await modalImage.waitFor({ state: 'visible' });
     await modalImage.dispatchEvent('load');
@@ -551,6 +589,25 @@ async function main() {
     await page.getByRole('button', { name: 'Close camera viewer' }).click();
     await page.locator('#camera-modal').waitFor({ state: 'hidden' });
     assert.equal(await page.locator('#modal-feed video, #modal-feed iframe, #modal-feed img').count(), 0);
+
+    const emptyStationsFixture = route => route.fulfill({
+      status: 200, contentType: 'application/geo+json', body: JSON.stringify({ features: [] })
+    });
+    await page.route('https://api.weather.gov/fixture/stations?*', emptyStationsFixture);
+    await visibleResults.nth(observedCamera.observedIndex).locator('.camera-result-open').click();
+    await page.getByText('Station observation unavailable.', { exact: true }).waitFor({ state: 'visible' });
+    assert.match(await page.locator('#weather-data').textContent(), /72°F.*NWS hourly forecast/s);
+    assert.equal((await page.locator('#weather-data').textContent()).includes('Open-Meteo fallback'), false);
+    await page.getByRole('button', { name: 'Close camera viewer' }).click();
+
+    const failedForecastFixture = route => route.fulfill({ status: 503, body: 'forecast unavailable' });
+    await page.route('https://api.weather.gov/fixture/hourly', failedForecastFixture);
+    await visibleResults.nth(observedCamera.observedIndex).locator('.camera-result-open').click();
+    await page.locator('#weather-data').filter({ hasText: 'Open-Meteo fallback' }).waitFor({ state: 'visible' });
+    assert.match(await page.locator('#weather-data').textContent(), /22°F.*Open-Meteo fallback/s);
+    await page.getByRole('button', { name: 'Close camera viewer' }).click();
+    await page.unroute('https://api.weather.gov/fixture/hourly', failedForecastFixture);
+    await page.unroute('https://api.weather.gov/fixture/stations?*', emptyStationsFixture);
     await page.unroute(cameraImageMatch, cameraImageFixture);
     await page.locator('#camera-type').selectOption('');
 

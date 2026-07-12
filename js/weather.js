@@ -45,6 +45,127 @@
     return units === 'metric' ? Math.round((number - 32) * 5 / 9) + '°C' : Math.round(number) + '°F';
   }
 
+  function temperatureFromCelsius(value, units) {
+    if (value == null) return null;
+    var number = Number(value);
+    if (!Number.isFinite(number)) return null;
+    return units === 'metric' ? Math.round(number) + '°C' : Math.round(number * 9 / 5 + 32) + '°F';
+  }
+
+  function windFromKmh(value, units) {
+    if (value == null) return null;
+    var number = Number(value);
+    if (!Number.isFinite(number)) return null;
+    return Math.round(units === 'metric' ? number : number / 1.609344) + (units === 'metric' ? ' km/h' : ' mph');
+  }
+
+  function distanceFromKm(value, units) {
+    if (value == null) return null;
+    var number = Number(value);
+    if (!Number.isFinite(number)) return null;
+    return Math.round(units === 'metric' ? number : number * 0.621371) + (units === 'metric' ? ' km' : ' mi');
+  }
+
+  function trustedNwsUrl(value) {
+    try {
+      var url = new URL(String(value || ''));
+      return url.protocol === 'https:' && url.hostname === 'api.weather.gov' ? url.toString() : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function stationDistanceKm(lat, lon, stationLat, stationLon) {
+    var toRadians = Math.PI / 180;
+    var deltaLat = (stationLat - lat) * toRadians;
+    var deltaLon = (stationLon - lon) * toRadians;
+    var a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+      Math.cos(lat * toRadians) * Math.cos(stationLat * toRadians) *
+      Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
+    return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  function rankObservationStations(collection, origin, limit) {
+    var features = collection && Array.isArray(collection.features) ? collection.features : [];
+    var lat = Number(origin && origin.lat);
+    var lon = Number(origin && origin.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return [];
+    return features.map(function (feature) {
+      var coordinates = feature && feature.geometry && feature.geometry.coordinates;
+      var properties = feature && feature.properties || {};
+      var stationLat = coordinates && Number(coordinates[1]);
+      var stationLon = coordinates && Number(coordinates[0]);
+      var stationUrl = trustedNwsUrl(feature && (feature.id || feature['@id']));
+      if (!stationUrl || !Number.isFinite(stationLat) || !Number.isFinite(stationLon)) return null;
+      var providerDistance = properties.distance && Number(properties.distance.value);
+      return {
+        id: String(properties.stationIdentifier || stationUrl.split('/').pop()),
+        name: String(properties.name || properties.stationIdentifier || '').trim(),
+        url: stationUrl.replace(/\/$/, ''),
+        distanceKm: Number.isFinite(providerDistance) && providerDistance >= 0
+          ? providerDistance / 1000
+          : stationDistanceKm(lat, lon, stationLat, stationLon)
+      };
+    }).filter(Boolean).sort(function (left, right) {
+      return left.distanceKm - right.distanceKm || left.id.localeCompare(right.id);
+    }).slice(0, Math.max(1, Math.min(5, Number(limit) || 5)));
+  }
+
+  function quantitativeValue(value) {
+    return value && value.value != null && Number.isFinite(Number(value.value)) ? Number(value.value) : null;
+  }
+
+  function observationTemperatureC(value) {
+    var number = quantitativeValue(value);
+    var unit = String(value && value.unitCode || '').toLowerCase();
+    if (number === null) return null;
+    if (unit.endsWith(':degc')) return number;
+    if (unit.endsWith(':degf')) return (number - 32) * 5 / 9;
+    return null;
+  }
+
+  function observationWindKmh(value) {
+    var number = quantitativeValue(value);
+    var unit = String(value && value.unitCode || '').toLowerCase();
+    if (number === null) return null;
+    if (unit.endsWith(':km_h-1')) return number;
+    if (unit.endsWith(':m_s-1')) return number * 3.6;
+    if (unit.endsWith(':mi_h-1')) return number * 1.609344;
+    return null;
+  }
+
+  function observationAngle(value) {
+    var number = quantitativeValue(value);
+    return number !== null && String(value && value.unitCode || '').toLowerCase().endsWith(':degree_(angle)')
+      ? number : null;
+  }
+
+  function observationPercent(value) {
+    var number = quantitativeValue(value);
+    return number !== null && String(value && value.unitCode || '').toLowerCase().endsWith(':percent')
+      ? number : null;
+  }
+
+  function normalizeNwsObservation(payload, station) {
+    var properties = payload && payload.properties;
+    if (!properties) return null;
+    var timestamp = new Date(properties.timestamp);
+    if (Number.isNaN(timestamp.getTime())) return null;
+    if (timestamp.getTime() > Date.now() + 10 * 60 * 1000) return null;
+    var observation = {
+      timestamp: timestamp.toISOString(),
+      conditions: String(properties.textDescription || '').trim(),
+      temperatureC: observationTemperatureC(properties.temperature),
+      windKmh: observationWindKmh(properties.windSpeed),
+      windDirection: observationAngle(properties.windDirection),
+      humidity: observationPercent(properties.relativeHumidity),
+      station: station
+    };
+    if (!observation.conditions && observation.temperatureC === null && observation.windKmh === null &&
+        observation.humidity === null) return null;
+    return observation;
+  }
+
   function windFromMph(value, units) {
     var text = String(value || '');
     var converted = text.replace(/\d+(?:\.\d+)?/g, function (match) {
@@ -74,12 +195,18 @@
   }
 
   return {
+    distanceFromKm: distanceFromKm,
     formatTime: formatTime,
     formatOpenMeteoTime: formatOpenMeteoTime,
     inNwsCoverageBounds: inNwsCoverageBounds,
     normalizeUnits: normalizeUnits,
+    normalizeNwsObservation: normalizeNwsObservation,
+    rankObservationStations: rankObservationStations,
     shouldUseNws: shouldUseNws,
+    temperatureFromCelsius: temperatureFromCelsius,
     temperatureFromFahrenheit: temperatureFromFahrenheit,
+    trustedNwsUrl: trustedNwsUrl,
+    windFromKmh: windFromKmh,
     windFromMph: windFromMph
   };
 });
