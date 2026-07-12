@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.63.0 - 2026-07-12
+
+- EarthCam Network feeds now render live in the viewer instead of loading a non-playing page embed. EarthCam's HTML5 player gates live video to authorized domains and signs its HLS with a per-session token minted in the page HTML, so off-site `type: embed` rows never played. Their public network API, however, exposes a per-camera `image.php` snapshot URL that hotlinks from any origin as a real refreshing JPEG. New `scripts/convert_earthcam_snapshots.py` matches EarthCam rows to that API by page URL and rewrites the matched rows to refreshing `type: image` feeds — the same mechanism the DOT image cameras use — so the actual camera view shows in the modal.
+- **256 of 276** EarthCam rows converted (each verified as a live JPEG before acceptance); the remaining **20** partner-hosted rows (myEarthCam/AbbeyRoad and moved pages) keep their page embed with the "open source" fallback link. No media is rehosted — the browser loads EarthCam's own public snapshot endpoint directly, and each row keeps its EarthCam page as `source_url` attribution.
+- Corpus unchanged at **36,592**; image feeds **28,495 -> 28,751**; provider embeds **509 -> 253**; deterministic shards remain **49**; no shell/service-worker change (data-only). Pairs with the prior YouTube embed fix so both provider families now play in-app.
+
 ## v0.62.0 - 2026-07-12
 
 - Expanded Rhode Island **143 -> 148** with current fixed views at Newport Harbor, downtown Westerly, Block Island North Light, Davisville, and East Greenwich. All five YouTube IDs remained public, embed-enabled, backed by playable HLS, manually frame-reviewed, and fixed to operator or exact-address evidence; the fresh RIDOT inventory's 139 usable rows were already present.
