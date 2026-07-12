@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.47.0 - 2026-07-12
+
+### +26 verified U.S. Virgin Islands destination cameras
+- Added 25 fixed-location YouTube cameras from CamStreamer's current first-party USVI map inventory after manual title/channel review and independent live verification. Every accepted video reports live status, permits embedding, exposes an active HLS format, and was rechecked from its canonical 11-character ID; coverage spans St. Croix beaches and resorts plus St. John bays, villas, parks, town views, and destination venues.
+- Added EarthCam's active Mountain Top Overlook on St. Thomas from its canonical page, which currently reports `cam_state=1`, `defaulttab=live`, and `liveon=true`. The bulk EarthCam inventory API returned HTTP 429 and remains retryable; the direct page was available and no media was copied or rehosted.
+- Corrected the existing Beach Bar St. John stream from a false Antigua geocode to the first-party Cruz Bay coordinate, refined the Lime Out St. Thomas coordinate, and normalized all legacy territory labels to `U.S. Virgin Islands`. Rejected an unavailable Sapphire Beach stream, a Christiansted view colocated with the existing St. Croix EarthCam, three location-ambiguous feeds, and one archived recording.
+- Corpus **33,635 -> 33,661**; U.S. Virgin Islands **4 -> 30**; YouTube **437 -> 462**; EarthCam **275 -> 276**; provider embeds **452 -> 453**; service-worker cache bumped to v24.
+
 ## v0.46.0 - 2026-07-12
 
 ### First verified Guam camera: Guam National Tennis Center
