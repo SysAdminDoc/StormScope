@@ -312,11 +312,20 @@ async function main() {
     const alertButton = page.getByRole('button', { name: /Severe Thunderstorm Warning/ });
     await alertButton.click();
     await page.locator('#alert-detail').waitFor({ state: 'visible' });
+    await page.getByRole('button', { name: 'Hide alert details' }).click();
+    await page.locator('#alert-detail').waitFor({ state: 'hidden' });
     await page.getByRole('button', { name: 'Toggle layers panel' }).click();
     await page.locator('#toggle-alerts').uncheck();
     await page.getByRole('button', { name: 'Toggle layers panel' }).click();
     await page.evaluate(() => window._stormscope.getMap().setView([39.5, -98.5], 5));
     await page.waitForTimeout(100);
+
+    await page.getByRole('button', { name: 'Find cameras' }).click();
+    await page.locator('#search-panel').waitFor({ state: 'visible' });
+    await page.keyboard.press('Escape');
+    await page.locator('#search-panel').waitFor({ state: 'hidden' });
+    assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.id), 'btn-search',
+      'Escape should close the search panel and return focus to its toggle');
 
     await page.getByRole('button', { name: 'Find cameras' }).click();
     await page.locator('#camera-query').fill('Alabama');

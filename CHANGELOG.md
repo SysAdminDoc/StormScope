@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.42.0 - 2026-07-12
+
+### Interaction and accessibility hardening (audit pass)
+- **Escape key now closes the top-most open surface** — camera modal, then multi-camera monitor, then the NWS alert detail, then the search or layers panel — and returns focus to the control that opened it. Previously Escape only dismissed the two modals, so keyboard users could not close open panels or the alert detail.
+- **The NWS alert detail can now be dismissed.** It gained a keyboard-accessible close button (`Hide alert details`) and collapses on Escape, returning focus to the alert that opened it. Before this, opening an alert detail left it stuck open until another alert was clicked, with no way to close it.
+- **Closing the multi-camera monitor no longer drops keyboard focus.** The monitor is launched from the search panel, which is hidden while the monitor is open — so restoring focus to the (now-hidden) trigger silently sent focus to `<body>`. Focus now falls back to the always-visible search toggle when the original trigger is no longer focusable.
+- Minor correctness: `btn-layers` `aria-expanded` is now set as a proper string, and the radar **Retry** button no longer passes its click event into `initRadar` as an options object.
+- Added headless-browser smoke coverage for the alert-detail dismiss button and Escape-closes-the-search-panel-with-focus-return behavior.
+
 ## v0.41.0 - 2026-07-12
 
 ### +41 more playback-verified fixed-location YouTube live cameras (396 → 437)

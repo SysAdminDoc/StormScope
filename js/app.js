@@ -66,6 +66,7 @@
   var alertRefreshTimer = null;
   var alertMoveTimer = null;
   var alertRetryMetadata = null;
+  var alertDetailReturnFocus = null;
   var alertNationalPayload = null;
   var alertNationalFetchedAt = 0;
   var appLocale = 'en';
@@ -1590,7 +1591,15 @@
       modal.classList.add('hidden');
       setModalBackgroundInert(false, modal);
       document.removeEventListener('keydown', trapFocus);
-      if (restoreFocus !== false && priorFocusEl && priorFocusEl.focus) priorFocusEl.focus();
+      if (restoreFocus !== false) {
+        // The monitor is launched from the search panel, which is hidden while
+        // the monitor is open — so the trigger button is no longer focusable.
+        // Fall back to the always-visible search toggle to avoid dropping focus.
+        var target = priorFocusEl && priorFocusEl.isConnected && priorFocusEl.offsetParent !== null
+          ? priorFocusEl
+          : document.getElementById('btn-search');
+        if (target && target.focus) target.focus();
+      }
       priorFocusEl = null;
     }
   }
@@ -2134,7 +2143,7 @@
       });
       button.appendChild(title);
       button.appendChild(summary);
-      button.addEventListener('click', function () { showAlertDetail(alert, true); });
+      button.addEventListener('click', function () { showAlertDetail(alert, true, button); });
       item.appendChild(button);
       list.appendChild(item);
 
@@ -2159,9 +2168,28 @@
     panel.classList.toggle('hidden', !alertsVisible);
   }
 
-  function showAlertDetail(alert, focus) {
+  function hideAlertDetail() {
     var detail = document.getElementById('alert-detail');
+    if (detail.classList.contains('hidden')) return false;
+    detail.classList.add('hidden');
     detail.replaceChildren();
+    var returnTo = alertDetailReturnFocus;
+    alertDetailReturnFocus = null;
+    if (returnTo && returnTo.isConnected && returnTo.offsetParent !== null) returnTo.focus();
+    return true;
+  }
+
+  function showAlertDetail(alert, focus, trigger) {
+    var detail = document.getElementById('alert-detail');
+    alertDetailReturnFocus = trigger || null;
+    detail.replaceChildren();
+    var dismiss = document.createElement('button');
+    dismiss.type = 'button';
+    dismiss.className = 'alert-detail-dismiss';
+    dismiss.setAttribute('aria-label', tr('alerts.hideDetail'));
+    dismiss.textContent = '×';
+    dismiss.addEventListener('click', hideAlertDetail);
+    detail.appendChild(dismiss);
     var heading = document.createElement('h3');
     heading.textContent = alert.headline;
     detail.appendChild(heading);
@@ -2197,6 +2225,18 @@
 
   // ── UI Bindings ──
 
+  // Close a header-toggled panel (search/layers) if it is open, returning focus
+  // to its toggle button so keyboard and screen-reader users keep their place.
+  function closeOpenPanel(panelId, toggleId) {
+    var panel = document.getElementById(panelId);
+    if (panel.classList.contains('hidden')) return false;
+    panel.classList.add('hidden');
+    var toggle = document.getElementById(toggleId);
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.focus();
+    return true;
+  }
+
   function bindUI() {
     document.getElementById('btn-search').addEventListener('click', function () {
       var panel = document.getElementById('search-panel');
@@ -2214,7 +2254,7 @@
     document.getElementById('btn-layers').addEventListener('click', function () {
       var panel = document.getElementById('layers-panel');
       var isHidden = panel.classList.toggle('hidden');
-      this.setAttribute('aria-expanded', !isHidden);
+      this.setAttribute('aria-expanded', String(!isHidden));
       document.getElementById('search-panel').classList.add('hidden');
       document.getElementById('btn-search').setAttribute('aria-expanded', 'false');
       document.getElementById('alerts-panel').classList.toggle('hidden', !isHidden || !alertsVisible);
@@ -2326,7 +2366,7 @@
       try { localStorage.setItem('stormscope-radar-palette', radarPalette); } catch (error) { /* optional */ }
       applyRadarPalette();
     });
-    document.getElementById('radar-retry').addEventListener('click', initRadar);
+    document.getElementById('radar-retry').addEventListener('click', function () { initRadar(); });
 
     document.getElementById('modal-close').addEventListener('click', closeCameraModal);
     document.querySelector('.modal-backdrop').addEventListener('click', closeCameraModal);
@@ -2421,11 +2461,12 @@
     });
 
     document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && activeCamera) {
-        closeCameraModal();
-      } else if (e.key === 'Escape' && !document.getElementById('monitor-modal').classList.contains('hidden')) {
-        closeMonitor(true);
-      }
+      if (e.key !== 'Escape') return;
+      if (activeCamera) { closeCameraModal(); return; }
+      if (!document.getElementById('monitor-modal').classList.contains('hidden')) { closeMonitor(true); return; }
+      if (hideAlertDetail()) return;
+      if (closeOpenPanel('search-panel', 'btn-search')) return;
+      closeOpenPanel('layers-panel', 'btn-layers');
     });
 
     map.on('click', function () {

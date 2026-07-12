@@ -251,6 +251,7 @@ button:focus-visible {
 }
 
 .alert-detail {
+  position: relative;
   margin-top: 10px;
   padding-top: 10px;
   border-top: 1px solid var(--border);
@@ -258,7 +259,31 @@ button:focus-visible {
   line-height: 1.5;
 }
 
-.alert-detail h3 { margin-bottom: 6px; font-size: 14px; }
+.alert-detail-dismiss {
+  position: absolute;
+  top: 6px;
+  right: 0;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.24);
+  color: var(--text-dim);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.alert-detail-dismiss:hover {
+  color: var(--text);
+  border-color: var(--border-hover);
+}
+
+.alert-detail h3 { margin-bottom: 6px; padding-right: 32px; font-size: 14px; }
 .alert-detail p { margin: 5px 0; white-space: pre-line; }
 .alert-detail a { color: var(--accent); }
 
@@ -974,7 +999,8 @@ button:focus-visible {
   }
   .header-btn,
   .radar-btn,
-  .modal-close-btn {
+  .modal-close-btn,
+  .alert-detail-dismiss {
     transition: none;
   }
 }
