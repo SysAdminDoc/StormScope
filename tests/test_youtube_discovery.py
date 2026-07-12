@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import sys
+import json
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -36,6 +38,61 @@ class YouTubeLocationExtractionTests(unittest.TestCase):
             "Italy - WS",
         )
         self.assertNotIn("Italy - WS", queries)
+
+    def test_live_playback_requires_public_embedding(self) -> None:
+        base = {"is_live": True, "url": "https://example.com/live.m3u8"}
+        self.assertFalse(youtube.ytdlp_confirms_live_playback(base))
+        self.assertFalse(youtube.ytdlp_confirms_live_playback({
+            **base, "playable_in_embed": True, "availability": "private"
+        }))
+        self.assertTrue(youtube.ytdlp_confirms_live_playback({
+            **base, "playable_in_embed": True, "availability": "public"
+        }))
+
+    def test_curated_live_stream_can_replace_a_legacy_embed_in_place(self) -> None:
+        old_source = "https://www.nps.gov/media/webcam/view.htm?id=legacy"
+        old_row = {
+            "id": 1,
+            "name": "Legacy embed",
+            "lat": 32.1,
+            "lon": -104.4,
+            "url": old_source,
+            "type": "embed",
+            "state": "",
+            "county": "",
+            "direction": "",
+            "source": "nps",
+            "last_verified": None,
+            "health": "unknown",
+            "failure_class": None,
+            "source_url": old_source,
+            "refresh_cadence_seconds": None,
+        }
+        located = youtube.LocatedCamera(
+            video_id="BwiIsjXt3KI",
+            name="Carlsbad Caverns Natural Entrance Bat Cam",
+            lat=32.176913,
+            lon=-104.441431,
+            state="New Mexico",
+            county="Eddy County",
+            location_query="override",
+            geocode_display_name="official location",
+            score=10,
+            reasons=["location_override"],
+            source_url="https://explore.org/livecams/bats/carlsbad-caverns",
+            replace_source_url=old_source,
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            data_file = Path(directory) / "cameras.json"
+            data_file.write_text(json.dumps([old_row]), encoding="utf-8")
+            added, replaced = youtube.append_cameras(data_file, [located], 0)
+            rows = json.loads(data_file.read_text(encoding="utf-8"))
+        self.assertEqual((0, 1), (added, replaced))
+        self.assertEqual(1, len(rows))
+        self.assertEqual(1, rows[0]["id"])
+        self.assertEqual("youtube", rows[0]["source"])
+        self.assertEqual("BwiIsjXt3KI", rows[0]["url"])
+        self.assertEqual(30, rows[0]["refresh_cadence_seconds"])
 
 
 if __name__ == "__main__":

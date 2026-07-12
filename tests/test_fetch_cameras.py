@@ -389,6 +389,175 @@ class FetchMergeTests(unittest.TestCase):
         self.assertEqual(757, report["inventory_views"])
         self.assertEqual("licensing_restricted", report["failure_class"])
 
+    def test_nmroads_uses_https_proxy_and_exact_provider_metadata(self):
+        payload = {
+            "cameraInfo": [{
+                "name": "I-25@La_Bajada_Lower",
+                "title": "I-25 NB @ Lower La Bajada",
+                "enabled": True,
+                "lat": 35.506,
+                "lon": -106.244,
+                "snapshotFile": "http://ss.nmroads.com/snapshots/test.jpg",
+            }]
+        }
+        snapshots = {
+            "I-25@La_Bajada_Lower": (
+                "hash", 8229, "2026-07-12T09:34:44+00:00"
+            )
+        }
+        with (
+            mock.patch.object(fetch_cameras, "fetch_json", return_value=payload),
+            mock.patch.object(
+                fetch_cameras,
+                "verify_nmroads_images",
+                return_value=({"I-25@La_Bajada_Lower"}, {}, snapshots),
+            ),
+            mock.patch.object(fetch_cameras, "atomic_write_json") as report_writer,
+        ):
+            result = fetch_cameras.run_fetcher(
+                "New Mexico DOT", fetch_cameras.fetch_newmexico
+            )
+        self.assertTrue(result.succeeded)
+        self.assertEqual(1, len(result.cameras))
+        row = result.cameras[0]
+        self.assertEqual("I-25@La_Bajada_Lower", row["provider_camera_id"])
+        self.assertEqual(35.506, row["lat"])
+        self.assertEqual(-106.244, row["lon"])
+        self.assertEqual("N", row["direction"])
+        self.assertTrue(row["url"].startswith("https://servicev5.nmroads.com/"))
+        self.assertNotIn("ss.nmroads.com", row["url"])
+        report = report_writer.call_args.args[1]
+        self.assertEqual(1, report["inventory_total"])
+        self.assertEqual(1, report["verified_live"])
+        self.assertEqual([], report["rejected"])
+
+    def test_nmroads_verification_requires_a_current_advancing_provider_frame(self):
+        candidate = {"name": "I-40@Test"}
+        first = ("hash-one", 8000, "2026-07-12T09:30:00+00:00")
+        second = ("hash-two", 8100, "2026-07-12T09:31:00+00:00")
+        with (
+            mock.patch.object(
+                fetch_cameras, "_nmroads_snapshot", side_effect=[first, second]
+            ),
+            mock.patch.object(fetch_cameras.time, "sleep"),
+        ):
+            verified, errors, snapshots = fetch_cameras.verify_nmroads_images(
+                [candidate], probe_interval=0, workers=1
+            )
+        self.assertEqual({"I-40@Test"}, verified)
+        self.assertEqual({}, errors)
+        self.assertEqual(second, snapshots["I-40@Test"])
+
+    def test_new_mexico_nws_accepts_three_current_official_views(self):
+        camera_ids = {
+            item["provider_camera_id"] for item in fetch_cameras.NEW_MEXICO_NWS_FEEDS
+        }
+        snapshots = {
+            camera_id: ("hash", 100000, "2026-07-12T09:15:00+00:00")
+            for camera_id in camera_ids
+        }
+        with (
+            mock.patch.object(
+                fetch_cameras,
+                "verify_current_jpeg_images",
+                return_value=(camera_ids, {}, snapshots),
+            ),
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "New Mexico NWS", fetch_cameras.fetch_new_mexico_nws
+            )
+        self.assertTrue(result.succeeded)
+        self.assertEqual(3, len(result.cameras))
+        self.assertTrue(all(row["source"] == "noaa" for row in result.cameras))
+        self.assertTrue(all(row["state"] == "New Mexico" for row in result.cameras))
+        self.assertTrue(all(row["county"] == "Bernalillo County" for row in result.cameras))
+        self.assertTrue(all(row["refresh_cadence_seconds"] == 300 for row in result.cameras))
+        self.assertEqual(camera_ids, {
+            row["provider_camera_id"] for row in result.cameras
+        })
+
+    def test_new_mexico_nps_replaces_the_legacy_source_page_embed(self):
+        candidate = fetch_cameras.NEW_MEXICO_NPS_FEEDS[0]
+        snapshots = {
+            candidate["provider_camera_id"]: (
+                "hash", 100000, "2026-07-12T09:20:47+00:00"
+            )
+        }
+        with (
+            mock.patch.object(
+                fetch_cameras,
+                "verify_current_jpeg_images",
+                return_value=({candidate["provider_camera_id"]}, {}, snapshots),
+            ),
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "New Mexico NPS verified",
+                fetch_cameras.fetch_new_mexico_nps_verified,
+            )
+        self.assertTrue(result.succeeded)
+        self.assertEqual(1, len(result.cameras))
+        row = result.cameras[0]
+        self.assertEqual("New Mexico", row["state"])
+        self.assertEqual("nps", row["source"])
+        self.assertEqual(candidate["url"], row["url"])
+        self.assertTrue(row["_replace_source_page"])
+
+    def test_new_mexico_usgs_accepts_only_current_exact_site_feeds(self):
+        camera_ids = {
+            item["provider_camera_id"] for item in fetch_cameras.NEW_MEXICO_USGS_FEEDS
+        }
+        snapshots = {
+            camera_id: ("hash", 100000, "2026-07-12T09:22:37+00:00")
+            for camera_id in camera_ids
+        }
+        with (
+            mock.patch.object(
+                fetch_cameras,
+                "verify_current_jpeg_images",
+                return_value=(camera_ids, {}, snapshots),
+            ),
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "New Mexico USGS", fetch_cameras.fetch_new_mexico_usgs
+            )
+        self.assertTrue(result.succeeded)
+        self.assertEqual(3, len(result.cameras))
+        self.assertTrue(all(row["source"] == "usgs" for row in result.cameras))
+        self.assertTrue(all(row["state"] == "New Mexico" for row in result.cameras))
+        self.assertTrue(all(row["county"] == "Lincoln County" for row in result.cameras))
+        self.assertEqual(camera_ids, {
+            row["provider_camera_id"] for row in result.cameras
+        })
+
+    def test_new_mexico_nrao_requires_an_advancing_first_party_image(self):
+        candidate = fetch_cameras.NEW_MEXICO_NRAO_FEEDS[0]
+        snapshots = {
+            candidate["provider_camera_id"]: (
+                "hash-two", 224632, "2026-07-12T09:24:16+00:00"
+            )
+        }
+        with (
+            mock.patch.object(
+                fetch_cameras,
+                "verify_current_jpeg_images",
+                return_value=({candidate["provider_camera_id"]}, {}, snapshots),
+            ) as verifier,
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "New Mexico NRAO", fetch_cameras.fetch_new_mexico_nrao
+            )
+        self.assertTrue(result.succeeded)
+        self.assertEqual(1, len(result.cameras))
+        self.assertEqual("nrao", result.cameras[0]["source"])
+        self.assertEqual("NE", result.cameras[0]["direction"])
+        verifier.assert_called_once_with(
+            [dict(candidate)], probe_interval=16.0, workers=1
+        )
+
     def test_pr_act_image_verification_requires_advancing_current_snapshots(self):
         candidate = {"camera_id": "13"}
         first = (100, "hash-one", 4000, "2026-07-12T03:30:00-04:00")
@@ -550,15 +719,63 @@ class FetchMergeTests(unittest.TestCase):
         first = ("hash-one", 40000, "2026-07-12T09:00:00+00:00")
         second = ("hash-two", 41000, "2026-07-12T09:01:00+00:00")
         with (
-            mock.patch.object(fetch_cameras, "_nps_image_snapshot", side_effect=[first, second]),
+            mock.patch.object(fetch_cameras, "_current_jpeg_snapshot", side_effect=[first, second]),
             mock.patch.object(fetch_cameras.time, "sleep"),
         ):
-            verified, errors, snapshots = fetch_cameras.verify_nps_images(
+            verified, errors, snapshots = fetch_cameras.verify_current_jpeg_images(
                 [candidate], probe_interval=0, workers=1
             )
         self.assertEqual({"yell-test"}, verified)
         self.assertEqual({}, errors)
         self.assertEqual(second, snapshots["yell-test"])
+
+    def test_current_jpeg_verification_can_require_content_advancement(self):
+        candidate = {
+            "provider_camera_id": "fast-refresh",
+            "url": "https://example.com/current.jpg",
+            "require_content_change": True,
+        }
+        snapshot = ("same-hash", 40000, "2026-07-12T09:00:00+00:00")
+        with (
+            mock.patch.object(
+                fetch_cameras, "_current_jpeg_snapshot", side_effect=[snapshot, snapshot]
+            ),
+            mock.patch.object(fetch_cameras.time, "sleep"),
+        ):
+            verified, errors, _snapshots = fetch_cameras.verify_current_jpeg_images(
+                [candidate], probe_interval=0, workers=1
+            )
+        self.assertEqual(set(), verified)
+        self.assertEqual("placeholder:not_advancing", errors["fast-refresh"])
+
+    def test_advancing_jpeg_can_use_cache_busting_without_provider_timestamp(self):
+        candidate = {
+            "provider_camera_id": "fast-refresh",
+            "url": "https://example.com/current.jpg",
+            "require_content_change": True,
+            "cache_bust": True,
+        }
+        first = ("hash-one", 40000, None)
+        second = ("hash-two", 41000, None)
+        with (
+            mock.patch.object(
+                fetch_cameras, "_current_jpeg_snapshot", side_effect=[first, second]
+            ) as snapshotter,
+            mock.patch.object(fetch_cameras.time, "sleep"),
+        ):
+            verified, errors, snapshots = fetch_cameras.verify_current_jpeg_images(
+                [candidate], probe_interval=0, workers=1
+            )
+        self.assertEqual({"fast-refresh"}, verified)
+        self.assertEqual({}, errors)
+        self.assertEqual(second, snapshots["fast-refresh"])
+        called_urls = [call.args[0] for call in snapshotter.call_args_list]
+        self.assertNotEqual(called_urls[0], called_urls[1])
+        self.assertTrue(all("_stormscope_probe=" in url for url in called_urls))
+        self.assertTrue(all(
+            call.kwargs["require_provider_timestamp"] is False
+            for call in snapshotter.call_args_list
+        ))
 
     def test_wyoming_nps_accepts_current_images_and_advancing_old_faithful_hls(self):
         image_ids = {
@@ -572,7 +789,7 @@ class FetchMergeTests(unittest.TestCase):
         with (
             mock.patch.object(
                 fetch_cameras,
-                "verify_nps_images",
+                "verify_current_jpeg_images",
                 return_value=(image_ids, {}, snapshots),
             ),
             mock.patch.object(

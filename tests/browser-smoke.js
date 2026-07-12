@@ -197,7 +197,7 @@ async function addNetworkFixtures(page) {
 
 async function waitForApp(page, requireRadar = true) {
   await page.goto(page.baseURL, { waitUntil: 'domcontentloaded' });
-  await page.locator('#camera-count').filter({ hasText: '33,680 cameras' }).waitFor({ state: 'visible' });
+  await page.locator('#camera-count').filter({ hasText: '33,871 cameras' }).waitFor({ state: 'visible' });
   if (requireRadar) {
     await page.waitForFunction(() => /RainViewer|NOAA\/NWS MRMS/.test(document.querySelector('#radar-meta').textContent));
   }
@@ -297,7 +297,7 @@ async function main() {
     assert.equal(await page.locator('html').getAttribute('lang'), 'es');
     assert.equal(await page.locator('label[for="app-locale"]').textContent(), 'Idioma');
     assert.equal(await page.locator('#search-heading').textContent(), 'Buscar cámaras');
-    assert.match(await page.locator('#camera-count').textContent(), /^33\.680 cámaras$/);
+    assert.match(await page.locator('#camera-count').textContent(), /^33\.871 cámaras$/);
     assert.match(await page.locator('#radar-frame-position').textContent(), /^Fotograma /);
     assert.match(await page.locator('#radar-time').textContent(), /hace|ahora mismo/);
     await page.locator('#app-locale').selectOption('en');
@@ -383,6 +383,21 @@ async function main() {
       const results = window._stormscope.getCameraResults();
       return results.length === 1 && results.every((camera) => camera.source === 'rtspme');
     });
+    await page.locator('#camera-source').selectOption('noaa');
+    await page.waitForFunction(() => {
+      const results = window._stormscope.getCameraResults();
+      return results.length === 3 && results.every((camera) => camera.source === 'noaa');
+    });
+    await page.locator('#camera-source').selectOption('usgs');
+    await page.waitForFunction(() => {
+      const results = window._stormscope.getCameraResults();
+      return results.length === 3 && results.every((camera) => camera.source === 'usgs');
+    });
+    await page.locator('#camera-source').selectOption('nrao');
+    await page.waitForFunction(() => {
+      const results = window._stormscope.getCameraResults();
+      return results.length === 1 && results.every((camera) => camera.source === 'nrao');
+    });
     await page.locator('#camera-source').selectOption('');
     await page.getByRole('button', { name: 'Find cameras' }).click();
 
@@ -395,12 +410,12 @@ async function main() {
 
     await page.evaluate(() => navigator.serviceWorker.ready);
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.locator('#camera-count').filter({ hasText: '33,680 cameras' }).waitFor({ state: 'visible' });
+    await page.locator('#camera-count').filter({ hasText: '33,871 cameras' }).waitFor({ state: 'visible' });
     assert.equal(await page.locator('#saved-views option', { hasText: 'Smoke view' }).count(), 1);
     await context.setOffline(true);
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.getByRole('heading', { name: 'StormScope' }).waitFor({ state: 'visible' });
-    await page.locator('#camera-count').filter({ hasText: '33,680 cameras' }).waitFor({ state: 'visible' });
+    await page.locator('#camera-count').filter({ hasText: '33,871 cameras' }).waitFor({ state: 'visible' });
     await context.setOffline(false);
 
     await page.getByRole('button', { name: 'Toggle layers panel' }).click();

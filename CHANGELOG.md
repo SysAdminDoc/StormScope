@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.52.0 - 2026-07-12
+
+- Expanded New Mexico from **6 to 199** accurately located cameras. The production NMRoads v5 inventory now uses its HTTPS image proxy and authoritative provider epochs; **174 of 183** enabled records passed repeated current-JPEG and 65-second advancement probes. Four empty feeds were classified `confirmed_dead`, two stale/reconnecting frames `placeholder`, and three non-advancing rows were withheld for retry.
+- Added three five-minute NOAA/NWS Albuquerque views, three current public-domain USGS canyon/Rio Ruidoso views, the current Valles Caldera Cabin District NPS still, and the 15-second NRAO Very Large Array view. The VLA requires changed cache-busted frames; Valles replaced its stale page embed in place. NOAA, USGS, and NRAO now have schema/source filters and browser coverage.
+- Searched all 37 New Mexico Census cities with two query forms and five-page-equivalent result depth plus 30 statewide, category, and operator query families. Added 11 canonical YouTube fixed cameras spanning Carlsbad Caverns wildlife, Belen/Gallup/Grants/Santa Fe/Las Vegas/Melrose railcams, Las Vegas street/plaza views, and downtown Roswell. All rechecked `is_live`, public, embed-enabled, and playable with active advancing HLS; the Carlsbad stream replaced its stale NPS embed, so the YouTube batch is +10 net.
+- Held or rejected 13 public-land candidates (stale/daylight-paused USGS frames, a station/coordinate mismatch, five Taos HLS views without exact first-party mount/usage evidence, stale Elephant Butte, inaccessible/bad-coordinate El Morro, and a transiently rate-limited Carlsbad probe later recovered) and seven relevant live YouTube results (duplicate, wrong-state/country, ambiguous, or unofficial relays). The ABQRoads mirror was deduplicated against NMRoads; HTTP-only NMRoads HLS remains excluded.
+- Corpus **33,680 -> 33,871**; DOT **32,746 -> 32,920**; YouTube **474 -> 485**; NPS **175 -> 174** after two embed replacements and one direct addition; NOAA **0 -> 3**; USGS **0 -> 3**; NRAO **0 -> 1**; provider embeds **449 -> 447**; deterministic shards **45 -> 46**; service-worker cache v28.
+
 ## v0.51.0 - 2026-07-12
 
 ### Verified Wyoming national-park, landmark, and downtown cameras

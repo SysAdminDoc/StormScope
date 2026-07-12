@@ -514,6 +514,10 @@ class LocatedCamera:
     geocode_display_name: str
     score: int
     reasons: list[str]
+    direction: str = ""
+    source_url: str = ""
+    refresh_cadence_seconds: int = 30
+    replace_source_url: str = ""
 
 
 def run_curl(args: list[str], *, data: bytes | None = None, timeout: int = 30) -> bytes:
@@ -569,6 +573,10 @@ def run_ytdlp_metadata(video_id: str, *, timeout: int = 75) -> dict[str, Any]:
 
 def ytdlp_confirms_live_playback(metadata: dict[str, Any]) -> bool:
     if metadata.get("is_live") is not True and metadata.get("live_status") != "is_live":
+        return False
+    if metadata.get("playable_in_embed") is not True:
+        return False
+    if metadata.get("availability") != "public":
         return False
     return bool(metadata.get("url") or metadata.get("formats") or metadata.get("requested_formats"))
 
@@ -1030,6 +1038,10 @@ def located_from_override(candidate: Candidate, override: dict[str, Any]) -> Loc
         geocode_display_name=str(override.get("geocode_display_name") or "override"),
         score=candidate.score + 5,
         reasons=[*candidate.reasons, "location_override"],
+        direction=str(override.get("direction") or ""),
+        source_url=str(override.get("source_url") or ""),
+        refresh_cadence_seconds=int(override.get("refresh_cadence_seconds") or 30),
+        replace_source_url=str(override.get("replace_source_url") or ""),
     )
 
 
@@ -1095,20 +1107,26 @@ def locate_candidate(
     return None, failures or ["no_location_query"]
 
 
-def append_cameras(data_file: Path, located: list[LocatedCamera], limit_add: int) -> int:
-    def append(cameras: list[dict[str, Any]]) -> int:
+def append_cameras(data_file: Path, located: list[LocatedCamera], limit_add: int) -> tuple[int, int]:
+    def append(cameras: list[dict[str, Any]]) -> tuple[int, int]:
         verified_at = utc_now_iso()
         existing_ids = {str(cam.get("url")) for cam in cameras if cam.get("type") == "youtube"}
         max_id = max(int(cam.get("id") or 0) for cam in cameras) if cameras else 0
         added = 0
+        replaced = 0
         for camera in located:
-            if limit_add and added >= limit_add:
+            if limit_add and added + replaced >= limit_add:
                 break
             if camera.video_id in existing_ids:
                 continue
-            max_id += 1
+            replacement_index = next((
+                index for index, existing in enumerate(cameras)
+                if camera.replace_source_url
+                and existing.get("source_url") == camera.replace_source_url
+            ), None)
+            camera_id = cameras[replacement_index]["id"] if replacement_index is not None else max_id + 1
             record = {
-                    "id": max_id,
+                    "id": camera_id,
                     "name": camera.name,
                     "lat": camera.lat,
                     "lon": camera.lon,
@@ -1116,19 +1134,26 @@ def append_cameras(data_file: Path, located: list[LocatedCamera], limit_add: int
                     "type": "youtube",
                     "state": camera.state,
                     "county": camera.county,
-                    "direction": "",
+                    "direction": camera.direction,
                     "source": "youtube",
                 }
+            source_url = camera.source_url or canonical_source_url("youtube", camera.video_id)
             record.update(
-                healthy_metadata(canonical_source_url("youtube", camera.video_id), verified_at=verified_at)
+                healthy_metadata(source_url, verified_at=verified_at)
             )
-            cameras.append(record)
+            record["refresh_cadence_seconds"] = camera.refresh_cadence_seconds
+            if replacement_index is None:
+                max_id += 1
+                cameras.append(record)
+                added += 1
+            else:
+                cameras[replacement_index] = record
+                replaced += 1
             existing_ids.add(camera.video_id)
-            added += 1
-        return added
+        return added, replaced
 
-    added, _ = update_camera_data(data_file, append)
-    return added
+    result, _ = update_camera_data(data_file, append)
+    return result
 
 
 def camera_to_report(camera: LocatedCamera) -> dict[str, Any]:
@@ -1143,6 +1168,10 @@ def camera_to_report(camera: LocatedCamera) -> dict[str, Any]:
         "geocode_display_name": camera.geocode_display_name,
         "score": camera.score,
         "reasons": camera.reasons,
+        "direction": camera.direction,
+        "source_url": camera.source_url,
+        "refresh_cadence_seconds": camera.refresh_cadence_seconds,
+        "replace_source_url": camera.replace_source_url,
     }
 
 
@@ -1285,8 +1314,9 @@ def main(argv: list[str] | None = None) -> int:
     located.sort(key=lambda item: (-item.score, item.state, item.name))
 
     added = 0
+    replaced = 0
     if args.apply:
-        added = append_cameras(args.data, located, args.limit_add)
+        added, replaced = append_cameras(args.data, located, args.limit_add)
 
     total, youtube_total, duplicate_youtube_ids, bad_youtube_records = validate_dataset(args.data)
     report = {
@@ -1296,6 +1326,7 @@ def main(argv: list[str] | None = None) -> int:
         "min_score": args.min_score,
         "applied": args.apply,
         "added": added,
+        "replaced": replaced,
         "summary": {
             "queries": len(queries),
             "direct_videos": len(direct_video_ids),
@@ -1319,7 +1350,7 @@ def main(argv: list[str] | None = None) -> int:
 
     print(
         "Summary: "
-        f"added={added} live={len(live_candidates)} located={len(located)} "
+        f"added={added} replaced={replaced} live={len(live_candidates)} located={len(located)} "
         f"location_rejected={len(location_rejects)} dataset_total={total} youtube={youtube_total}"
     )
     print(f"Report: {args.report}")

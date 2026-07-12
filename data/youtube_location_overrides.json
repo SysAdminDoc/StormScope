@@ -1573,5 +1573,97 @@
     "lon": -105.594778,
     "state": "Wyoming",
     "county": "Albany County"
+  },
+  "BwiIsjXt3KI": {
+    "name": "Carlsbad Caverns Natural Entrance Bat Cam",
+    "lat": 32.176913,
+    "lon": -104.441431,
+    "state": "New Mexico",
+    "county": "Eddy County",
+    "source_url": "https://explore.org/livecams/bats/carlsbad-caverns",
+    "replace_source_url": "https://www.nps.gov/media/webcam/view.htm?id=ECD2475F-95A4-43C7-9E78-DED990F833F9"
+  },
+  "EKohXgHGCj8": {
+    "name": "Belen BNSF Yard PTZ Live Railcam",
+    "lat": 34.6600246,
+    "lon": -106.7677666,
+    "state": "New Mexico",
+    "county": "Valencia County",
+    "source_url": "https://www.youtube.com/watch?v=EKohXgHGCj8"
+  },
+  "hatt7HlQGu0": {
+    "name": "Gallup MP 157.5 West Live Railcam",
+    "lat": 35.52883473801,
+    "lon": -108.740386730438,
+    "state": "New Mexico",
+    "county": "McKinley County",
+    "direction": "W",
+    "source_url": "https://southwestrailcams.com/LiveRailCams/GallupNM.html"
+  },
+  "hbmeqWdDLjk": {
+    "name": "Gallup MP 157.5 East Live Railcam",
+    "lat": 35.52883473801,
+    "lon": -108.740386730438,
+    "state": "New Mexico",
+    "county": "McKinley County",
+    "direction": "E",
+    "source_url": "https://southwestrailcams.com/LiveRailCams/GallupNM.html"
+  },
+  "MYfMV_WR3s4": {
+    "name": "Grants MP 96.2 PTZ Live Railcam",
+    "lat": 35.154064099842,
+    "lon": -107.859839726174,
+    "state": "New Mexico",
+    "county": "Cibola County",
+    "source_url": "https://southwestrailcams.com/LiveRailCams/GrantsNM.html"
+  },
+  "R168_-P5PQw": {
+    "name": "Santa Fe MP 18.32 Live Railcam",
+    "lat": 35.639257019218,
+    "lon": -105.962993244623,
+    "state": "New Mexico",
+    "county": "Santa Fe County",
+    "source_url": "https://southwestrailcams.com/LiveRailCams/SantaFeNM.html"
+  },
+  "ZaPt2niVJyY": {
+    "name": "Las Vegas MP 770 PTZ Live Railcam",
+    "lat": 35.594342213866,
+    "lon": -105.212716853811,
+    "state": "New Mexico",
+    "county": "San Miguel County",
+    "source_url": "https://southwestrailcams.com/LiveRailCams/LasVegasNM.html"
+  },
+  "dteUSXY5zW0": {
+    "name": "Melrose MP 680.7 Live Railcam",
+    "lat": 34.424585556286,
+    "lon": -103.628945928135,
+    "state": "New Mexico",
+    "county": "Curry County",
+    "source_url": "https://southwestrailcams.com/LiveRailCams/MelroseNM.html"
+  },
+  "sw8MuxrKcs8": {
+    "name": "Las Vegas Bridge Street West Live Cam",
+    "lat": 35.593713152033,
+    "lon": -105.224668777187,
+    "state": "New Mexico",
+    "county": "San Miguel County",
+    "direction": "W",
+    "source_url": "https://www.desertgate.com/las-vegas-nm-live-video-streams/"
+  },
+  "ljFzPY6rmgQ": {
+    "name": "Las Vegas Historic Plaza Park Live Cam",
+    "lat": 35.592419698645,
+    "lon": -105.226235690166,
+    "state": "New Mexico",
+    "county": "San Miguel County",
+    "source_url": "https://www.desertgate.com/las-vegas-nm-live-video-streams/"
+  },
+  "kLoFxVhRWtQ": {
+    "name": "Roswell Downtown Live Cam",
+    "lat": 33.39816074511,
+    "lon": -104.523718713095,
+    "state": "New Mexico",
+    "county": "Chaves County",
+    "source_url": "https://share.earthcam.net/RoswellNewMexico"
   }
 }

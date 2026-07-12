@@ -11,6 +11,7 @@ import hashlib
 import json
 import gzip
 import html
+import itertools
 import re
 import ssl
 import sys
@@ -834,11 +835,11 @@ WYOMING_OLD_FAITHFUL = {
 }
 
 
-def _nps_image_snapshot(url):
+def _current_jpeg_snapshot(url, require_provider_timestamp=True):
     request = urllib.request.Request(
         url,
         headers={
-            'User-Agent': 'StormScope/0.51.0',
+            'User-Agent': 'StormScope/0.52.0',
             'Accept': 'image/jpeg,image/*,*/*',
             'Cache-Control': 'no-cache',
         },
@@ -849,8 +850,10 @@ def _nps_image_snapshot(url):
         body = response.read()
     if 'image' not in content_type or len(body) < 10_000 or not body.startswith(b'\xff\xd8\xff'):
         raise ValueError('placeholder:not_a_current_jpeg')
-    if not last_modified:
+    if not last_modified and require_provider_timestamp:
         raise ValueError('placeholder:missing_provider_timestamp')
+    if not last_modified:
+        return hashlib.sha256(body).hexdigest(), len(body), None
     provider_time = email.utils.parsedate_to_datetime(last_modified)
     if provider_time.tzinfo is None:
         provider_time = provider_time.replace(tzinfo=timezone.utc)
@@ -860,13 +863,32 @@ def _nps_image_snapshot(url):
     return hashlib.sha256(body).hexdigest(), len(body), provider_time.isoformat()
 
 
-def verify_nps_images(candidates, probe_interval=2.0, workers=7):
+def verify_current_jpeg_images(candidates, probe_interval=2.0, workers=7):
     snapshots = {}
     errors = {}
+    probe_sequence = itertools.count()
 
     def probe(item):
         try:
-            return item['provider_camera_id'], _nps_image_snapshot(item['url']), None
+            url = item['url']
+            if item.get('cache_bust'):
+                parsed = urllib.parse.urlsplit(url)
+                query = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+                query.append((
+                    '_stormscope_probe',
+                    f'{time.time_ns()}-{next(probe_sequence)}',
+                ))
+                url = urllib.parse.urlunsplit(parsed._replace(
+                    query=urllib.parse.urlencode(query)
+                ))
+            return (
+                item['provider_camera_id'],
+                _current_jpeg_snapshot(
+                    url,
+                    require_provider_timestamp=not item.get('require_content_change'),
+                ),
+                None,
+            )
         except Exception as exc:  # noqa: BLE001
             return item['provider_camera_id'], None, str(exc)
 
@@ -890,6 +912,14 @@ def verify_nps_images(candidates, probe_interval=2.0, workers=7):
     final_errors = {}
     for candidate in candidates:
         camera_id = candidate['provider_camera_id']
+        if (
+            camera_id in verified
+            and candidate.get('require_content_change')
+            and first[camera_id][0] == snapshots[camera_id][0]
+        ):
+            verified.remove(camera_id)
+            final_errors[camera_id] = 'placeholder:not_advancing'
+            continue
         if camera_id in verified:
             continue
         details = errors.get(camera_id, ['transient_network:incomplete'])
@@ -903,7 +933,7 @@ def verify_nps_images(candidates, probe_interval=2.0, workers=7):
 
 def fetch_wyoming_nps_verified():
     image_candidates = [dict(item) for item in WYOMING_NPS_IMAGE_FEEDS]
-    verified_images, image_errors, image_snapshots = verify_nps_images(image_candidates)
+    verified_images, image_errors, image_snapshots = verify_current_jpeg_images(image_candidates)
     old_faithful = dict(WYOMING_OLD_FAITHFUL)
     verified_hls, hls_errors = verify_live_hls(
         [old_faithful['url']], probe_interval=10.0, workers=1,
@@ -1541,28 +1571,453 @@ def fetch_delaware_live():
 
 
 # ── New Mexico DOT ──
-def fetch_newmexico():
+NEW_MEXICO_DOT_API = 'https://servicev5.nmroads.com/RealMapWAR'
+NEW_MEXICO_DOT_SOURCE = 'https://www.nmroads.com/default.html'
+
+
+def _nmroads_image_url(camera_name, timestamp=0):
+    return f'{NEW_MEXICO_DOT_API}/GetCameraImage?' + urllib.parse.urlencode({
+        'ts': timestamp,
+        'cameraName': camera_name,
+    })
+
+
+def _nmroads_snapshot(camera):
+    camera_name = camera['name']
+    timestamp_url = f'{NEW_MEXICO_DOT_API}/GetCachedObject?' + urllib.parse.urlencode({
+        'key': f'{camera_name}Time',
+    })
+    raw_timestamp = _http_bytes(timestamp_url, timeout=20).strip()
     try:
-        data = fetch_json('https://servicev4.nmroads.com/RealMapWAR/GetCameraInfo', timeout=20)
-        count = 0
-        items = data if isinstance(data, list) else [data]
-        for cam in items:
-            if not cam.get('enabled'):
+        provider_milliseconds = int(raw_timestamp)
+    except ValueError as exc:
+        body = _http_bytes(
+            _nmroads_image_url(camera_name, time.time_ns()),
+            headers={'Accept': 'image/jpeg,image/*,*/*', 'Cache-Control': 'no-cache'},
+            timeout=25,
+        )
+        if not body:
+            raise ValueError('confirmed_dead:empty_image') from exc
+        raise ValueError('placeholder:missing_provider_timestamp') from exc
+    provider_time = datetime.fromtimestamp(
+        provider_milliseconds / 1000, tz=timezone.utc
+    )
+    age = datetime.now(timezone.utc) - provider_time
+    if age < -timedelta(minutes=5) or age > timedelta(minutes=3):
+        raise ValueError(f'placeholder:stale_provider_timestamp:{int(age.total_seconds())}')
+
+    body = _http_bytes(
+        _nmroads_image_url(camera_name, time.time_ns()),
+        headers={'Accept': 'image/jpeg,image/*,*/*', 'Cache-Control': 'no-cache'},
+        timeout=25,
+    )
+    if not body:
+        raise ValueError('confirmed_dead:empty_image')
+    if len(body) < 2_000 or not body.startswith(b'\xff\xd8\xff'):
+        raise ValueError('placeholder:not_a_valid_jpeg')
+    return hashlib.sha256(body).hexdigest(), len(body), provider_time.isoformat()
+
+
+def verify_nmroads_images(candidates, probe_interval=65.0, workers=12):
+    first = {}
+    second = {}
+    errors = {}
+
+    def probe(item):
+        try:
+            return item['name'], _nmroads_snapshot(item), None
+        except Exception as exc:  # noqa: BLE001
+            return item['name'], None, str(exc)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+        for camera_name, snapshot, error in executor.map(probe, candidates):
+            if error:
+                errors.setdefault(camera_name, []).append(error)
+            else:
+                first[camera_name] = snapshot
+    if probe_interval:
+        time.sleep(probe_interval)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+        for camera_name, snapshot, error in executor.map(probe, candidates):
+            if error:
+                errors.setdefault(camera_name, []).append(error)
+            else:
+                second[camera_name] = snapshot
+
+    verified = set(first) & set(second)
+    final_errors = {}
+    for camera in candidates:
+        camera_name = camera['name']
+        if camera_name in verified:
+            first_snapshot = first[camera_name]
+            second_snapshot = second[camera_name]
+            if (
+                first_snapshot[0] != second_snapshot[0]
+                or first_snapshot[2] != second_snapshot[2]
+            ):
                 continue
-            lat = cam.get('lat')
-            lon = cam.get('lon')
-            name = cam.get('name', '') or cam.get('title', 'NM Camera')
-            img_url = cam.get('snapshotFile', '')
-            if img_url and not img_url.startswith('http'):
-                img_url = f'https://ss.nmroads.com/{img_url}'
-            if not img_url:
-                continue
-            add_camera(name, lat, lon, img_url, 'image', 'New Mexico', '', '', 'dot')
-            count += 1
-        return count
-    except Exception as e:
-        print(f'  New Mexico: {e}')
-        return 0
+            verified.remove(camera_name)
+            final_errors[camera_name] = 'placeholder:not_advancing'
+            continue
+        details = errors.get(camera_name, ['transient_network:incomplete'])
+        detail = details[-1]
+        final_errors[camera_name] = (
+            detail if detail.startswith(('placeholder:', 'confirmed_dead:',
+                                         'transient_network:'))
+            else f'transient_network:{detail}'
+        )
+    return verified, final_errors, second
+
+
+def _nmroads_direction(title):
+    match = re.search(r'(?i)(?:^|[^A-Z])(NB|SB|EB|WB)(?:[^A-Z]|$)', title)
+    if match:
+        return match.group(1)[0].upper()
+    for word, direction in (
+        ('north', 'N'), ('south', 'S'), ('east', 'E'), ('west', 'W')
+    ):
+        if re.search(rf'(?i)\b{word}\b', title):
+            return direction
+    return ''
+
+
+def fetch_newmexico():
+    api_url = f'{NEW_MEXICO_DOT_API}/GetCameraInfo'
+    data = fetch_json(api_url, timeout=20)
+    items = data if isinstance(data, list) else data.get('cameraInfo', [])
+    enabled = [camera for camera in items if camera.get('enabled')]
+    verified, errors, snapshots = verify_nmroads_images(enabled)
+    rejected = []
+    count = 0
+    for camera in enabled:
+        camera_name = camera['name']
+        if camera_name not in verified:
+            rejected.append({
+                'provider_camera_id': camera_name,
+                'name': camera.get('title') or camera_name,
+                'grouping': camera.get('grouping') or '',
+                'district': camera.get('district'),
+                'failure_class': errors.get(
+                    camera_name, 'transient_network:incomplete'
+                ),
+            })
+            continue
+        add_camera(
+            camera.get('title') or camera_name,
+            camera['lat'],
+            camera['lon'],
+            _nmroads_image_url(camera_name),
+            'image',
+            'New Mexico',
+            '',
+            _nmroads_direction(camera.get('title') or camera_name),
+            'dot',
+            NEW_MEXICO_DOT_SOURCE,
+            60,
+        )
+        cameras[-1]['provider_camera_id'] = camera_name
+        cameras[-1]['provider_timestamp'] = snapshots[camera_name][2]
+        count += 1
+
+    atomic_write_json(
+        DATA_DIR / 'new_mexico_dot_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'New Mexico Department of Transportation',
+            'source_url': api_url,
+            'public_source_url': NEW_MEXICO_DOT_SOURCE,
+            'attribution': 'New Mexico Department of Transportation / NMRoads',
+            'usage_terms': (
+                'Public traveler-information service; no express reuse license located'
+            ),
+            'refresh_cadence_seconds': 60,
+            'inventory_total': len(items),
+            'enabled': len(enabled),
+            'verified_live': count,
+            'rejected': rejected,
+        },
+        indent=2,
+    )
+    print(f'  New Mexico DOT image verification: {count}/{len(enabled)} current')
+    return count
+
+
+# ── NOAA/NWS Albuquerque current five-minute stills ──
+NEW_MEXICO_NWS_FEEDS = (
+    {
+        'provider_camera_id': 'extne',
+        'name': 'NWS Albuquerque - Sunport and Sandia Mountains',
+        'url': 'https://www.weather.gov/images/abq/webcam/extne_000.jpg',
+        'direction': 'NE',
+    },
+    {
+        'provider_camera_id': 'extsouth',
+        'name': 'NWS Albuquerque - South toward Manzano Mountains',
+        'url': 'https://www.weather.gov/images/abq/webcam/extsouth_000.jpg',
+        'direction': 'S',
+    },
+    {
+        'provider_camera_id': 'extwest',
+        'name': 'NWS Albuquerque - West Mesa',
+        'url': 'https://www.weather.gov/images/abq/webcam/extwest_000.jpg',
+        'direction': 'W',
+    },
+)
+NEW_MEXICO_NWS_SOURCE = 'https://www.weather.gov/abq/webcam'
+NEW_MEXICO_NWS_LAT = 35.036792990052
+NEW_MEXICO_NWS_LON = -106.625605101972
+
+
+def fetch_new_mexico_nws():
+    candidates = [dict(item) for item in NEW_MEXICO_NWS_FEEDS]
+    verified, errors, snapshots = verify_current_jpeg_images(
+        candidates, probe_interval=2.0, workers=3
+    )
+    rejected = []
+    count = 0
+    for camera in candidates:
+        camera_id = camera['provider_camera_id']
+        if camera_id not in verified:
+            rejected.append({
+                'provider_camera_id': camera_id,
+                'name': camera['name'],
+                'failure_class': errors.get(camera_id, 'transient_network:incomplete'),
+            })
+            continue
+        add_camera(
+            camera['name'], NEW_MEXICO_NWS_LAT, NEW_MEXICO_NWS_LON,
+            camera['url'], 'image', 'New Mexico', 'Bernalillo County',
+            camera['direction'], 'noaa', NEW_MEXICO_NWS_SOURCE, 300,
+        )
+        cameras[-1]['provider_camera_id'] = camera_id
+        cameras[-1]['provider_timestamp'] = snapshots[camera_id][2]
+        count += 1
+
+    atomic_write_json(
+        DATA_DIR / 'new_mexico_nws_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'NOAA National Weather Service Albuquerque',
+            'source_url': NEW_MEXICO_NWS_SOURCE,
+            'attribution': 'NOAA/National Weather Service',
+            'geographic_scope': 'NWS Albuquerque office and Sunport',
+            'location_evidence': 'Official office address matched by U.S. Census geocoder',
+            'refresh_cadence_seconds': 300,
+            'candidates': len(candidates),
+            'verified_live': count,
+            'rejected': rejected,
+        },
+        indent=2,
+    )
+    print(f'  New Mexico NWS image verification: {count}/{len(candidates)} current')
+    return count
+
+
+NEW_MEXICO_NPS_FEEDS = (
+    {
+        'provider_camera_id': 'vall-valle-grande-cabin',
+        'name': 'Valle Grande from the Cabin District',
+        'lat': 35.86438952202784,
+        'lon': -106.51895703889164,
+        'url': 'https://www.nps.gov/webcams-vall/valle_grande_cabin_webcam.jpg',
+        'county': 'Sandoval County',
+        'source_url': ('https://www.nps.gov/media/webcam/view.htm?'
+                       'id=A6FB0323-FCA4-211B-12314249C522ED57'),
+    },
+)
+
+
+def fetch_new_mexico_nps_verified():
+    candidates = [dict(item) for item in NEW_MEXICO_NPS_FEEDS]
+    verified, errors, snapshots = verify_current_jpeg_images(
+        candidates, probe_interval=2.0, workers=1
+    )
+    rejected = []
+    count = 0
+    for camera in candidates:
+        camera_id = camera['provider_camera_id']
+        if camera_id not in verified:
+            rejected.append({
+                'provider_camera_id': camera_id,
+                'name': camera['name'],
+                'failure_class': errors.get(camera_id, 'transient_network:incomplete'),
+            })
+            continue
+        add_camera(
+            camera['name'], camera['lat'], camera['lon'], camera['url'], 'image',
+            'New Mexico', camera['county'], '', 'nps', camera['source_url'], 60,
+        )
+        cameras[-1]['provider_camera_id'] = camera_id
+        cameras[-1]['provider_timestamp'] = snapshots[camera_id][2]
+        cameras[-1]['_replace_source_page'] = True
+        count += 1
+
+    atomic_write_json(
+        DATA_DIR / 'new_mexico_nps_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'National Park Service',
+            'source_url': candidates[0]['source_url'],
+            'attribution': 'National Park Service',
+            'geographic_scope': 'Valles Caldera National Preserve, New Mexico',
+            'refresh_cadence_seconds': 60,
+            'candidates': len(candidates),
+            'verified_live': count,
+            'rejected': rejected,
+        },
+        indent=2,
+    )
+    print(f'  New Mexico NPS image verification: {count}/{len(candidates)} current')
+    return count
+
+
+NEW_MEXICO_USGS_FEEDS = (
+    {
+        'provider_camera_id': 'nm-gavilan-canyon-skunk-canyon',
+        'name': 'Gavilan Canyon at Skunk Canyon near Hollywood',
+        'lat': 33.34488056,
+        'lon': -105.6439111,
+        'url': ('https://usgs-nims-images.s3.amazonaws.com/overlay/'
+                'NM_Gavilan_Canyon_at_Skunk_Canyon_near_Hollywood/'
+                'NM_Gavilan_Canyon_at_Skunk_Canyon_near_Hollywood_newest.jpg'),
+        'county': 'Lincoln County',
+        'source_url': ('https://www.usgs.gov/centers/new-mexico-water-science-center/'
+                       'science/new-mexico-water-science-center-webcams'),
+        'refresh_cadence_seconds': 300,
+    },
+    {
+        'provider_camera_id': '08386500',
+        'name': 'Rio Ruidoso above Ruidoso',
+        'lat': 33.33673056,
+        'lon': -105.7414806,
+        'url': ('https://usgs-nims-images.s3.amazonaws.com/overlay/'
+                'NM_RIO_RUIDOSO_ABOVE_RUIDOSO/'
+                'NM_RIO_RUIDOSO_ABOVE_RUIDOSO_newest.jpg'),
+        'county': 'Lincoln County',
+        'source_url': ('https://www.usgs.gov/media/webcams/'
+                       'rio-ruidoso-webcam-upstream-ruidoso-nm'),
+        'refresh_cadence_seconds': 120,
+    },
+    {
+        'provider_camera_id': '08386505',
+        'name': 'Rio Ruidoso at Ruidoso',
+        'lat': 33.33653056,
+        'lon': -105.7263083,
+        'url': ('https://usgs-nims-images.s3.amazonaws.com/overlay/'
+                'NM_RIO_RUIDOSO_AT_RUIDOSO/'
+                'NM_RIO_RUIDOSO_AT_RUIDOSO_newest.jpg'),
+        'county': 'Lincoln County',
+        'source_url': ('https://www.usgs.gov/media/webcams/'
+                       'rio-ruidoso-ruidoso-nm-webcam'),
+        'refresh_cadence_seconds': 120,
+    },
+)
+
+
+def fetch_new_mexico_usgs():
+    candidates = [dict(item) for item in NEW_MEXICO_USGS_FEEDS]
+    verified, errors, snapshots = verify_current_jpeg_images(
+        candidates, probe_interval=2.0, workers=4
+    )
+    rejected = []
+    count = 0
+    for camera in candidates:
+        camera_id = camera['provider_camera_id']
+        if camera_id not in verified:
+            rejected.append({
+                'provider_camera_id': camera_id,
+                'name': camera['name'],
+                'failure_class': errors.get(camera_id, 'transient_network:incomplete'),
+            })
+            continue
+        add_camera(
+            camera['name'], camera['lat'], camera['lon'], camera['url'], 'image',
+            'New Mexico', camera['county'], '', 'usgs', camera['source_url'],
+            camera['refresh_cadence_seconds'],
+        )
+        cameras[-1]['provider_camera_id'] = camera_id
+        cameras[-1]['provider_timestamp'] = snapshots[camera_id][2]
+        count += 1
+
+    atomic_write_json(
+        DATA_DIR / 'new_mexico_usgs_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'U.S. Geological Survey New Mexico Water Science Center',
+            'attribution': 'U.S. Geological Survey',
+            'usage_terms': 'Public domain',
+            'geographic_scope': 'New Mexico stream and canyon monitoring sites',
+            'candidates': len(candidates),
+            'verified_live': count,
+            'rejected': rejected,
+        },
+        indent=2,
+    )
+    print(f'  New Mexico USGS image verification: {count}/{len(candidates)} current')
+    return count
+
+
+NEW_MEXICO_NRAO_FEEDS = (
+    {
+        'provider_camera_id': 'vla-antenna-assembly-building-ne',
+        'name': 'Very Large Array - Antenna Assembly Building Northeast View',
+        'lat': 34.07276,
+        'lon': -107.62833,
+        'url': 'https://public.nrao.edu/wp-content/uploads/temp/vla_webcam_temp.jpg',
+        'county': 'Socorro County',
+        'direction': 'NE',
+        'source_url': 'https://public.nrao.edu/vla-webcam/',
+        'require_content_change': True,
+        'cache_bust': True,
+    },
+)
+
+
+def fetch_new_mexico_nrao():
+    candidates = [dict(item) for item in NEW_MEXICO_NRAO_FEEDS]
+    verified, errors, snapshots = verify_current_jpeg_images(
+        candidates, probe_interval=16.0, workers=1
+    )
+    rejected = []
+    count = 0
+    for camera in candidates:
+        camera_id = camera['provider_camera_id']
+        if camera_id not in verified:
+            rejected.append({
+                'provider_camera_id': camera_id,
+                'name': camera['name'],
+                'failure_class': errors.get(camera_id, 'transient_network:incomplete'),
+            })
+            continue
+        add_camera(
+            camera['name'], camera['lat'], camera['lon'], camera['url'], 'image',
+            'New Mexico', camera['county'], camera['direction'], 'nrao',
+            camera['source_url'], 15,
+        )
+        cameras[-1]['provider_camera_id'] = camera_id
+        if snapshots[camera_id][2]:
+            cameras[-1]['provider_timestamp'] = snapshots[camera_id][2]
+        count += 1
+
+    atomic_write_json(
+        DATA_DIR / 'new_mexico_nrao_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'National Radio Astronomy Observatory',
+            'source_url': NEW_MEXICO_NRAO_FEEDS[0]['source_url'],
+            'attribution': 'NRAO/AUI/NSF',
+            'usage_terms': 'CC BY 4.0',
+            'usage_terms_url': 'https://public.nrao.edu/media-use/',
+            'geographic_scope': 'Very Large Array, Socorro County, New Mexico',
+            'refresh_cadence_seconds': 15,
+            'candidates': len(candidates),
+            'verified_live': count,
+            'rejected': rejected,
+        },
+        indent=2,
+    )
+    print(f'  New Mexico NRAO image verification: {count}/{len(candidates)} current')
+    return count
 
 
 # ── Minnesota (IRIS) ──
@@ -2908,6 +3363,10 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
         ('Missouri DOT', fetch_missouri),
         ('Delaware (live HLS)', fetch_delaware_live),
         ('New Mexico DOT', fetch_newmexico),
+        ('New Mexico NWS', fetch_new_mexico_nws),
+        ('New Mexico NPS verified', fetch_new_mexico_nps_verified),
+        ('New Mexico USGS', fetch_new_mexico_usgs),
+        ('New Mexico NRAO', fetch_new_mexico_nrao),
         ('Minnesota (IRIS)', fetch_mn_iris),
         ('Iowa DOT', fetch_iowa_dot),
         ('Wyoming DOT', fetch_wyoming),
