@@ -40,6 +40,7 @@ data/massachusetts_transport_discovery_report*.json
 data/massachusetts_youtube_discovery_report*.json
 data/minnesota_511_discovery_report*.json
 data/minnesota_usgs_discovery_report*.json
+data/hawaii_usgs_discovery_report*.json
 ROADMAP.md
 Roadmap_Blocked.md
 RESEARCH.md

@@ -1386,6 +1386,71 @@ class FetchMergeTests(unittest.TestCase):
         self.assertFalse(result.succeeded)
         self.assertIn("truncated_verified_inventory", result.error)
 
+    def test_hawaii_usgs_requires_every_curated_current_image(self):
+        feed = {
+            "provider_camera_id": "HI_Kilauea_Testcam",
+            "name": "Kilauea Test Camera",
+            "lat": 19.4,
+            "lon": -155.3,
+            "direction": "E",
+            "cadence": 120,
+            "volcano": "kilauea",
+        }
+        expected_url = (
+            "https://usgs-nims-images.s3.amazonaws.com/overlay/"
+            "HI_Kilauea_Testcam/HI_Kilauea_Testcam_newest.jpg"
+        )
+        with (
+            mock.patch.object(fetch_cameras, "HAWAII_USGS_NIMS_FEEDS", (feed,)),
+            mock.patch.object(
+                fetch_cameras,
+                "verify_current_jpeg_images",
+                return_value=(
+                    {"HI_Kilauea_Testcam"},
+                    {},
+                    {
+                        "HI_Kilauea_Testcam": (
+                            "hash",
+                            20000,
+                            "2026-07-12T12:34:38+00:00",
+                        )
+                    },
+                ),
+            ) as verifier,
+            mock.patch.object(fetch_cameras, "atomic_write_json") as report_writer,
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Hawaii USGS verified", fetch_cameras.fetch_hawaii_usgs_verified
+            )
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual(1, len(result.cameras))
+        row = result.cameras[0]
+        self.assertEqual(expected_url, row["url"])
+        self.assertEqual("Hawaii", row["state"])
+        self.assertEqual("Hawaii County", row["county"])
+        self.assertEqual("E", row["direction"])
+        self.assertEqual("volcano", row["category"])
+        self.assertEqual("HI_Kilauea_Testcam", row["provider_camera_id"])
+        self.assertEqual("https://www.usgs.gov/volcanoes/kilauea/webcams", row["source_url"])
+        self.assertEqual(300, verifier.call_args.args[0][0]["max_age_seconds"])
+        self.assertEqual(1, report_writer.call_args.args[1]["verified_live"])
+
+    def test_hawaii_usgs_retains_last_known_good_on_any_failed_image(self):
+        with (
+            mock.patch.object(
+                fetch_cameras,
+                "verify_current_jpeg_images",
+                return_value=(set(), {"missing": "confirmed_dead:http_404"}, {}),
+            ),
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Hawaii USGS verified", fetch_cameras.fetch_hawaii_usgs_verified
+            )
+        self.assertFalse(result.succeeded)
+        self.assertIn("truncated_verified_inventory", result.error)
+
 
 if __name__ == "__main__":
     unittest.main()

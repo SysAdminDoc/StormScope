@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.56.0 - 2026-07-12
+
+- Expanded Hawaii from **13 to 37** accurately located cameras. Added **14** current, manually reviewed, public-domain USGS Hawaiian Volcano Observatory/NIMS images across Kilauea and Mauna Loa. Each curated camera uses official provider coordinates, a direct HTTPS JPEG, an explicit cadence, a fresh provider timestamp, and a fail-closed refresh contract that retains the complete last-known-good set on any partial verification failure.
+- Searched **56** statewide, island, city, landmark, park, beach, harbor, airport, resort, weather, wildlife, volcano, surf, traffic, and operator YouTube families at up to 100 results per family. Added **11** exact-location public/embeddable streams across USGS HVO, Waikiki Aquarium, Explore.org, Maui resorts, Poipu Bay, Subaru Telescope, and CFHT; all passed immediate current-live metadata, playable HLS, segment-advancement, and embedding checks.
+- Removed the existing `mLYWolyZxuM` Oahu tour because it rotates among Waikiki, North Shore, and Diamond Head views and therefore cannot support the single fixed Honolulu coordinate previously assigned to it. Deferred two ambiguous views, one embed-disabled live stream, one transient USGS stream, and the nonadvancing MEGA Lab HLS candidate; composite, mobile, recorded, music, commentary, and unauthorized relay results were also rejected.
+- Resolved the current first-party GoAkamai inventory and audited all **361** coordinate-backed records. Although **280** unique camera identities were technically live, the controlling disclaimer prohibits publication, display, or distribution without written HDOT and Honolulu DTS permission, so every feed remains `licensing_restricted`. All 27 Maui cameras were disabled placeholders; the audit also found 78 placeholders and three duplicate/location-mismatched feeds.
+- Corpus **36,295 -> 36,319**; Hawaii **13 -> 37**; YouTube **548 -> 558** after 11 additions and one composite removal; USGS **15 -> 29**; deterministic shards remain **49**; service-worker cache v32.
+
 ## v0.55.0 - 2026-07-12
 
 - Expanded Minnesota from **9 to 1,723** accurately located cameras. Replaced both stale MnDOT fetch paths with the current first-party Minnesota 511 CARS inventory and its official coordinates, view IDs, timestamps, and HTTPS media. Of 1,527 public locations / 1,941 unique views, the shipped conservative intersection contains **1,084 advancing HLS streams** and **603 advancing JPEG views**; every accepted frame was manually reviewed across contact sheets.

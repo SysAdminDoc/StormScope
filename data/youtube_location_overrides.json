@@ -2276,5 +2276,99 @@
     "county": "Lake County",
     "source_url": "https://www.dnr.state.mn.us/water_access/harbors/two_harbors.html",
     "refresh_cadence_seconds": 300
+  },
+  "gXKuUyKt8mc": {
+    "name": "Kilauea V3 - South Halemaumau Crater",
+    "lat": 19.421,
+    "lon": -155.287,
+    "state": "Hawaii",
+    "county": "Hawaii County",
+    "source_url": "https://www.usgs.gov/volcanoes/kilauea/multimedia/webcams",
+    "refresh_cadence_seconds": 300
+  },
+  "HggWKlZv9yk": {
+    "name": "Kilauea V1 - West Halemaumau Crater",
+    "lat": 19.421,
+    "lon": -155.287,
+    "state": "Hawaii",
+    "county": "Hawaii County",
+    "source_url": "https://www.usgs.gov/volcanoes/kilauea/multimedia/webcams",
+    "refresh_cadence_seconds": 300
+  },
+  "WIUg8wzhq1g": {
+    "name": "Waikiki Aquarium South Shore Surf Cam",
+    "lat": 21.265912,
+    "lon": -157.821908,
+    "state": "Hawaii",
+    "county": "Honolulu County",
+    "source_url": "https://www.waikikiaquarium.org/experience/virtual/webcam/",
+    "refresh_cadence_seconds": 300
+  },
+  "Fp7l8XASb9Y": {
+    "name": "Banzai Pipeline - Ehukai Beach",
+    "lat": 21.662348,
+    "lon": -158.053987,
+    "state": "Hawaii",
+    "county": "Honolulu County",
+    "source_url": "https://explore.org/livecams/hawaii/hawaii-pipeline-cam",
+    "refresh_cadence_seconds": 300
+  },
+  "GL_2CrLwSDA": {
+    "name": "Napili Sunset Beachfront Resort",
+    "lat": 20.994482,
+    "lon": -156.666034,
+    "state": "Hawaii",
+    "county": "Maui County",
+    "refresh_cadence_seconds": 300
+  },
+  "gX7c8hzR17Y": {
+    "name": "Napili Kai Beach Resort",
+    "lat": 20.99608,
+    "lon": -156.665712,
+    "state": "Hawaii",
+    "county": "Maui County",
+    "refresh_cadence_seconds": 300
+  },
+  "G1zgkkguCyc": {
+    "name": "Fairmont Kea Lani - Wailea",
+    "lat": 20.675819,
+    "lon": -156.441713,
+    "state": "Hawaii",
+    "county": "Maui County",
+    "refresh_cadence_seconds": 300
+  },
+  "UpwNqncnqTE": {
+    "name": "Napili Shores Resort Unit A102",
+    "lat": 20.993211,
+    "lon": -156.668119,
+    "state": "Hawaii",
+    "county": "Maui County",
+    "refresh_cadence_seconds": 300
+  },
+  "kP3JW-K59-c": {
+    "name": "Poipu Bay Golf Course",
+    "lat": 21.877472,
+    "lon": -159.436133,
+    "state": "Hawaii",
+    "county": "Kauai County",
+    "refresh_cadence_seconds": 300
+  },
+  "6g4Fh8K-MhY": {
+    "name": "Maunakea East - Subaru Telescope",
+    "lat": 19.825556,
+    "lon": -155.476111,
+    "state": "Hawaii",
+    "county": "Hawaii County",
+    "source_url": "https://subarutelescope.org/en/about/",
+    "refresh_cadence_seconds": 300
+  },
+  "MPokOMJvZ-g": {
+    "name": "Maunakea West - Canada-France-Hawaii Telescope",
+    "lat": 19.828294,
+    "lon": -155.471667,
+    "state": "Hawaii",
+    "county": "Hawaii County",
+    "source_url": "https://www.cfht.hawaii.edu/",
+    "refresh_cadence_seconds": 300
   }
 }

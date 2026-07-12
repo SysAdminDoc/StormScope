@@ -711,7 +711,7 @@ def fetch_txdot():
 def fetch_nps():
     try:
         url = 'https://developer.nps.gov/api/v1/webcams?api_key=DEMO_KEY&limit=500'
-        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.55.0'})
+        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.56.0'})
         count = 0
         for cam in data.get('data', []):
             if str(cam.get('status') or '').lower() == 'inactive':
@@ -841,7 +841,7 @@ def _current_jpeg_snapshot(
     request = urllib.request.Request(
         url,
         headers={
-            'User-Agent': 'StormScope/0.55.0',
+            'User-Agent': 'StormScope/0.56.0',
             'Accept': 'image/jpeg,image/*,*/*',
             'Cache-Control': 'no-cache',
         },
@@ -2992,6 +2992,158 @@ def fetch_minnesota_usgs_verified():
     return count
 
 
+HAWAII_USGS_NIMS_FEEDS = (
+    {
+        'provider_camera_id': 'HI_Kilauea_KWcam',
+        'name': 'Kilauea Halemaumau West-Rim Panorama (KWcam)',
+        'lat': 19.40754, 'lon': -155.29175, 'direction': 'E', 'cadence': 120,
+        'volcano': 'kilauea',
+    },
+    {
+        'provider_camera_id': 'HI_Kilauea_B1cam',
+        'name': 'Kilauea Caldera East Rim (B1cam)',
+        'lat': 19.402388, 'lon': -155.267455, 'direction': '', 'cadence': 120,
+        'volcano': 'kilauea',
+    },
+    {
+        'provider_camera_id': 'HI_Mauna_Loa_MDLcam',
+        'name': 'Mauna Loa Southwest Rift Zone from Dandelion Cone (MDLcam)',
+        'lat': 19.35303, 'lon': -155.6653, 'direction': '', 'cadence': 300,
+        'volcano': 'mauna-loa',
+    },
+    {
+        'provider_camera_id': 'HI_Kilauea_PWcam',
+        'name': 'Puu Oo West Flank (PWcam)',
+        'lat': 19.390348, 'lon': -155.108235, 'direction': '', 'cadence': 600,
+        'volcano': 'kilauea',
+    },
+    {
+        'provider_camera_id': 'HI_Mauna_Loa_MK2cam',
+        'name': 'Mauna Loa Summit from Maunakea (MK2cam)',
+        'lat': 19.78955, 'lon': -155.45848, 'direction': 'S', 'cadence': 300,
+        'volcano': 'mauna-loa',
+    },
+    {
+        'provider_camera_id': 'HI_Kilauea_MITDcam',
+        'name': 'Kilauea Southwest Rift Zone from Hilina Pali (MITDcam)',
+        'lat': 19.3356, 'lon': -155.301, 'direction': 'N', 'cadence': 300,
+        'volcano': 'kilauea',
+    },
+    {
+        'provider_camera_id': 'HI_Kilauea_KPcam',
+        'name': 'Kilauea Summit from Mauna Loa Strip Road (KPcam)',
+        'lat': 19.4934, 'lon': -155.38326, 'direction': '', 'cadence': 300,
+        'volcano': 'kilauea',
+    },
+    {
+        'provider_camera_id': 'HI_Mauna_Loa_MLcam',
+        'name': 'Mokuaweoweo Caldera Northwest Rim (MLcam)',
+        'lat': 19.481624, 'lon': -155.599231, 'direction': '', 'cadence': 300,
+        'volcano': 'mauna-loa',
+    },
+    {
+        'provider_camera_id': 'HI_Mauna_Loa_HLcam',
+        'name': 'Mauna Loa Northwest Flank from Hualalai (HLcam)',
+        'lat': 19.68108, 'lon': -155.82105, 'direction': '', 'cadence': 1200,
+        'volcano': 'mauna-loa',
+    },
+    {
+        'provider_camera_id': 'HI_Kilauea_MUcam',
+        'name': 'Maunaulu (MUcam)',
+        'lat': 19.3673, 'lon': -155.2007, 'direction': '', 'cadence': 300,
+        'volcano': 'kilauea',
+    },
+    {
+        'provider_camera_id': 'HI_Mauna_Loa_M3cam',
+        'name': 'Mauna Loa Upper Southwest Rift Zone (M3cam)',
+        'lat': 19.35393, 'lon': -155.66462, 'direction': '', 'cadence': 300,
+        'volcano': 'mauna-loa',
+    },
+    {
+        'provider_camera_id': 'HI_Mauna_Loa_MSPcam',
+        'name': 'Mauna Loa Southwest Rift Zone from South Point (MSPcam)',
+        'lat': 18.9793, 'lon': -155.668, 'direction': '', 'cadence': 600,
+        'volcano': 'mauna-loa',
+    },
+    {
+        'provider_camera_id': 'HI_Kilauea_HPcam',
+        'name': 'Holei Pali (HPcam)',
+        'lat': 19.31714, 'lon': -155.10235, 'direction': '', 'cadence': 1200,
+        'volcano': 'kilauea',
+    },
+    {
+        'provider_camera_id': 'HI_Mauna_Loa_M2cam',
+        'name': 'Mauna Loa Middle Southwest Rift Zone (M2cam)',
+        'lat': 19.21526, 'lon': -155.73906, 'direction': '', 'cadence': 300,
+        'volcano': 'mauna-loa',
+    },
+)
+
+
+def fetch_hawaii_usgs_verified():
+    candidates = []
+    for feed in HAWAII_USGS_NIMS_FEEDS:
+        candidate = dict(feed)
+        camera_id = candidate['provider_camera_id']
+        candidate['url'] = (
+            'https://usgs-nims-images.s3.amazonaws.com/overlay/'
+            f'{camera_id}/{camera_id}_newest.jpg'
+        )
+        candidate['max_age_seconds'] = max(300, candidate['cadence'] * 2)
+        candidates.append(candidate)
+
+    verified, errors, snapshots = verify_current_jpeg_images(
+        candidates, probe_interval=2.0, workers=7
+    )
+    rejected = []
+    count = 0
+    for camera in candidates:
+        camera_id = camera['provider_camera_id']
+        if camera_id not in verified:
+            rejected.append({
+                'provider_camera_id': camera_id,
+                'name': camera['name'],
+                'failure_class': errors.get(
+                    camera_id, 'transient_network:verification_incomplete'
+                ),
+            })
+            continue
+        source_url = (
+            f'https://www.usgs.gov/volcanoes/{camera["volcano"]}/webcams'
+        )
+        add_camera(
+            camera['name'], camera['lat'], camera['lon'], camera['url'],
+            'image', 'Hawaii', 'Hawaii County', camera['direction'], 'usgs',
+            source_url, camera['cadence'],
+        )
+        cameras[-1]['provider_camera_id'] = camera_id
+        cameras[-1]['provider_timestamp'] = snapshots[camera_id][2]
+        cameras[-1]['category'] = 'volcano'
+        count += 1
+
+    atomic_write_json(
+        DATA_DIR / 'hawaii_usgs_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'USGS Hawaiian Volcano Observatory / NIMS',
+            'source_url': 'https://www.usgs.gov/observatories/hvo',
+            'attribution': 'U.S. Geological Survey, Hawaiian Volcano Observatory',
+            'usage_terms': 'USGS-authored HVO/NIMS imagery is public domain',
+            'geographic_scope': 'Kilauea and Mauna Loa, Hawaii County, Hawaii',
+            'candidates': len(candidates),
+            'verified_live': count,
+            'rejected': rejected,
+        },
+        indent=2,
+    )
+    if count != len(candidates):
+        raise IncompleteProviderError(
+            f'truncated_verified_inventory:{count}<{len(candidates)}'
+        )
+    print(f'  Hawaii USGS image verification: {count}/{len(candidates)} current')
+    return count
+
+
 # ── Iowa (IRIS) ──
 _IMAGE_MAGIC = (b'\xff\xd8\xff', b'\x89PNG\r\n\x1a\n', b'GIF87a', b'GIF89a', b'RIFF')
 
@@ -4325,6 +4477,7 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
         ('New Mexico NRAO', fetch_new_mexico_nrao),
         ('Minnesota 511 (MnDOT IRIS)', fetch_minnesota_511),
         ('Minnesota USGS verified', fetch_minnesota_usgs_verified),
+        ('Hawaii USGS verified', fetch_hawaii_usgs_verified),
         ('Iowa DOT', fetch_iowa_dot),
         ('Wyoming DOT', fetch_wyoming),
         ('Maryland (CHART)', fetch_maryland_chart),
