@@ -578,6 +578,116 @@ class FetchMergeTests(unittest.TestCase):
             row["county"] for row in result.cameras
         })
 
+    def test_massachusetts_nps_requires_all_current_monument_and_lighthouse_views(self):
+        camera_ids = {
+            item["provider_camera_id"]
+            for item in fetch_cameras.MASSACHUSETTS_NPS_FEEDS
+        }
+        snapshots = {
+            camera_id: ("hash", 400000, "2026-07-12T10:50:24+00:00")
+            for camera_id in camera_ids
+        }
+        with (
+            mock.patch.object(
+                fetch_cameras,
+                "verify_current_jpeg_images",
+                return_value=(camera_ids, {}, snapshots),
+            ) as verifier,
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Massachusetts NPS verified",
+                fetch_cameras.fetch_massachusetts_nps_verified,
+            )
+        self.assertTrue(result.succeeded)
+        self.assertEqual(11, len(result.cameras))
+        self.assertTrue(all(row["state"] == "Massachusetts" for row in result.cameras))
+        self.assertTrue(all(row["county"] == "Suffolk County" for row in result.cameras))
+        self.assertTrue(all(row["source"] == "nps" for row in result.cameras))
+        self.assertEqual({"N", "E", "S", "W"}, {
+            row["direction"] for row in result.cameras
+        })
+        self.assertEqual(camera_ids, {
+            row["provider_camera_id"] for row in result.cameras
+        })
+        verifier.assert_called_once_with(
+            [dict(item) for item in fetch_cameras.MASSACHUSETTS_NPS_FEEDS],
+            probe_interval=2.0,
+            workers=8,
+        )
+
+    def test_massachusetts_nps_partial_snapshot_fails_closed(self):
+        candidate = fetch_cameras.MASSACHUSETTS_NPS_FEEDS[0]
+        snapshots = {
+            candidate["provider_camera_id"]: (
+                "hash", 400000, "2026-07-12T10:50:24+00:00"
+            )
+        }
+        with (
+            mock.patch.object(
+                fetch_cameras,
+                "verify_current_jpeg_images",
+                return_value=(
+                    {candidate["provider_camera_id"]},
+                    {},
+                    snapshots,
+                ),
+            ),
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Massachusetts NPS verified",
+                fetch_cameras.fetch_massachusetts_nps_verified,
+            )
+        self.assertFalse(result.succeeded)
+        self.assertEqual([], result.cameras)
+        self.assertIn("truncated_verified_inventory:1<11", result.error)
+
+    def test_massachusetts_mwra_accepts_only_two_unobstructed_advancing_hls(self):
+        urls = {item["url"] for item in fetch_cameras.MASSACHUSETTS_MWRA_FEEDS}
+        with (
+            mock.patch.object(
+                fetch_cameras,
+                "verify_live_hls",
+                return_value=(urls, {}),
+            ) as verifier,
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Massachusetts MWRA", fetch_cameras.fetch_massachusetts_mwra
+            )
+        self.assertTrue(result.succeeded)
+        self.assertEqual(2, len(result.cameras))
+        self.assertTrue(all(row["state"] == "Massachusetts" for row in result.cameras))
+        self.assertTrue(all(row["source"] == "mwra" for row in result.cameras))
+        self.assertTrue(all(row["type"] == "hls" for row in result.cameras))
+        self.assertEqual({"Suffolk County", "Worcester County"}, {
+            row["county"] for row in result.cameras
+        })
+        verifier.assert_called_once_with(
+            [item["url"] for item in fetch_cameras.MASSACHUSETTS_MWRA_FEEDS],
+            probe_interval=8.0,
+            workers=2,
+            referer=fetch_cameras.MASSACHUSETTS_MWRA_SOURCE,
+        )
+
+    def test_massachusetts_mwra_partial_snapshot_fails_closed(self):
+        candidate = fetch_cameras.MASSACHUSETTS_MWRA_FEEDS[0]
+        with (
+            mock.patch.object(
+                fetch_cameras,
+                "verify_live_hls",
+                return_value=({candidate["url"]}, {}),
+            ),
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Massachusetts MWRA", fetch_cameras.fetch_massachusetts_mwra
+            )
+        self.assertFalse(result.succeeded)
+        self.assertEqual([], result.cameras)
+        self.assertIn("truncated_verified_inventory:1<2", result.error)
+
     def test_clarksville_accepts_only_official_unlocked_advancing_players(self):
         candidate = fetch_cameras.TENNESSEE_CLARKSVILLE_FEEDS[0]
         alias, _name, _lat, _lon, source_page = candidate

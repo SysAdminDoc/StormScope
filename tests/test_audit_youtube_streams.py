@@ -5,6 +5,8 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -39,6 +41,31 @@ def youtube_camera(camera_id: int, video_id: str, *, verified_at: str | None = N
 
 
 class AuditMetadataTests(unittest.TestCase):
+    def test_targeted_audit_selects_only_requested_video_ids(self):
+        cameras = [
+            youtube_camera(1, "AAAAAAAAAAA"),
+            youtube_camera(2, "BBBBBBBBBBB"),
+            youtube_camera(3, "CCCCCCCCCCC"),
+        ]
+        args = SimpleNamespace(
+            video=["BBBBBBBBBBB"],
+            limit=0,
+            workers=1,
+            retries=0,
+            timeout=1,
+            progress_every=1,
+        )
+        with mock.patch.object(
+            audit,
+            "audit_camera",
+            side_effect=lambda index, camera, _retries, _timeout: audit.AuditResult(
+                index, camera["url"], camera["name"], "ok", "playable_live"
+            ),
+        ) as inspect:
+            results = audit.audit_all(cameras, args)
+        self.assertEqual(["BBBBBBBBBBB"], [result.video_id for result in results])
+        self.assertEqual(1, inspect.call_count)
+
     def test_success_updates_health_transient_degrades_and_only_confirmed_failure_removes(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "cameras.json"

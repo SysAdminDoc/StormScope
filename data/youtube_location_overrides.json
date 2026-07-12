@@ -1849,5 +1849,259 @@
     "county": "Wilson County",
     "source_url": "https://www.lebanontn.org/775/Live-Traffic-Cameras",
     "refresh_cadence_seconds": 300
+  },
+  "RDXaNJ0pFPw": {
+    "name": "Massachusetts Maritime Academy Football Field",
+    "lat": 41.740402,
+    "lon": -70.622688,
+    "state": "Massachusetts",
+    "county": "Barnstable County",
+    "source_url": "https://www.maritime.edu/webcams",
+    "refresh_cadence_seconds": 300
+  },
+  "JoUhTSdOH7I": {
+    "name": "Massachusetts Maritime Academy Pier",
+    "lat": 41.737999,
+    "lon": -70.625801,
+    "state": "Massachusetts",
+    "county": "Barnstable County",
+    "source_url": "https://www.maritime.edu/webcams",
+    "refresh_cadence_seconds": 300
+  },
+  "cJRA0nxG53k": {
+    "name": "Massachusetts Maritime Academy Hendy Field",
+    "lat": 41.74192,
+    "lon": -70.623123,
+    "state": "Massachusetts",
+    "county": "Barnstable County",
+    "source_url": "https://www.maritime.edu/webcams",
+    "refresh_cadence_seconds": 300
+  },
+  "8vi6w_rIyYk": {
+    "name": "Massachusetts Maritime Academy Parade Field",
+    "lat": 41.738754,
+    "lon": -70.625076,
+    "state": "Massachusetts",
+    "county": "Barnstable County",
+    "source_url": "https://www.maritime.edu/webcams",
+    "refresh_cadence_seconds": 300
+  },
+  "_OeFhA2XqqA": {
+    "name": "Massachusetts Maritime Academy Cape Cod Canal",
+    "lat": 41.740803,
+    "lon": -70.626503,
+    "state": "Massachusetts",
+    "county": "Barnstable County",
+    "source_url": "https://www.maritime.edu/webcams",
+    "refresh_cadence_seconds": 300
+  },
+  "KfELrHrocmQ": {
+    "name": "Town of Chatham Fish Pier",
+    "lat": 41.6884132,
+    "lon": -69.9512616,
+    "state": "Massachusetts",
+    "county": "Barnstable County",
+    "source_url": "https://www.chatham-ma.gov/928/Fish-Pier-Live-Stream",
+    "refresh_cadence_seconds": 300
+  },
+  "pTsgwZTJQ8g": {
+    "name": "UMass Amherst Du Bois Library Falcon Cam",
+    "lat": 42.3897359,
+    "lon": -72.5281676,
+    "state": "Massachusetts",
+    "county": "Hampshire County",
+    "source_url": "https://www.library.umass.edu/falcons/",
+    "refresh_cadence_seconds": 300
+  },
+  "nVhgCTa04kw": {
+    "name": "UMass Lowell Fox Hall Falcon Cam - Inside",
+    "lat": 42.652135,
+    "lon": -71.320355,
+    "state": "Massachusetts",
+    "county": "Middlesex County",
+    "source_url": "https://www.uml.edu/Falcons/",
+    "refresh_cadence_seconds": 300
+  },
+  "JPl_onqeUCU": {
+    "name": "UMass Lowell Fox Hall Falcon Cam - Outside",
+    "lat": 42.652135,
+    "lon": -71.320355,
+    "state": "Massachusetts",
+    "county": "Middlesex County",
+    "source_url": "https://www.uml.edu/Falcons/",
+    "refresh_cadence_seconds": 300
+  },
+  "8U0M_mionOs": {
+    "name": "Springfield Union Station PTZ Rail Camera",
+    "lat": 42.1066274,
+    "lon": -72.5937469,
+    "state": "Massachusetts",
+    "county": "Hampden County",
+    "refresh_cadence_seconds": 300
+  },
+  "wuPEBUNnATE": {
+    "name": "Chester Railway Station West Rail Camera",
+    "lat": 42.280411320869,
+    "lon": -72.978562988797,
+    "state": "Massachusetts",
+    "county": "Hampden County",
+    "refresh_cadence_seconds": 300
+  },
+  "mwZwcV0Enm4": {
+    "name": "Ayer Station Rail Camera",
+    "lat": 42.559318729937,
+    "lon": -71.587823699968,
+    "state": "Massachusetts",
+    "county": "Middlesex County",
+    "refresh_cadence_seconds": 300
+  },
+  "VsuSbXPN93o": {
+    "name": "Newburyport Market Square West",
+    "lat": 42.811128745233,
+    "lon": -70.870030536721,
+    "state": "Massachusetts",
+    "county": "Essex County",
+    "source_url": "https://newburyport.com/look-market-square-west-live-cam/",
+    "refresh_cadence_seconds": 300
+  },
+  "CGrmP5woZz8": {
+    "name": "Newburyport State Street North",
+    "lat": 42.810326010366,
+    "lon": -70.869881003569,
+    "state": "Massachusetts",
+    "county": "Essex County",
+    "source_url": "https://newburyport.com/state-street-live-cam/",
+    "refresh_cadence_seconds": 300
+  },
+  "WkjZg22TBfQ": {
+    "name": "Newburyport State Street South",
+    "lat": 42.810326010366,
+    "lon": -70.869881003569,
+    "state": "Massachusetts",
+    "county": "Essex County",
+    "source_url": "https://newburyport.com/state-street-live-cam/",
+    "refresh_cadence_seconds": 300
+  },
+  "IMUXzqo75Sk": {
+    "name": "Newburyport Riverfront Boating and Waterfront",
+    "lat": 42.811318762978,
+    "lon": -70.866070590385,
+    "state": "Massachusetts",
+    "county": "Essex County",
+    "source_url": "https://newburyport.com/look-riverfront-boating-live-cam/",
+    "refresh_cadence_seconds": 300
+  },
+  "4vMn1XPEO54": {
+    "name": "Newburyport Inn Street South",
+    "lat": 42.811128745233,
+    "lon": -70.870030536721,
+    "state": "Massachusetts",
+    "county": "Essex County",
+    "refresh_cadence_seconds": 300
+  },
+  "ZQWFvFkjoJs": {
+    "name": "Newburyport Boat Traffic and Lighthouse View",
+    "lat": 42.811318762978,
+    "lon": -70.866070590385,
+    "state": "Massachusetts",
+    "county": "Essex County",
+    "refresh_cadence_seconds": 300
+  },
+  "oezcsH9ZZ24": {
+    "name": "Boston Museum of Science - Charles River View",
+    "lat": 42.367349426433,
+    "lon": -71.070603277101,
+    "state": "Massachusetts",
+    "county": "Suffolk County",
+    "refresh_cadence_seconds": 300
+  },
+  "p-pVYYH4ZCk": {
+    "name": "Boston Museum of Science - Green Line View",
+    "lat": 42.367349426433,
+    "lon": -71.070603277101,
+    "state": "Massachusetts",
+    "county": "Suffolk County",
+    "refresh_cadence_seconds": 300
+  },
+  "Jq-5u9NNZiM": {
+    "name": "Boston Museum of Science - City View",
+    "lat": 42.367349426433,
+    "lon": -71.070603277101,
+    "state": "Massachusetts",
+    "county": "Suffolk County",
+    "refresh_cadence_seconds": 300
+  },
+  "sWF5RQ_OzpM": {
+    "name": "Boston Common at Boylston Street",
+    "lat": 42.352277507238,
+    "lon": -71.066636960519,
+    "state": "Massachusetts",
+    "county": "Suffolk County",
+    "refresh_cadence_seconds": 300
+  },
+  "49WtyN1V1ZQ": {
+    "name": "Boston Harbor from Hyatt Regency",
+    "lat": 42.359198654238,
+    "lon": -71.027191724175,
+    "state": "Massachusetts",
+    "county": "Suffolk County",
+    "refresh_cadence_seconds": 300
+  },
+  "liNviF0C_Bc": {
+    "name": "Downtown Fitchburg from First Parish Church",
+    "lat": 42.587093297666,
+    "lon": -71.805938757866,
+    "state": "Massachusetts",
+    "county": "Worcester County",
+    "refresh_cadence_seconds": 300
+  },
+  "ZlmEdBfHqsM": {
+    "name": "Jubilee Yacht Club Southwest Webcam",
+    "lat": 42.539528721263,
+    "lon": -70.878910576403,
+    "state": "Massachusetts",
+    "county": "Essex County",
+    "refresh_cadence_seconds": 300
+  },
+  "KziwCV7db9s": {
+    "name": "Nahant Beach - Ocean House Surf Camera",
+    "lat": 42.436788674647,
+    "lon": -70.936610592034,
+    "state": "Massachusetts",
+    "county": "Essex County",
+    "refresh_cadence_seconds": 300
+  },
+  "f5D4lPET76s": {
+    "name": "Turners Falls Municipal Airport",
+    "lat": 42.590938663385,
+    "lon": -72.524431055656,
+    "state": "Massachusetts",
+    "county": "Franklin County",
+    "refresh_cadence_seconds": 300
+  },
+  "TE6N2eDrsR0": {
+    "name": "Woods Hole Ferry Dock and Harbor from Pie in the Sky",
+    "lat": 41.523366124147,
+    "lon": -70.668823034814,
+    "state": "Massachusetts",
+    "county": "Barnstable County",
+    "refresh_cadence_seconds": 300
+  },
+  "5-ClAzUV2UA": {
+    "name": "Woods Hole Harbor and Ferry from Woods Hole Inn",
+    "lat": 41.523702489922,
+    "lon": -70.669372552386,
+    "state": "Massachusetts",
+    "county": "Barnstable County",
+    "source_url": "https://gomarthasvineyard.com/webcams/woods-hole-webcam",
+    "refresh_cadence_seconds": 300
+  },
+  "Yy-Eo5NMkVE": {
+    "name": "Provincetown Dolphin Fleet Whale Watch Pier",
+    "lat": 42.049184,
+    "lon": -70.181696,
+    "state": "Massachusetts",
+    "county": "Barnstable County",
+    "refresh_cadence_seconds": 300
   }
 }

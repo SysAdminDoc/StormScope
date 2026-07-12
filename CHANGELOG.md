@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.54.0 - 2026-07-12
+
+- Expanded Massachusetts from **7 to 49** accurately located cameras. Added all eight current one-minute Boston National Historical Park monument views and three current Boston Light directions after repeated provider-timestamp checks and manual frame review. Boston Light South was rejected because its embedded May 19 frame timestamp remained stale even while HTTP metadata appeared fresh.
+- Added two advancing first-party Massachusetts Water Resources Authority HLS feeds at Deer Island and Cosgrove/Wachusett Reservoir. Quabbin's technically live feed remains excluded because the operator warns and visual review confirms that maintenance scaffolding obscures the view. Added the `mwra` schema, source filter, CSP, fail-closed provider contract, report, and browser coverage.
+- Searched all **58 Massachusetts Census cities** at five-page-equivalent depth plus **26** statewide, operator, rail, weather, harbor, landmark, airport, wildlife, campus, and beach query families. Added **30** exact-location public/embeddable YouTube cameras spanning Massachusetts Maritime Academy, Chatham, UMass, Springfield/Chester/Ayer rail, Newburyport, Boston, Fitchburg, Beverly, Nahant, Turners Falls, Woods Hole, and Provincetown. Every accepted canonical ID was rechecked live with an advancing HLS playlist and available segments.
+- Removed the June 18 Boston Logan storm recording after repeat yt-dlp and YouTube player evidence confirmed `was_live`, no HLS formats, `isLiveNow=false`, and a final end timestamp. The YouTube auditor now supports repeatable exact `--video VIDEO_ID` targeting while retaining transactional backup and rollback behavior.
+- Mass511 research covered all **304** active rows: 147 currently return real images and 157 return identical temporary-unavailable placeholders. MassDOT explicitly directs third parties to coordinate a unique TrafficLand API feed, so the working images remain `licensing_restricted`; legacy TrafficLand tokens are `authentication_required`. Boston BTD, Springfield, Cambridge, Steamship Authority, airports, transit, ports, science, resort, and university families were also classified without inventing feeds or coordinates.
+- Corpus **34,541 -> 34,583**; Massachusetts **7 -> 49**; YouTube **506 -> 535** after 30 additions and one archived removal; NPS **175 -> 186**; MWRA **0 -> 2**; provider embeds remain **459**; deterministic shards remain **47**; service-worker cache v30.
+
 ## v0.53.0 - 2026-07-12
 
 - Expanded Tennessee from **6 to 677** accurately located cameras. Added **635** current TDOT SmartWay HLS views from the production public RoadwayCameras API after grouping probes by the five SkyVDN hosts, requiring advancing live playlists and segments, and manually reviewing every accepted frame. Rejected four duplicated legacy IDs, three maintenance/offline placeholders, two movable trailer cameras, one dead endpoint, and 22 transient rows that remain retryable.

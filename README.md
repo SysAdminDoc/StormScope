@@ -1,7 +1,7 @@
-[![Version](https://img.shields.io/badge/version-0.53.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.54.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
-[![Cameras](https://img.shields.io/badge/cameras-34%2C541-cyan)]()
+[![Cameras](https://img.shields.io/badge/cameras-34%2C583-cyan)]()
 [![Live Site](https://img.shields.io/badge/live_site-open_StormScope-7c3aed)](https://sysadmindoc.github.io/StormScope/)
 
 # StormScope
@@ -16,12 +16,12 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 - **Accessible Radar Timeline** — Direct frame scrubbing, manual-only/0.5×/1×/2× playback, explicit frame age and light/moderate/heavy scale text, plus standard, color-vision-friendly, and high-contrast presentations
 - **Official Weather Alerts** — Viewport-scoped NWS watches, warnings, and advisories with severity polygons and accessible details
 - **Optional Hazard Context** — Keyless NOAA lightning density and viewport-bounded NIFC wildfire perimeters start off, show freshness and attribution, fail independently, and stay below warnings and cameras
-- **34,541 Live Cameras** — Traffic, NOAA/NWS, USGS, NRAO, park, Smithsonian, EarthCam, IPCamLive, RTSP.me, LiveBeaches, and webcam feeds across all 50 US states plus Washington, D.C., territories, and international locations
+- **34,583 Live Cameras** — Traffic, NOAA/NWS, USGS, NRAO, park, MWRA, Smithsonian, EarthCam, IPCamLive, RTSP.me, LiveBeaches, and webcam feeds across all 50 US states plus Washington, D.C., territories, and international locations
 - **Fast Camera Discovery** — Progressive state shards make the map interactive before the full corpus loads; accessible search, health/source/type filters, health-first name/distance sorting, and a virtualized result list stay synchronized with the map
 - **Local Favorites and Views** — Favorite cameras, restore the last map/layer/opacity state, save named views, and validate portable JSON imports/exports without an account
 - **English and Spanish UI** — Live language switching covers controls, recovery states, weather/radar labels, WMO conditions, alerts, dates, numbers, and units with deterministic English fallback
 - **Bounded Multi-Camera Monitor** — Select 2–4 search results after a bandwidth warning; offscreen/hidden direct feeds pause, one close destroys all players, and unsupported provider embeds become safe source links
-- **506 YouTube Live Streams** — Playback-verified 24/7 streams including beaches, airports, railcams, harbors, city skylines, landmarks, indoor/outdoor feeds, wildlife cams, volcano cams, and city-list discoveries (red markers)
+- **535 YouTube Live Streams** — Playback-verified 24/7 streams including beaches, airports, railcams, harbors, city skylines, landmarks, indoor/outdoor feeds, wildlife cams, volcano cams, and city-list discoveries (red markers)
 - **459 Provider Embed Feeds** — 276 EarthCam Network pages, 164 active NPS embed pages, 4 direct LiveBeaches/Brownrice players, 14 first-party IPCamLive feeds, and 1 first-party RTSP.me lake feed
 - **Click-to-View** — YouTube embeds, EarthCam pages, HLS video streams, and auto-refreshing image feeds in a modal viewer
 - **Current Weather** — Country-aware NWS forecasts with Open-Meteo fallback, metric/US units, and explicit issue/observation times
@@ -32,7 +32,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 
 ## Camera Coverage
 
-34,541 cameras across all 50 US states plus Washington, D.C.:
+34,583 cameras across all 50 US states plus Washington, D.C.:
 
 | State | Cameras | | State | Cameras |
 |-------|--------:|-|-------|--------:|
@@ -56,7 +56,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 | Tennessee | 677 | | New Hampshire | 185 |
 | Nevada | 661 | | South Dakota | 184 |
 
-Plus: Mississippi (160), Maine (146), Rhode Island (139), West Virginia (120 WV511 streams: 119 healthy and one retryable degraded), Vermont (93), Montana (39), U.S. Virgin Islands (30, including 27 currently verified YouTube streams), Puerto Rico (22, including 19 advancing official ACT traffic cameras), Wyoming (15, including 8 directly verified NPS feeds), Arkansas (11, including rail, river, wildlife, weather, and lake views), Washington, D.C. (9, including 3 first-party Smithsonian wildlife streams), Guam (1 verified first-party destination camera), and the remaining lower-count US states and territories, international country buckets, 175 active National Park webcams, 276 EarthCam Network feeds, 14 first-party IPCamLive feeds, 3 NOAA/NWS stills, 3 USGS stills, 1 NRAO still, 4 LiveBeaches direct embeds, and 506 playback-verified YouTube streams.
+Plus: Mississippi (160), Maine (146), Rhode Island (139), West Virginia (120 WV511 streams: 119 healthy and one retryable degraded), Vermont (93), Massachusetts (49, including 11 directly verified NPS images, 2 MWRA HLS feeds, and 32 current YouTube cameras), Montana (39), U.S. Virgin Islands (30, including 27 currently verified YouTube streams), Puerto Rico (22, including 19 advancing official ACT traffic cameras), Wyoming (15, including 8 directly verified NPS feeds), Arkansas (11, including rail, river, wildlife, weather, and lake views), Washington, D.C. (9, including 3 first-party Smithsonian wildlife streams), Guam (1 verified first-party destination camera), and the remaining lower-count US states and territories, international country buckets, 186 active National Park webcams, 2 MWRA HLS feeds, 276 EarthCam Network feeds, 14 first-party IPCamLive feeds, 3 NOAA/NWS stills, 3 USGS stills, 1 NRAO still, 4 LiveBeaches direct embeds, and 535 playback-verified YouTube streams.
 
 ## Quick Start
 
@@ -112,13 +112,13 @@ The pinned package/tarball/file/license inventory is `vendor/dependencies.json`.
 - [NOAA/NWS MRMS](https://mapservices.weather.noaa.gov/) — Official fallback radar imagery and history (no key)
 - [NWS API](https://www.weather.gov/documentation/services-web-api) — Free hourly weather data (no key)
 - [HLS.js 1.6.16](https://github.com/video-dev/hls.js/) (Apache-2.0) — HLS video stream playback
-- Camera data from 30+ official state/local DOT sources + [OpenTrafficCamMap](https://github.com/AidanWelch/OpenTrafficCamMap) (MIT) + NOAA/NWS + USGS + NRAO + NPS + EarthCam + IPCamLive + LiveBeaches + verified-live YouTube streams
+- Camera data from 30+ official state/local DOT sources + [OpenTrafficCamMap](https://github.com/AidanWelch/OpenTrafficCamMap) (MIT) + NOAA/NWS + USGS + NRAO + NPS + MWRA + EarthCam + IPCamLive + LiveBeaches + verified-live YouTube streams
 
 ## Data Sources
 
 - **Radar**: RainViewer primary with official NOAA/NWS MRMS fallback; the UI identifies the active source, age, resolution, coverage, and degradation reason
 - **Hazard context**: NOAA nowCOAST 15-minute lightning density and NIFC WFIGS current wildfire perimeters, both optional and keyless
-- **Cameras**: 30+ official state/local DOT sources (Caltrans, FL511, WSDOT, NYCDOT, IDOT, MDOT, CDOT, WV511, NMRoads, Tennessee SmartWay, Clarksville Traffic Cameras, etc.), OpenTrafficCamMap, NOAA/NWS, USGS, NRAO, NPS, EarthCam, first-party IPCamLive destinations, LiveBeaches, and verified-live YouTube streams
+- **Cameras**: 30+ official state/local DOT sources (Caltrans, FL511, WSDOT, NYCDOT, IDOT, MDOT, CDOT, WV511, NMRoads, Tennessee SmartWay, Clarksville Traffic Cameras, etc.), OpenTrafficCamMap, NOAA/NWS, USGS, NRAO, NPS, MWRA, EarthCam, first-party IPCamLive destinations, LiveBeaches, and verified-live YouTube streams
 - **City discovery list**: U.S. Census Bureau 2025 Gazetteer places file, filtered to legal city records and written as `City, State`
 - **Weather**: National Weather Service (NWS) hourly forecast API
 
@@ -157,6 +157,8 @@ Audit existing YouTube rows and remove confirmed broken/non-live streams:
 ```bash
 python scripts/audit_youtube_streams.py --apply
 ```
+
+Target a known canonical stream without auditing the full corpus by repeating `--video VIDEO_ID` as needed.
 
 For long unattended discovery, run the loop driver. `--iterations 0` runs continuously; omit `--apply` for a dry run:
 

@@ -184,6 +184,13 @@ def compact_error(message: str) -> str:
 
 def audit_all(cameras: list[dict[str, Any]], args: argparse.Namespace) -> list[AuditResult]:
     youtube = [(index, cam) for index, cam in enumerate(cameras) if cam.get("type") == "youtube"]
+    if args.video:
+        requested = set(args.video)
+        youtube = [
+            (index, camera)
+            for index, camera in youtube
+            if str(camera.get("url") or "") in requested
+        ]
     if args.limit:
         youtube = youtube[: args.limit]
     results: list[AuditResult] = []
@@ -276,6 +283,13 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--timeout", type=int, default=75)
     parser.add_argument("--retries", type=int, default=1)
+    parser.add_argument(
+        "--video",
+        action="append",
+        default=[],
+        metavar="VIDEO_ID",
+        help="audit only this exact 11-character video ID; may be repeated",
+    )
     parser.add_argument("--limit", type=int, default=0, help="audit only the first N YouTube rows")
     parser.add_argument("--progress-every", type=int, default=25)
     return parser.parse_args(argv)
@@ -283,6 +297,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv or sys.argv[1:])
+    invalid_video_ids = [video_id for video_id in args.video if not VIDEO_ID_RE.fullmatch(video_id)]
+    if invalid_video_ids:
+        raise RuntimeError(f"invalid --video ID: {invalid_video_ids[0]}")
     cameras = load_json(args.data)
     if not isinstance(cameras, list):
         raise RuntimeError(f"{args.data} does not contain a JSON array")

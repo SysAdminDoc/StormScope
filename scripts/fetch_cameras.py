@@ -711,7 +711,7 @@ def fetch_txdot():
 def fetch_nps():
     try:
         url = 'https://developer.nps.gov/api/v1/webcams?api_key=DEMO_KEY&limit=500'
-        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.53.0'})
+        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.54.0'})
         count = 0
         for cam in data.get('data', []):
             if str(cam.get('status') or '').lower() == 'inactive':
@@ -839,7 +839,7 @@ def _current_jpeg_snapshot(url, require_provider_timestamp=True):
     request = urllib.request.Request(
         url,
         headers={
-            'User-Agent': 'StormScope/0.53.0',
+            'User-Agent': 'StormScope/0.54.0',
             'Accept': 'image/jpeg,image/*,*/*',
             'Cache-Control': 'no-cache',
         },
@@ -1349,6 +1349,270 @@ def fetch_tennessee_nps_verified():
         indent=2,
     )
     print(f'  Tennessee NPS image verification: {count}/{len(candidates)} current')
+    return count
+
+
+MASSACHUSETTS_NPS_FEEDS = (
+    {
+        'provider_camera_id': 'bost-bunker-hill-south',
+        'name': 'Bunker Hill Monument - Looking South',
+        'lat': 42.376253,
+        'lon': -71.06075,
+        'url': 'https://www.nps.gov/webcams-bost/se-ts.jpeg',
+        'direction': 'S',
+        'source_url': ('https://www.nps.gov/media/webcam/view.htm?'
+                       'id=B1447BC9-A568-BC47-B0BE8A051F9D441E'),
+    },
+    {
+        'provider_camera_id': 'bost-bunker-hill-east',
+        'name': 'Bunker Hill Monument - Looking East',
+        'lat': 42.376253,
+        'lon': -71.06075,
+        'url': 'https://www.nps.gov/webcams-bost/ne-ts.jpeg',
+        'direction': 'E',
+        'source_url': ('https://www.nps.gov/media/webcam/view.htm?'
+                       'id=B157B8BD-C808-C652-965AA8D1EC0CCCA4'),
+    },
+    {
+        'provider_camera_id': 'bost-bunker-hill-north',
+        'name': 'Bunker Hill Monument - Looking North',
+        'lat': 42.376253,
+        'lon': -71.06075,
+        'url': 'https://www.nps.gov/webcams-bost/nw-ts.jpeg',
+        'direction': 'N',
+        'source_url': ('https://www.nps.gov/media/webcam/view.htm?'
+                       'id=B168A52D-A28F-0833-AB8832CB627D347E'),
+    },
+    {
+        'provider_camera_id': 'bost-bunker-hill-west',
+        'name': 'Bunker Hill Monument - Looking West',
+        'lat': 42.376253,
+        'lon': -71.06075,
+        'url': 'https://www.nps.gov/webcams-bost/sw-ts.jpeg',
+        'direction': 'W',
+        'source_url': ('https://www.nps.gov/media/webcam/view.htm?'
+                       'id=B17835F2-AC01-8A62-F2F0EC85B33643D3'),
+    },
+    {
+        'provider_camera_id': 'bost-dorchester-heights-west',
+        'name': 'Dorchester Heights Monument - Looking West',
+        'lat': 42.332725,
+        'lon': -71.045837,
+        'url': 'https://www.nps.gov/webcams-bost/west-001.jpeg',
+        'direction': 'W',
+        'source_url': ('https://www.nps.gov/media/webcam/view.htm?'
+                       'id=9AAE89A9-533B-47A4-A5C4-A568562EFB62'),
+    },
+    {
+        'provider_camera_id': 'bost-dorchester-heights-north',
+        'name': 'Dorchester Heights Monument - Looking North',
+        'lat': 42.332725,
+        'lon': -71.045837,
+        'url': 'https://www.nps.gov/webcams-bost/north-001.jpeg',
+        'direction': 'N',
+        'source_url': ('https://www.nps.gov/media/webcam/view.htm?'
+                       'id=EC95E4C8-7524-4F4F-8B5E-993B4BAEAD6F'),
+    },
+    {
+        'provider_camera_id': 'bost-dorchester-heights-east',
+        'name': 'Dorchester Heights Monument - Looking East',
+        'lat': 42.332725,
+        'lon': -71.045837,
+        'url': 'https://www.nps.gov/webcams-bost/east-001.jpeg',
+        'direction': 'E',
+        'source_url': ('https://www.nps.gov/media/webcam/view.htm?'
+                       'id=5A35A7A4-0CCF-4AF4-A02A-545094FB42E1'),
+    },
+    {
+        'provider_camera_id': 'bost-dorchester-heights-south',
+        'name': 'Dorchester Heights Monument - Looking South',
+        'lat': 42.332725,
+        'lon': -71.045837,
+        'url': 'https://www.nps.gov/webcams-bost/south-001.jpeg',
+        'direction': 'S',
+        'source_url': ('https://www.nps.gov/media/webcam/view.htm?'
+                       'id=D450CFAD-8FC5-4A69-BA51-CCC666A1C9AA'),
+    },
+    {
+        'provider_camera_id': 'boha-boston-light-west',
+        'name': 'Little Brewster - Boston Light Looking West',
+        'lat': 42.329333,
+        'lon': -70.891806,
+        'url': 'https://www.nps.gov/webcams-boha/west-001.jpeg',
+        'direction': 'W',
+        'source_url': ('https://www.nps.gov/media/webcam/view.htm?'
+                       'id=CFA25A47-F869-239A-B5B838DCE750B775'),
+    },
+    {
+        'provider_camera_id': 'boha-boston-light-north',
+        'name': 'Little Brewster - Boston Light Looking North',
+        'lat': 42.329333,
+        'lon': -70.891806,
+        'url': 'https://www.nps.gov/webcams-boha/north-001.jpeg',
+        'direction': 'N',
+        'source_url': ('https://www.nps.gov/media/webcam/view.htm?'
+                       'id=D64C5AE8-0B37-21E1-5B7A8BE3F83A5E9C'),
+    },
+    {
+        'provider_camera_id': 'boha-boston-light-east',
+        'name': 'Little Brewster - Boston Light Looking East',
+        'lat': 42.329333,
+        'lon': -70.891806,
+        'url': 'https://www.nps.gov/webcams-boha/east-001.jpeg',
+        'direction': 'E',
+        'source_url': ('https://www.nps.gov/media/webcam/view.htm?'
+                       'id=D5BED697-F515-890D-5B26E4B45F0CE3D8'),
+    },
+)
+
+MASSACHUSETTS_NPS_MANUAL_REJECTIONS = (
+    {
+        'provider_camera_id': 'boha-boston-light-south',
+        'name': 'Little Brewster - Boston Light Looking South',
+        'failure_class': 'placeholder:stale_embedded_timestamp_2026-05-19',
+        'source_url': ('https://www.nps.gov/media/webcam/view.htm?'
+                       'id=D5607165-B7B3-D1D0-E3C4108889ED095E'),
+    },
+)
+
+
+def fetch_massachusetts_nps_verified():
+    candidates = [dict(item) for item in MASSACHUSETTS_NPS_FEEDS]
+    verified, errors, snapshots = verify_current_jpeg_images(
+        candidates, probe_interval=2.0, workers=8
+    )
+    rejected = [dict(item) for item in MASSACHUSETTS_NPS_MANUAL_REJECTIONS]
+    for camera in candidates:
+        camera_id = camera['provider_camera_id']
+        if camera_id not in verified:
+            rejected.append({
+                'provider_camera_id': camera_id,
+                'name': camera['name'],
+                'failure_class': errors.get(camera_id, 'transient_network:incomplete'),
+            })
+            continue
+        add_camera(
+            camera['name'], camera['lat'], camera['lon'], camera['url'], 'image',
+            'Massachusetts', 'Suffolk County', camera['direction'], 'nps',
+            camera['source_url'], 60,
+        )
+        cameras[-1]['provider_camera_id'] = camera_id
+        cameras[-1]['provider_timestamp'] = snapshots[camera_id][2]
+
+    count = len(verified)
+    atomic_write_json(
+        DATA_DIR / 'massachusetts_nps_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'National Park Service',
+            'source_url': 'https://www.nps.gov/bost/learn/photosmultimedia/webcams.htm',
+            'attribution': 'National Park Service',
+            'usage_terms': 'NPS-created website material is generally public domain',
+            'usage_terms_url': 'https://www.nps.gov/aboutus/disclaimer.htm',
+            'geographic_scope': (
+                'Boston National Historical Park and Boston Harbor Islands, '
+                'Massachusetts'
+            ),
+            'refresh_cadence_seconds': 60,
+            'candidates': len(candidates) + len(MASSACHUSETTS_NPS_MANUAL_REJECTIONS),
+            'verified_live': count,
+            'rejected': rejected,
+        },
+        indent=2,
+    )
+    if count != len(candidates):
+        raise IncompleteProviderError(
+            f'truncated_verified_inventory:{count}<{len(candidates)}'
+        )
+    print(f'  Massachusetts NPS image verification: {count}/{len(candidates)} current')
+    return count
+
+
+MASSACHUSETTS_MWRA_SOURCE = 'https://www.mwra.com/about-mwra/live-camera-feeds'
+MASSACHUSETTS_MWRA_FEEDS = (
+    {
+        'provider_camera_id': 'mwra-ditp-boston-harbor',
+        'name': 'MWRA Deer Island - Boston Harbor',
+        'lat': 42.35,
+        'lon': -70.958969,
+        'url': 'https://www.mwra.com/sites/default/files/camera-streams/ditp.m3u8',
+        'county': 'Suffolk County',
+        'direction': 'W',
+    },
+    {
+        'provider_camera_id': 'mwra-cosgrove-wachusett-reservoir',
+        'name': 'MWRA Cosgrove - Wachusett Reservoir',
+        'lat': 42.398307,
+        'lon': -71.689638,
+        'url': 'https://www.mwra.com/sites/default/files/camera-streams/cosgrove.m3u8',
+        'county': 'Worcester County',
+        'direction': '',
+    },
+)
+
+MASSACHUSETTS_MWRA_MANUAL_REJECTIONS = (
+    {
+        'provider_camera_id': 'mwra-quabbin-reservoir',
+        'name': 'MWRA Quabbin Reservoir',
+        'failure_class': 'placeholder:maintenance_scaffolding_obscures_view',
+        'url': 'https://www.mwra.com/sites/default/files/camera-streams/quabbin.m3u8',
+    },
+)
+
+
+def fetch_massachusetts_mwra():
+    candidates = [dict(item) for item in MASSACHUSETTS_MWRA_FEEDS]
+    verified, errors = verify_live_hls(
+        [camera['url'] for camera in candidates],
+        probe_interval=8.0,
+        workers=2,
+        referer=MASSACHUSETTS_MWRA_SOURCE,
+    )
+    rejected = [dict(item) for item in MASSACHUSETTS_MWRA_MANUAL_REJECTIONS]
+    for camera in candidates:
+        if camera['url'] not in verified:
+            rejected.append({
+                'provider_camera_id': camera['provider_camera_id'],
+                'name': camera['name'],
+                'failure_class': errors.get(
+                    camera['url'], 'transient_network:incomplete'
+                ),
+            })
+            continue
+        add_camera(
+            camera['name'], camera['lat'], camera['lon'], camera['url'], 'hls',
+            'Massachusetts', camera['county'], camera['direction'], 'mwra',
+            MASSACHUSETTS_MWRA_SOURCE, 6,
+        )
+        cameras[-1]['provider_camera_id'] = camera['provider_camera_id']
+
+    count = len(verified)
+    atomic_write_json(
+        DATA_DIR / 'massachusetts_mwra_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'Massachusetts Water Resources Authority',
+            'source_url': MASSACHUSETTS_MWRA_SOURCE,
+            'attribution': 'Massachusetts Water Resources Authority',
+            'usage_terms': (
+                'First-party public live-camera page; no express reuse license found'
+            ),
+            'geographic_scope': (
+                'Deer Island, Wachusett Reservoir, and Quabbin Reservoir, '
+                'Massachusetts'
+            ),
+            'refresh_cadence_seconds': 6,
+            'candidates': len(candidates) + len(MASSACHUSETTS_MWRA_MANUAL_REJECTIONS),
+            'verified_live': count,
+            'rejected': rejected,
+        },
+        indent=2,
+    )
+    if count != len(candidates):
+        raise IncompleteProviderError(
+            f'truncated_verified_inventory:{count}<{len(candidates)}'
+        )
+    print(f'  Massachusetts MWRA HLS verification: {count}/{len(candidates)} advancing')
     return count
 
 
@@ -3715,6 +3979,8 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
         ('Tennessee DOT (SmartWay)', fetch_tndot),
         ('Tennessee NPS verified', fetch_tennessee_nps_verified),
         ('Tennessee Clarksville IPCamLive', fetch_tennessee_clarksville),
+        ('Massachusetts NPS verified', fetch_massachusetts_nps_verified),
+        ('Massachusetts MWRA', fetch_massachusetts_mwra),
         ('Montana (Iteris)', lambda: fetch_iteris_geojson('MT', 'Montana')),
         ('South Dakota (Iteris)', lambda: fetch_iteris_geojson('SD', 'South Dakota')),
         ('Missouri DOT', fetch_missouri),
