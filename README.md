@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.77.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.78.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
 [![Cameras](https://img.shields.io/badge/cameras-36%2C592-cyan)]()
@@ -102,6 +102,14 @@ python scripts/check.py
 The gate runs the preflight first, then uses Playwright Chromium for the exhaustive smoke and reduced Firefox/WebKit contracts for boot, search, modal cleanup, cached offline shell, and HLS branch behavior. The Windows WebKit port uses an injected native-HLS capability to exercise that branch because the port does not ship the platform media stack.
 
 It validates the camera corpus and deterministic shards, verifies vendored dependency/license hashes plus expiring supplemental CVE dispositions, runs Python units, lint, JavaScript syntax/contracts and service-worker tests, and enforces a real headless desktop/mobile/modal/offline/cache/accessibility smoke. The smoke requires the first camera shard to render within 2.5 seconds on the local Chromium test profile.
+
+Build the one release asset only from a clean committed tree:
+
+```bash
+python scripts/package_release.py --clean
+```
+
+The packager rejects version drift, dirty/untracked input, stale tags, and stale `dist/` files; writes only `dist/StormScope-vX.Y.Z.zip`; fixes entry order, timestamps, compression, and permissions; embeds `release-manifest.json` with the exact commit and SHA-256/size of every tracked file; then reopens and verifies the archive before printing its final SHA-256. Repeating the command for the same commit produces identical bytes.
 
 Audit exact vendored versions, licenses, newer stable releases, and OSV advisories while also exercising Leaflet 1.9.4, markercluster 1.5.3, and HLS.js 1.6.16 in Chromium:
 

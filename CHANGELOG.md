@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.78.0 - 2026-07-12
+
+- Added deterministic release packaging with strict parity checks across package metadata, app runtime, README badge, latest changelog, lockfile, and every tool user agent. Packaging requires a clean committed tree, rejects stale/newer tags and stale artifacts, and writes exactly `dist/StormScope-vX.Y.Z.zip`.
+- ZIP entry order, timestamps, compression, and permissions are fixed; an embedded manifest records the exact commit plus every tracked file's size and SHA-256. The packager reopens and verifies all bytes/metadata before printing the final digest, with regression coverage for reproducibility, stale artifacts, and stale tags. The complete gate checks parity before tests. Service-worker cache bumped to v51.
+
 ## v0.77.0 - 2026-07-12
 
 - Added a single fail-fast local toolchain preflight that reports actual/supported versions and paths for Python, Node.js, npm, curl, Ruff, yt-dlp, Playwright, Chromium, Firefox, and WebKit, aggregating every missing or incompatible requirement before exiting nonzero.
