@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.39.0 - 2026-07-11
+
+### Closed four low-coverage state gaps with verified keyless DOT feeds (+1,639 cameras)
+- **South Carolina (SCDOT via SkyVDN HLS, 17 → 748)** — the `sc.cdn.iteris-atis.com` cameras geojson migrated to a flat SkyVDN structure (`https_url` HLS playlists + `image_url` thumbnails); the old Iteris parser expected a `cameras[]`/`image` shape and silently returned zero. New `fetch_skyvdn_hls` reads each `active` camera's `https_url`, verifies it with the two-probe advancing-manifest check (rejects `#EXT-X-ENDLIST`, non-advancing sequences, dead segments), and accepts only live streams. **731 of 761 verified advancing**, 30 rejected to the ignored report.
+- **Alaska (511 mapicons, 104 → 227)** — new `fetch_alaska` reads the keyless `511.alaska.gov/map/mapIcons/Cameras` list and its `/map/Cctv/{id}` snapshot proxy; each candidate is image-verified (real JPEG/PNG magic, not HTML/placeholder). **123 of 123 verified live.**
+- **Arizona (AZ511 DataTables, 108 → 752)** — new `fetch_az511` pages the `List/GetData/Cameras` DataTables endpoint and its `/map/Cctv/{id}` snapshot proxy with per-image verification. **644 of 644 verified live.** The AZ server caps responses at 100 rows regardless of the requested `length`, so the shared DataTables pager now advances `start` by the actual returned-row count (fixes a latent gap that would have skipped rows on any 100-capped 511 instance, Georgia unaffected).
+- **South Dakota (Iteris, 43 → 184)** — the SD Iteris feed still uses the `cameras[]`/`image` shape and now parses 190 official snapshot rows.
+- Corpus 31,788 → **33,427** (+1,639); rebuilt to 45 deterministic shards; synced localized counts, README table, and smoke-test assertions. West Virginia remains the only state-level gap.
+
 ## v0.38.0 - 2026-07-11
 
 ### Recovered Iowa DOT with per-image live verification (+1,123 cameras)

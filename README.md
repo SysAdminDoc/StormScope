@@ -1,7 +1,7 @@
-[![Version](https://img.shields.io/badge/version-0.38.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.39.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
-[![Cameras](https://img.shields.io/badge/cameras-31%2C788-cyan)]()
+[![Cameras](https://img.shields.io/badge/cameras-33%2C427-cyan)]()
 [![Live Site](https://img.shields.io/badge/live_site-open_StormScope-7c3aed)](https://sysadmindoc.github.io/StormScope/)
 
 # StormScope
@@ -16,7 +16,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 - **Accessible Radar Timeline** — Direct frame scrubbing, manual-only/0.5×/1×/2× playback, explicit frame age and light/moderate/heavy scale text, plus standard, color-vision-friendly, and high-contrast presentations
 - **Official Weather Alerts** — Viewport-scoped NWS watches, warnings, and advisories with severity polygons and accessible details
 - **Optional Hazard Context** — Keyless NOAA lightning density and viewport-bounded NIFC wildfire perimeters start off, show freshness and attribution, fail independently, and stay below warnings and cameras
-- **31,788 Live Cameras** — Traffic, weather, park, EarthCam, LiveBeaches, and webcam feeds across 49 US states plus Washington, D.C., territories, and international locations
+- **33,427 Live Cameras** — Traffic, weather, park, EarthCam, LiveBeaches, and webcam feeds across 49 US states plus Washington, D.C., territories, and international locations
 - **Fast Camera Discovery** — Progressive state shards make the map interactive before the full corpus loads; accessible search, health/source/type filters, health-first name/distance sorting, and a virtualized result list stay synchronized with the map
 - **Local Favorites and Views** — Favorite cameras, restore the last map/layer/opacity state, save named views, and validate portable JSON imports/exports without an account
 - **English and Spanish UI** — Live language switching covers controls, recovery states, weather/radar labels, WMO conditions, alerts, dates, numbers, and units with deterministic English fallback
@@ -32,28 +32,31 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 
 ## Camera Coverage
 
-31,788 cameras across 49 US states plus Washington, D.C.:
+33,427 cameras across 49 US states plus Washington, D.C.:
 
 | State | Cameras | | State | Cameras |
 |-------|--------:|-|-------|--------:|
-| Florida | 4,957 | | Alabama | 595 |
-| California | 3,123 | | Indiana | 573 |
-| Utah | 2,053 | | Missouri | 563 |
-| Virginia | 1,677 | | Maryland | 523 |
-| Pennsylvania | 1,515 | | Kansas | 519 |
-| Washington | 1,354 | | Idaho | 460 |
-| Iowa | 1,127 | | Wisconsin | 452 |
-| North Carolina | 1,127 | | Oklahoma | 361 |
-| Oregon | 1,127 | | Connecticut | 352 |
-| Ohio | 1,066 | | Nebraska | 350 |
-| Colorado | 1,013 | | Louisiana | 338 |
-| New York | 994 | | Illinois | 331 |
-| Georgia | 848 | | Delaware | 315 |
+| Florida | 4,957 | | Indiana | 573 |
+| California | 3,123 | | Missouri | 563 |
+| Utah | 2,053 | | Maryland | 523 |
+| Virginia | 1,677 | | Kansas | 519 |
+| Pennsylvania | 1,515 | | Idaho | 460 |
+| Washington | 1,354 | | Wisconsin | 452 |
+| Iowa | 1,127 | | Oklahoma | 361 |
+| North Carolina | 1,127 | | Connecticut | 352 |
+| Oregon | 1,127 | | Nebraska | 350 |
+| Ohio | 1,066 | | Louisiana | 338 |
+| Colorado | 1,013 | | Illinois | 331 |
+| New York | 994 | | Delaware | 315 |
+| Georgia | 848 | | Alaska | 227 |
 | Texas | 832 | | Kentucky | 226 |
 | Michigan | 777 | | North Dakota | 189 |
-| Nevada | 661 | | New Hampshire | 185 |
+| Arizona | 752 | | New Hampshire | 185 |
+| South Carolina | 748 | | South Dakota | 184 |
+| Nevada | 661 | | Mississippi | 160 |
+| Alabama | 595 | | Maine | 141 |
 
-Plus: Mississippi (160), Maine (141), Rhode Island (139), Vermont, Arizona, Alaska, Montana, South Carolina, South Dakota, the remaining lower-count US states, international country/territory buckets, 172 active National Park webcams, 275 EarthCam Network feeds, 4 LiveBeaches direct embeds, and 369 playback-verified YouTube streams. West Virginia is the only remaining state-level gap.
+Plus: Rhode Island (139), Vermont (93), Montana (39), and the remaining lower-count US states, international country/territory buckets, 172 active National Park webcams, 275 EarthCam Network feeds, 4 LiveBeaches direct embeds, and 369 playback-verified YouTube streams. West Virginia is the only remaining state-level gap.
 
 ## Quick Start
 

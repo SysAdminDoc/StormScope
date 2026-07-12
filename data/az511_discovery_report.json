@@ -1,0 +1,10 @@
+{
+  "generated_at": "2026-07-12T02:23:35Z",
+  "provider": "Arizona (AZ511)",
+  "source_url": "https://az511.com/",
+  "attribution": "Arizona DOT",
+  "refresh_cadence_seconds": 60,
+  "candidates": 644,
+  "verified_live": 644,
+  "rejected": []
+}

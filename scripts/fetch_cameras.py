@@ -469,7 +469,7 @@ def fetch_511_datatables(base_url, state_name, referer=None):
                 break
             all_rows.extend(rows)
             total = data.get('recordsTotal', 0)
-            start += page_size
+            start += len(rows)
             if start >= total:
                 break
         count = 0
@@ -980,6 +980,214 @@ def fetch_iteris_geojson(state_code, state_name):
         return count
     except Exception as e:
         print(f'  {state_name} Iteris: {e}')
+        return 0
+
+
+# ── SkyVDN HLS (SC SCDOT 511) — Iteris geojson metadata + verified live streams ──
+def fetch_skyvdn_hls(state_code, state_name, source_page, report_name):
+    try:
+        url = (f'https://{state_code.lower()}.cdn.iteris-atis.com'
+               '/geojson/icons/metadata/icons.cameras.geojson')
+        data = fetch_json(url, timeout=30)
+        candidates = []
+        seen = set()
+        for feat in data.get('features', []):
+            props = feat.get('properties', {}) or {}
+            if not props.get('active'):
+                continue
+            stream = str(props.get('https_url') or '').strip()
+            if not stream.startswith('https://') or stream in seen:
+                continue
+            geom = feat.get('geometry', {}) or {}
+            coords = geom.get('coordinates') or [0, 0]
+            if not isinstance(coords, list) or len(coords) < 2:
+                continue
+            seen.add(stream)
+            candidates.append({
+                'camera_id': props.get('id'),
+                'name': props.get('description') or props.get('route') or f'{state_name} Camera',
+                'lat': coords[1],
+                'lon': coords[0],
+                'county': props.get('jurisdiction') or '',
+                'direction': props.get('direction') or '',
+                'url': stream,
+            })
+        verified_urls, verification_errors = verify_live_hls([c['url'] for c in candidates])
+        rejected = []
+        added = 0
+        for item in candidates:
+            if item['url'] not in verified_urls:
+                rejected.append({
+                    'provider_camera_id': item['camera_id'],
+                    'name': item['name'],
+                    'url': item['url'],
+                    'failure_class': verification_errors.get(
+                        item['url'], 'transient_network:verification_incomplete'),
+                })
+                continue
+            before = len(cameras)
+            add_camera(item['name'], item['lat'], item['lon'], item['url'],
+                       'hls', state_name, item['county'], item['direction'], 'dot',
+                       source_page, 10)
+            if len(cameras) == before:
+                rejected.append({
+                    'provider_camera_id': item['camera_id'],
+                    'name': item['name'],
+                    'url': item['url'],
+                    'failure_class': 'location_ambiguous:invalid_coordinates',
+                })
+                continue
+            cameras[-1]['provider_camera_id'] = str(item['camera_id'])
+            added += 1
+        atomic_write_json(
+            DATA_DIR / report_name,
+            {
+                'generated_at': utc_now_iso(),
+                'provider': f'{state_name} (SkyVDN)',
+                'source_url': source_page,
+                'attribution': f'{state_name} DOT',
+                'refresh_cadence_seconds': 10,
+                'candidates': len(candidates),
+                'verified_live': added,
+                'rejected': rejected,
+            },
+            indent=2,
+        )
+        print(f'  {state_name} SkyVDN HLS verification: {added}/{len(candidates)} advancing')
+        return added
+    except Exception as e:
+        print(f'  {state_name} SkyVDN: {e}')
+        return 0
+
+
+# ── Alaska (511 mapicons) — verified live snapshot proxy ──
+def fetch_alaska():
+    try:
+        data = fetch_json('https://511.alaska.gov/map/mapIcons/Cameras', timeout=25)
+        items = data.get('item2', []) if isinstance(data, dict) else data
+        candidates = []
+        seen = set()
+        for item in items:
+            loc = item.get('location', [0, 0])
+            if not isinstance(loc, list) or len(loc) < 2:
+                continue
+            item_id = str(item.get('itemId', '')).strip()
+            if not item_id:
+                continue
+            img_url = f'https://511.alaska.gov/map/Cctv/{item_id}'
+            if img_url in seen:
+                continue
+            seen.add(img_url)
+            candidates.append({
+                'id': item_id,
+                'name': item.get('title', '') or f'Alaska Camera {item_id}',
+                'lat': loc[0], 'lon': loc[1], 'url': img_url,
+            })
+        verified, errors = verify_live_images([c['url'] for c in candidates])
+        count = 0
+        rejected = []
+        for cam in candidates:
+            if cam['url'] not in verified:
+                rejected.append({'provider_camera_id': cam['id'], 'name': cam['name'],
+                                 'url': cam['url'],
+                                 'failure_class': errors.get(cam['url'], 'transient_network:incomplete')})
+                continue
+            add_camera(cam['name'], cam['lat'], cam['lon'], cam['url'], 'image',
+                       'Alaska', '', '', 'dot', 'https://511.alaska.gov/', 60)
+            count += 1
+        atomic_write_json(
+            DATA_DIR / 'alaska_511_discovery_report.json',
+            {'generated_at': utc_now_iso(), 'provider': 'Alaska (511)',
+             'source_url': 'https://511.alaska.gov/', 'attribution': 'Alaska DOT&PF',
+             'refresh_cadence_seconds': 60, 'candidates': len(candidates),
+             'verified_live': count, 'rejected': rejected},
+            indent=2,
+        )
+        print(f'  Alaska 511 image verification: {count}/{len(candidates)} live')
+        return count
+    except Exception as e:
+        print(f'  Alaska: {e}')
+        return 0
+
+
+# ── Arizona (AZ511 DataTables) — verified live snapshot proxy ──
+def fetch_az511():
+    try:
+        base = 'https://az511.com'
+        url = f'{base}/List/GetData/Cameras'
+        all_rows = []
+        start = 0
+        while True:
+            raw = _http_bytes(
+                url,
+                headers={'Accept': 'application/json',
+                         'Content-Type': 'application/x-www-form-urlencoded',
+                         'X-Requested-With': 'XMLHttpRequest',
+                         'Referer': base + '/', 'Origin': base},
+                data=f'draw=1&start={start}&length=100&search[value]='.encode('ascii'),
+                method='POST', timeout=30)
+            payload = json.loads(raw)
+            rows = payload.get('data', [])
+            if not rows:
+                break
+            all_rows.extend(rows)
+            total = payload.get('recordsTotal', 0)
+            start += len(rows)
+            if start >= total:
+                break
+        candidates = []
+        seen = set()
+        for row in all_rows:
+            wkt = ''
+            try:
+                wkt = row.get('latLng', {}).get('geography', {}).get('wellKnownText', '')
+            except (AttributeError, TypeError):
+                continue
+            m = re.search(r'POINT\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*\)', wkt)
+            if not m:
+                continue
+            lon, lat = float(m.group(1)), float(m.group(2))
+            img_url = ''
+            for img in row.get('images', []) or []:
+                if img.get('disabled') or img.get('blocked'):
+                    continue
+                raw_url = img.get('imageUrl', '')
+                if raw_url:
+                    img_url = base + raw_url if raw_url.startswith('/') else raw_url
+                    break
+            if not img_url or img_url in seen:
+                continue
+            seen.add(img_url)
+            candidates.append({
+                'id': str(row.get('id', '')),
+                'name': row.get('location') or row.get('roadway') or 'Arizona Camera',
+                'lat': lat, 'lon': lon, 'direction': row.get('direction', '') or '',
+                'url': img_url,
+            })
+        verified, errors = verify_live_images([c['url'] for c in candidates])
+        count = 0
+        rejected = []
+        for cam in candidates:
+            if cam['url'] not in verified:
+                rejected.append({'provider_camera_id': cam['id'], 'name': cam['name'],
+                                 'url': cam['url'],
+                                 'failure_class': errors.get(cam['url'], 'transient_network:incomplete')})
+                continue
+            add_camera(cam['name'], cam['lat'], cam['lon'], cam['url'], 'image',
+                       'Arizona', '', cam['direction'], 'dot', base + '/', 60)
+            count += 1
+        atomic_write_json(
+            DATA_DIR / 'az511_discovery_report.json',
+            {'generated_at': utc_now_iso(), 'provider': 'Arizona (AZ511)',
+             'source_url': base + '/', 'attribution': 'Arizona DOT',
+             'refresh_cadence_seconds': 60, 'candidates': len(candidates),
+             'verified_live': count, 'rejected': rejected},
+            indent=2,
+        )
+        print(f'  AZ511 image verification: {count}/{len(candidates)} live')
+        return count
+    except Exception as e:
+        print(f'  Arizona: {e}')
         return 0
 
 
@@ -1642,7 +1850,8 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
         ('New England 511 (ME/NH/VT)', fetch_newengland511),
         ('Connecticut (CT511)', lambda: fetch_511_mapicons('https://www.ctroads.org', 'Connecticut')),
         ('Idaho (ID511)', lambda: fetch_511_mapicons('https://511.idaho.gov', 'Idaho')),
-        ('South Carolina (Iteris)', lambda: fetch_iteris_geojson('SC', 'South Carolina')),
+        ('South Carolina (SkyVDN)', lambda: fetch_skyvdn_hls(
+            'SC', 'South Carolina', 'https://www.511sc.org/', 'scdot_skyvdn_discovery_report.json')),
         ('Montana (Iteris)', lambda: fetch_iteris_geojson('MT', 'Montana')),
         ('South Dakota (Iteris)', lambda: fetch_iteris_geojson('SD', 'South Dakota')),
         ('Missouri DOT', fetch_missouri),
@@ -1669,6 +1878,8 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
             {'north': 43.1, 'south': 39.9, 'east': -95.2, 'west': -104.2},
             'https://www.511.nebraska.gov/')),
         ('Mississippi (MDOT Traffic)', fetch_ms_mdot),
+        ('Alaska (511)', fetch_alaska),
+        ('Arizona (AZ511)', fetch_az511),
         ('NPS Webcams', fetch_nps),
     ])
     return providers

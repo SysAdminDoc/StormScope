@@ -1,0 +1,10 @@
+{
+  "generated_at": "2026-07-12T02:22:46Z",
+  "provider": "Alaska (511)",
+  "source_url": "https://511.alaska.gov/",
+  "attribution": "Alaska DOT&PF",
+  "refresh_cadence_seconds": 60,
+  "candidates": 123,
+  "verified_live": 123,
+  "rejected": []
+}

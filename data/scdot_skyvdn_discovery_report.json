@@ -1,0 +1,191 @@
+{
+  "generated_at": "2026-07-12T02:22:26Z",
+  "provider": "South Carolina (SkyVDN)",
+  "source_url": "https://www.511sc.org/",
+  "attribution": "South Carolina DOT",
+  "refresh_cadence_seconds": 10,
+  "candidates": 761,
+  "verified_live": 731,
+  "rejected": [
+    {
+      "provider_camera_id": "e72068cf-d2a0-11e6-8996-0123456789ab",
+      "name": "I-26 W @ MM 106.8",
+      "url": "https://s18.us-east-1.skyvdn.com/rtplive/10014/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "e7241248-d2a0-11e6-8996-0123456789ab",
+      "name": "I-26 E @ MM 107.5 (Bush River Rd)",
+      "url": "https://s20.us-east-1.skyvdn.com/rtplive/10016/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "4ba292e3-2df2-11e6-8d81-0123456789ab",
+      "name": "I-26 E @ MM 95.2",
+      "url": "https://s18.us-east-1.skyvdn.com/rtplive/10050/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "4198",
+      "name": "I-26 E @ MM 94.5",
+      "url": "https://s20.us-east-1.skyvdn.com/rtplive/10051/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "e7208fd9-d2a0-11e6-8996-0123456789ab",
+      "name": "I-20 W @ MM 64.5",
+      "url": "https://s18.us-east-1.skyvdn.com/rtplive/10061/playlist.m3u8",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "provider_camera_id": "6346",
+      "name": "I-77 N @ MM 34.02 (Exit 34)",
+      "url": "https://s18.us-east-1.skyvdn.com/rtplive/10190/playlist.m3u8",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "provider_camera_id": "6414",
+      "name": "I-77 S @ MM 38.9",
+      "url": "https://s19.us-east-1.skyvdn.com/rtplive/10193/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "6415",
+      "name": "I-77 N @ MM 43.9",
+      "url": "https://s19.us-east-1.skyvdn.com/rtplive/10196/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "4252",
+      "name": "I-26 W @ MM 135.7",
+      "url": "https://s19.us-east-1.skyvdn.com/rtplive/10515/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "6077",
+      "name": "I-26 E @ MM 63.5",
+      "url": "https://s20.us-east-1.skyvdn.com/rtplive/10606/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "e7237605-d2a0-11e6-8996-0123456789ab",
+      "name": "I-85 S @ MM 43",
+      "url": "https://s19.us-east-1.skyvdn.com/rtplive/30032/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "e720ddf3-d2a0-11e6-8996-0123456789ab",
+      "name": "I-85 N @ MM 46 (Hwy. 291 Pleasantburg Dr.)",
+      "url": "https://s18.us-east-1.skyvdn.com/rtplive/30034/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "e72300d4-d2a0-11e6-8996-0123456789ab",
+      "name": "US 17 Median @ SC 544",
+      "url": "https://s20.us-east-1.skyvdn.com/rtplive/50013/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "6121",
+      "name": "I-95 N @ MM 179.4",
+      "url": "https://s19.us-east-1.skyvdn.com/rtplive/50247/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "6301",
+      "name": "I-95 N @ MM 180.1",
+      "url": "https://s19.us-east-1.skyvdn.com/rtplive/50248/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "6144",
+      "name": "I-95 @ Exit 193",
+      "url": "https://s18.us-east-1.skyvdn.com/rtplive/50260/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "6146",
+      "name": "I-95 N @ MM 193.9",
+      "url": "https://s18.us-east-1.skyvdn.com/rtplive/50261/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "6155",
+      "name": "I-95 S @ MM 196",
+      "url": "https://s19.us-east-1.skyvdn.com/rtplive/50263/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "e7248779-d2a0-11e6-8996-0123456789ab",
+      "name": "I-26 E @ MM 212",
+      "url": "https://s20.us-east-1.skyvdn.com/rtplive/60022/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "e72300db-d2a0-11e6-8996-0123456789ab",
+      "name": "I-26 E @ MM 214",
+      "url": "https://s20.us-east-1.skyvdn.com/rtplive/60031/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "e7215327-d2a0-11e6-8996-0123456789ab",
+      "name": "I-26 W @ MM 214.5 (Bennett Yard Overpass)",
+      "url": "https://s18.us-east-1.skyvdn.com/rtplive/60032/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "e72300dd-d2a0-11e6-8996-0123456789ab",
+      "name": "I-526 E @ MM 18 (Rivers Ave)",
+      "url": "https://s20.us-east-1.skyvdn.com/rtplive/60043/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "e721532b-d2a0-11e6-8996-0123456789ab",
+      "name": "I-526 W @ MM 24 (Daniel Island)",
+      "url": "https://s18.us-east-1.skyvdn.com/rtplive/60047/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "e72523bf-d2a0-11e6-8996-0123456789ab",
+      "name": "I-95 N @ MM 4",
+      "url": "https://s18.us-east-1.skyvdn.com/rtplive/60051/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "e7217a30-d2a0-11e6-8996-0123456789ab",
+      "name": "I-26 W @ MM 220 (Romney St)",
+      "url": "https://s18.us-east-1.skyvdn.com/rtplive/60061/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "e7217a31-d2a0-11e6-8996-0123456789ab",
+      "name": "US 17 N in Charleston",
+      "url": "https://s18.us-east-1.skyvdn.com/rtplive/60064/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "e7217a32-d2a0-11e6-8996-0123456789ab",
+      "name": "US 17 S in Charleston (Arthur Ravenel Jr. Brdg)",
+      "url": "https://s18.us-east-1.skyvdn.com/rtplive/60067/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "e7241246-d2a0-11e6-8996-0123456789ab",
+      "name": "Mt. Pleasant Tower - Upper",
+      "url": "https://s19.us-east-1.skyvdn.com/rtplive/60076/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "e724fca4-d2a0-11e6-8996-0123456789ab",
+      "name": "I-26 E @ MM 199 (US 17A N Charleston)",
+      "url": "https://s20.us-east-1.skyvdn.com/rtplive/60096/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "6186",
+      "name": "I-95 S @ MM 75.5",
+      "url": "https://s20.us-east-1.skyvdn.com/rtplive/60190/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    }
+  ]
+}
