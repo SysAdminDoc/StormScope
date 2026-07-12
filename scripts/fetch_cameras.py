@@ -711,7 +711,7 @@ def fetch_txdot():
 def fetch_nps():
     try:
         url = 'https://developer.nps.gov/api/v1/webcams?api_key=DEMO_KEY&limit=500'
-        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.54.0'})
+        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.55.0'})
         count = 0
         for cam in data.get('data', []):
             if str(cam.get('status') or '').lower() == 'inactive':
@@ -835,11 +835,13 @@ WYOMING_OLD_FAITHFUL = {
 }
 
 
-def _current_jpeg_snapshot(url, require_provider_timestamp=True):
+def _current_jpeg_snapshot(
+    url, require_provider_timestamp=True, max_age_seconds=1200
+):
     request = urllib.request.Request(
         url,
         headers={
-            'User-Agent': 'StormScope/0.54.0',
+            'User-Agent': 'StormScope/0.55.0',
             'Accept': 'image/jpeg,image/*,*/*',
             'Cache-Control': 'no-cache',
         },
@@ -858,7 +860,7 @@ def _current_jpeg_snapshot(url, require_provider_timestamp=True):
     if provider_time.tzinfo is None:
         provider_time = provider_time.replace(tzinfo=timezone.utc)
     age = datetime.now(timezone.utc) - provider_time.astimezone(timezone.utc)
-    if age < -timedelta(minutes=5) or age > timedelta(minutes=20):
+    if age < -timedelta(minutes=5) or age > timedelta(seconds=max_age_seconds):
         raise ValueError(f'placeholder:stale_provider_timestamp:{int(age.total_seconds())}')
     return hashlib.sha256(body).hexdigest(), len(body), provider_time.isoformat()
 
@@ -886,6 +888,7 @@ def verify_current_jpeg_images(candidates, probe_interval=2.0, workers=7):
                 _current_jpeg_snapshot(
                     url,
                     require_provider_timestamp=not item.get('require_content_change'),
+                    max_age_seconds=item.get('max_age_seconds', 1200),
                 ),
                 None,
             )
@@ -1021,28 +1024,6 @@ def fetch_vdot():
         return count
     except Exception as e:
         print(f'  VDOT: {e}')
-        return 0
-
-
-# ── Minnesota DOT ──
-def fetch_mndot():
-    try:
-        url = ('https://511mn.org/map/mapIcons/Cameras')
-        data = fetch_json(url)
-        items = data.get('item2', []) if isinstance(data, dict) else data
-        count = 0
-        for item in items:
-            loc = item.get('location', [0, 0])
-            if not isinstance(loc, list) or len(loc) < 2:
-                continue
-            item_id = item.get('itemId', '')
-            name = item.get('title', '') or f'MN Camera {item_id}'
-            img_url = f'https://511mn.org/map/Cctv/{item_id}'
-            add_camera(name, loc[0], loc[1], img_url, 'image', 'Minnesota', '', '', 'dot')
-            count += 1
-        return count
-    except Exception as e:
-        print(f'  MnDOT: {e}')
         return 0
 
 
@@ -2638,25 +2619,377 @@ def fetch_new_mexico_nrao():
     return count
 
 
-# ── Minnesota (IRIS) ──
-def fetch_mn_iris():
-    try:
-        data = fetch_json('https://tr.511mn.org/tgcameras/api/cameras', timeout=20)
-        count = 0
-        for cam in data:
-            lat = cam.get('latitude') or cam.get('lat')
-            lon = cam.get('longitude') or cam.get('lon')
-            name = cam.get('name', '') or cam.get('description', 'MN Camera')
-            img_url = cam.get('imageUrl', '') or cam.get('url', '')
-            if not img_url:
+# ── Minnesota 511 (CARS / MnDOT IRIS) ──
+MINNESOTA_511_SOURCE = 'https://511mn.org/list/cameras'
+MINNESOTA_511_API = 'https://mntg.carsprogram.org/cameras_v1/api/cameras'
+MINNESOTA_511_MINIMUM_INVENTORY = 1400
+
+
+def _retry_minnesota_hls(urls, retry_delay=12.0):
+    verified, errors = verify_live_hls(
+        urls, probe_interval=8.0, workers=32, referer=MINNESOTA_511_SOURCE
+    )
+    retryable = [
+        url for url in urls
+        if url not in verified
+        and str(errors.get(url) or '').startswith('transient_network:')
+    ]
+    if not retryable:
+        return verified, errors
+    if retry_delay:
+        time.sleep(retry_delay)
+    retry_verified, retry_errors = verify_live_hls(
+        retryable, probe_interval=8.0, workers=8, referer=MINNESOTA_511_SOURCE
+    )
+    verified.update(retry_verified)
+    for url in retryable:
+        if url in retry_verified:
+            errors.pop(url, None)
+        elif url in retry_errors:
+            errors[url] = retry_errors[url]
+    return verified, errors
+
+
+def _retry_minnesota_images(
+    candidates, probe_interval=910.0, retry_delay=12.0
+):
+    verified, errors, snapshots = verify_current_jpeg_images(
+        candidates, probe_interval=probe_interval, workers=32
+    )
+    retryable = [
+        item for item in candidates
+        if item['provider_camera_id'] not in verified
+        and str(errors.get(item['provider_camera_id']) or '').startswith(
+            'transient_network:'
+        )
+    ]
+    if not retryable:
+        return verified, errors, snapshots
+    if retry_delay:
+        time.sleep(retry_delay)
+    retry_verified, retry_errors, retry_snapshots = verify_current_jpeg_images(
+        retryable, probe_interval=2.0, workers=8
+    )
+    verified.update(retry_verified)
+    snapshots.update(retry_snapshots)
+    for item in retryable:
+        camera_id = item['provider_camera_id']
+        if camera_id in retry_verified:
+            errors.pop(camera_id, None)
+        elif camera_id in retry_errors:
+            errors[camera_id] = retry_errors[camera_id]
+    return verified, errors, snapshots
+
+
+def _minnesota_direction(name):
+    match = re.search(r'\b(NB|SB|EB|WB|N|S|E|W)\b', str(name), re.IGNORECASE)
+    return match.group(1).upper() if match else ''
+
+
+def fetch_minnesota_511():
+    inventory = fetch_json(MINNESOTA_511_API, timeout=60)
+    if not isinstance(inventory, list) or len(inventory) < MINNESOTA_511_MINIMUM_INVENTORY:
+        raise IncompleteProviderError(
+            f'truncated_inventory:{len(inventory) if isinstance(inventory, list) else 0}'
+        )
+
+    candidates = []
+    rejected = []
+    seen_urls = set()
+    for camera in inventory:
+        location = camera.get('location') or {}
+        if camera.get('public') is not True:
+            continue
+        for view_index, view in enumerate(camera.get('views') or []):
+            url = str(view.get('url') or '').strip()
+            provider_camera_id = f"{camera.get('id')}:{view_index}"
+            if not url.startswith('https://'):
+                rejected.append({
+                    'provider_camera_id': provider_camera_id,
+                    'name': view.get('name') or camera.get('name') or '',
+                    'failure_class': 'unsupported_embed:no_https_media',
+                })
                 continue
-            add_camera(name, lat, lon, img_url, detect_type(img_url),
-                       'Minnesota', '', '', 'dot')
-            count += 1
-        return count
-    except Exception as e:
-        print(f'  MN IRIS: {e}')
-        return 0
+            if url in seen_urls:
+                rejected.append({
+                    'provider_camera_id': provider_camera_id,
+                    'name': view.get('name') or camera.get('name') or '',
+                    'failure_class': 'duplicate:normalized_feed_url',
+                })
+                continue
+            seen_urls.add(url)
+            view_type = str(view.get('type') or '')
+            if view_type not in {'WMP', 'STILL_IMAGE'}:
+                rejected.append({
+                    'provider_camera_id': provider_camera_id,
+                    'name': view.get('name') or camera.get('name') or '',
+                    'failure_class': f'unsupported_embed:view_type_{view_type or "missing"}',
+                })
+                continue
+            candidates.append({
+                'provider_camera_id': provider_camera_id,
+                'provider_location_id': str(camera.get('id') or ''),
+                'name': view.get('name') or camera.get('name') or 'MnDOT Camera',
+                'lat': location.get('latitude'),
+                'lon': location.get('longitude'),
+                'city_reference': location.get('cityReference') or '',
+                'route_id': location.get('routeId') or '',
+                'url': url,
+                'type': 'hls' if view_type == 'WMP' else 'image',
+                'provider_updated': camera.get('lastUpdated'),
+                'provider_image_timestamp': view.get('imageTimestamp'),
+            })
+
+    hls_candidates = [item for item in candidates if item['type'] == 'hls']
+    image_candidates = [
+        {**item, 'cache_bust': True, 'require_content_change': True}
+        for item in candidates if item['type'] == 'image'
+    ]
+    verified_hls, hls_errors = _retry_minnesota_hls(
+        [item['url'] for item in hls_candidates]
+    )
+    verified_images, image_errors, image_snapshots = _retry_minnesota_images(
+        image_candidates
+    )
+
+    count = 0
+    type_counts = {'hls': 0, 'image': 0}
+    for item in candidates:
+        if item['type'] == 'hls':
+            is_verified = item['url'] in verified_hls
+            failure = hls_errors.get(item['url'])
+        else:
+            is_verified = item['provider_camera_id'] in verified_images
+            failure = image_errors.get(item['provider_camera_id'])
+        if not is_verified:
+            rejected.append({
+                'provider_camera_id': item['provider_camera_id'],
+                'name': item['name'],
+                'url': item['url'],
+                'failure_class': failure or 'transient_network:verification_incomplete',
+            })
+            continue
+        before = len(cameras)
+        add_camera(
+            item['name'], item['lat'], item['lon'], item['url'], item['type'],
+            'Minnesota', '', _minnesota_direction(item['name']), 'dot',
+            MINNESOTA_511_SOURCE, 10 if item['type'] == 'hls' else 900,
+        )
+        if len(cameras) == before:
+            rejected.append({
+                'provider_camera_id': item['provider_camera_id'],
+                'name': item['name'],
+                'failure_class': 'location_ambiguous:invalid_provider_coordinates',
+            })
+            continue
+        row = cameras[-1]
+        row['provider_camera_id'] = item['provider_camera_id']
+        row['provider_location_id'] = item['provider_location_id']
+        row['provider_updated'] = item['provider_updated']
+        row['provider_image_timestamp'] = item['provider_image_timestamp']
+        if item['type'] == 'image':
+            snapshot = image_snapshots.get(item['provider_camera_id'])
+            if snapshot and snapshot[2]:
+                row['provider_timestamp'] = snapshot[2]
+        row['category'] = 'traffic'
+        type_counts[item['type']] += 1
+        count += 1
+
+    minimum_verified = int(len(candidates) * 0.80)
+    atomic_write_json(
+        DATA_DIR / 'minnesota_511_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'Minnesota 511 / MnDOT IRIS',
+            'source_url': MINNESOTA_511_SOURCE,
+            'api_url': MINNESOTA_511_API,
+            'attribution': 'Minnesota Department of Transportation / Minnesota 511',
+            'usage_terms': (
+                'Official public real-time traveler-information service; '
+                'no express reuse license located'
+            ),
+            'refresh_cadence_seconds': {'hls': 10, 'image': 900},
+            'inventory_locations': len(inventory),
+            'candidate_views': len(candidates),
+            'verified_live': count,
+            'verified_by_type': type_counts,
+            'rejected': rejected,
+        },
+        indent=2,
+    )
+    if count < minimum_verified:
+        raise IncompleteProviderError(
+            f'truncated_verified_inventory:{count}<{minimum_verified}'
+        )
+    print(
+        f'  Minnesota 511 verification: {count}/{len(candidates)} current '
+        f'({type_counts["hls"]} HLS, {type_counts["image"]} images)'
+    )
+    return count
+
+
+MINNESOTA_USGS_NIMS_FEEDS = (
+    {
+        'provider_camera_id': 'MN_Rainy_River_at_Boat_Landing_below_International_Falls',
+        'name': 'Rainy River at Boat Landing below International Falls',
+        'lat': 48.5922222,
+        'lon': -93.4466667,
+        'county': 'Koochiching County',
+        'site': 'USGS-05129515',
+    },
+    {
+        'provider_camera_id': 'MN_CLEARWATER_RIVER_AT_RED_LAKE_FALLS_MN',
+        'name': 'Clearwater River at Red Lake Falls',
+        'lat': 47.88620556,
+        'lon': -96.2765806,
+        'county': 'Red Lake County',
+        'site': 'USGS-05078500',
+    },
+    {
+        'provider_camera_id': 'MN_Buffalo_River_near_Dilworth',
+        'name': 'Buffalo River near Dilworth',
+        'lat': 46.963238,
+        'lon': -96.661716,
+        'county': 'Clay County',
+        'site': 'USGS-05062000',
+    },
+    {
+        'provider_camera_id': 'MN_Knife_River_Near_Two_Harbors',
+        'name': 'Knife River near Two Harbors',
+        'lat': 46.94694,
+        'lon': -91.795577,
+        'county': 'Lake County',
+        'site': 'USGS-04015330',
+    },
+    {
+        'provider_camera_id': 'MN_St_Croix_River_at_Stillwater',
+        'name': 'St. Croix River at Stillwater',
+        'lat': 45.05607806,
+        'lon': -92.8040963,
+        'county': 'Washington County',
+        'site': 'USGS-05341550',
+    },
+    {
+        'provider_camera_id': 'MN_Mississippi_River_below_Lock_and_Dam_2_at_Hastings',
+        'name': 'Mississippi River below Lock and Dam 2 at Hastings',
+        'lat': 44.7458333,
+        'lon': -92.8477778,
+        'county': 'Dakota County',
+        'site': 'USGS-05331580',
+    },
+    {
+        'provider_camera_id': 'MN_Cannon_River_at_Northfield',
+        'name': 'Cannon River at Northfield',
+        'lat': 44.4585833,
+        'lon': -93.1596667,
+        'county': 'Rice County',
+        'site': 'USGS-05355024',
+    },
+    {
+        'provider_camera_id': 'MN_Mississippi_River_at_St_Paul',
+        'name': 'Mississippi River at Saint Paul',
+        'lat': 44.9444444,
+        'lon': -93.0881111,
+        'county': 'Ramsey County',
+        'site': 'USGS-05331000',
+    },
+    {
+        'provider_camera_id': 'MN_Otter_Tail_River_below_Orwell_Dam_nr_Fergus_Falls',
+        'name': 'Otter Tail River below Orwell Dam near Fergus Falls',
+        'lat': 46.2143495,
+        'lon': -96.1841473,
+        'county': 'Otter Tail County',
+        'site': 'USGS-05046000',
+    },
+    {
+        'provider_camera_id': 'MN_Snake_River_near_Pine_City',
+        'name': 'Snake River near Pine City',
+        'lat': 45.84162199,
+        'lon': -92.9335412,
+        'county': 'Pine County',
+        'site': 'USGS-05338500',
+    },
+    {
+        'provider_camera_id': 'MN_Des_Moines_River_at_Jackson',
+        'name': 'Des Moines River at Jackson',
+        'lat': 43.6207916,
+        'lon': -94.9851299,
+        'county': 'Jackson County',
+        'site': 'USGS-05476000',
+    },
+    {
+        'provider_camera_id': 'MN_Minnesota_River_at_Morton',
+        'name': 'Minnesota River at Morton',
+        'lat': 44.5460717,
+        'lon': -94.9963838,
+        'county': 'Redwood County',
+        'site': 'USGS-05316580',
+    },
+)
+
+
+def fetch_minnesota_usgs_verified():
+    candidates = []
+    for feed in MINNESOTA_USGS_NIMS_FEEDS:
+        candidate = dict(feed)
+        camera_id = candidate['provider_camera_id']
+        candidate['url'] = (
+            'https://usgs-nims-images.s3.amazonaws.com/overlay/'
+            f'{camera_id}/{camera_id}_newest.jpg'
+        )
+        candidate['max_age_seconds'] = 7200
+        candidates.append(candidate)
+
+    verified, errors, snapshots = verify_current_jpeg_images(
+        candidates, probe_interval=2.0, workers=6
+    )
+    rejected = []
+    count = 0
+    for camera in candidates:
+        camera_id = camera['provider_camera_id']
+        if camera_id not in verified:
+            rejected.append({
+                'provider_camera_id': camera_id,
+                'name': camera['name'],
+                'failure_class': errors.get(
+                    camera_id, 'transient_network:verification_incomplete'
+                ),
+            })
+            continue
+        source_url = (
+            'https://waterdata.usgs.gov/monitoring-location/'
+            f'{camera["site"]}/'
+        )
+        add_camera(
+            camera['name'], camera['lat'], camera['lon'], camera['url'],
+            'image', 'Minnesota', camera['county'], '', 'usgs', source_url, 3600,
+        )
+        cameras[-1]['provider_camera_id'] = camera_id
+        cameras[-1]['provider_timestamp'] = snapshots[camera_id][2]
+        cameras[-1]['category'] = 'river'
+        count += 1
+
+    atomic_write_json(
+        DATA_DIR / 'minnesota_usgs_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'USGS National Imagery Management System',
+            'source_url': 'https://api.waterdata.usgs.gov/nims/v0',
+            'attribution': 'U.S. Geological Survey',
+            'usage_terms': 'USGS-authored NIMS/HIVIS imagery is public domain',
+            'refresh_cadence_seconds': 3600,
+            'candidates': len(candidates),
+            'verified_live': count,
+            'rejected': rejected,
+        },
+        indent=2,
+    )
+    if count != len(candidates):
+        raise IncompleteProviderError(
+            f'truncated_verified_inventory:{count}<{len(candidates)}'
+        )
+    print(f'  Minnesota USGS image verification: {count}/{len(candidates)} current')
+    return count
 
 
 # ── Iowa (IRIS) ──
@@ -3990,7 +4323,8 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
         ('New Mexico NPS verified', fetch_new_mexico_nps_verified),
         ('New Mexico USGS', fetch_new_mexico_usgs),
         ('New Mexico NRAO', fetch_new_mexico_nrao),
-        ('Minnesota (IRIS)', fetch_mn_iris),
+        ('Minnesota 511 (MnDOT IRIS)', fetch_minnesota_511),
+        ('Minnesota USGS verified', fetch_minnesota_usgs_verified),
         ('Iowa DOT', fetch_iowa_dot),
         ('Wyoming DOT', fetch_wyoming),
         ('Maryland (CHART)', fetch_maryland_chart),

@@ -2103,5 +2103,178 @@
     "state": "Massachusetts",
     "county": "Barnstable County",
     "refresh_cadence_seconds": 300
+  },
+  "XPYApGolg2U": {
+    "name": "Minnesota DNR Nongame Wildlife Falcon Cam",
+    "lat": 44.94806,
+    "lon": -93.09417,
+    "state": "Minnesota",
+    "county": "Ramsey County",
+    "source_url": "https://www.dnr.state.mn.us/features/webcams/falconcam/index.html",
+    "refresh_cadence_seconds": 300
+  },
+  "-T4G47n-QNc": {
+    "name": "Big Bog State Recreation Area Fire Tower Cam",
+    "lat": 48.170069,
+    "lon": -94.511812,
+    "state": "Minnesota",
+    "county": "Beltrami County",
+    "source_url": "https://www.dnr.state.mn.us/state_parks/bigbogcam/index.html",
+    "refresh_cadence_seconds": 300
+  },
+  "FedW40y3XJE": {
+    "name": "Itasca State Park Mississippi River Headwaters Cam",
+    "lat": 47.23988,
+    "lon": -95.20781,
+    "state": "Minnesota",
+    "county": "Clearwater County",
+    "source_url": "https://www.dnr.state.mn.us/state_parks/itasca/headwaters.html",
+    "refresh_cadence_seconds": 300
+  },
+  "1keU6WOoDbw": {
+    "name": "Lakeland PBS Bemidji Towercam",
+    "lat": 47.461445004428,
+    "lon": -94.85250398277,
+    "state": "Minnesota",
+    "county": "Beltrami County",
+    "refresh_cadence_seconds": 300
+  },
+  "CYl_uPm7yto": {
+    "name": "International Wolf Center South Habitat Cam",
+    "lat": 47.905760178299,
+    "lon": -91.827878799209,
+    "state": "Minnesota",
+    "county": "Saint Louis County",
+    "source_url": "https://wolf.org/meet-our-wolves/wolf-cams2/",
+    "refresh_cadence_seconds": 300
+  },
+  "33wFmCqH_Vs": {
+    "name": "Xcel Energy Allen S. King Falcon Cam",
+    "lat": 45.030694,
+    "lon": -92.779309,
+    "state": "Minnesota",
+    "county": "Washington County",
+    "refresh_cadence_seconds": 300
+  },
+  "MHFWAtFnnJM": {
+    "name": "Xcel Energy Sherco Falcon Cam",
+    "lat": 45.379650655845,
+    "lon": -93.892286733674,
+    "state": "Minnesota",
+    "county": "Sherburne County",
+    "refresh_cadence_seconds": 300
+  },
+  "KYxUtgc-_Og": {
+    "name": "Glensheen Lake Superior Cam",
+    "lat": 46.815177303187,
+    "lon": -92.051749626199,
+    "state": "Minnesota",
+    "county": "Saint Louis County",
+    "refresh_cadence_seconds": 300
+  },
+  "m2wWzo9GmwY": {
+    "name": "Duluth Beach Cam at Solglimt B&B",
+    "lat": 46.77643878701,
+    "lon": -92.090865369928,
+    "state": "Minnesota",
+    "county": "Saint Louis County",
+    "refresh_cadence_seconds": 300
+  },
+  "nCf7X2cPDAY": {
+    "name": "Duluth Ship Canal Lighthouse Cam",
+    "lat": 46.78019999307,
+    "lon": -92.092109750621,
+    "state": "Minnesota",
+    "county": "Saint Louis County",
+    "refresh_cadence_seconds": 300
+  },
+  "36MiI7NltHk": {
+    "name": "Duluth Aerial Lift Bridge Cam",
+    "lat": 46.78019999307,
+    "lon": -92.092109750621,
+    "state": "Minnesota",
+    "county": "Saint Louis County",
+    "refresh_cadence_seconds": 300
+  },
+  "ZXlXNf_w5Lw": {
+    "name": "Duluth South Pier Lighthouse Cam",
+    "lat": 46.7800671,
+    "lon": -92.0877042,
+    "state": "Minnesota",
+    "county": "Saint Louis County",
+    "refresh_cadence_seconds": 300
+  },
+  "bBubIPZYVt0": {
+    "name": "Duluth Harbor Plaza / Great Lakes Aquarium Cam",
+    "lat": 46.778997111497,
+    "lon": -92.100065514492,
+    "state": "Minnesota",
+    "county": "Saint Louis County",
+    "refresh_cadence_seconds": 300
+  },
+  "EbVlhVeD3jA": {
+    "name": "Duluth Bayfront Cam",
+    "lat": 46.77865,
+    "lon": -92.1018137,
+    "state": "Minnesota",
+    "county": "Saint Louis County",
+    "refresh_cadence_seconds": 300
+  },
+  "mpMdJJjw59E": {
+    "name": "Duluth Western Harbor Cam",
+    "lat": 46.7622613,
+    "lon": -92.1490205,
+    "state": "Minnesota",
+    "county": "Saint Louis County",
+    "refresh_cadence_seconds": 300
+  },
+  "rCec9HDbFwA": {
+    "name": "Two Harbors Depot Cam",
+    "lat": 47.018862411854,
+    "lon": -91.669942704807,
+    "state": "Minnesota",
+    "county": "Lake County",
+    "refresh_cadence_seconds": 300
+  },
+  "HCbXJK6Ve3I": {
+    "name": "Aitkin BNSF Brainerd Sub MP 93.16",
+    "lat": 46.527396,
+    "lon": -93.735659,
+    "state": "Minnesota",
+    "county": "Aitkin County",
+    "refresh_cadence_seconds": 300
+  },
+  "LAnjFc4d0YY": {
+    "name": "Brainerd BNSF Brainerd Sub MP 118",
+    "lat": 46.357295348475,
+    "lon": -94.187004507606,
+    "state": "Minnesota",
+    "county": "Crow Wing County",
+    "refresh_cadence_seconds": 300
+  },
+  "bfuxxXT2GLE": {
+    "name": "Perham BNSF Staples Sub MP 189.3",
+    "lat": 46.598057,
+    "lon": -95.57897,
+    "state": "Minnesota",
+    "county": "Otter Tail County",
+    "refresh_cadence_seconds": 300
+  },
+  "c1kfkIoF0k0": {
+    "name": "Duluth Pier B Cam",
+    "lat": 46.7765398,
+    "lon": -92.1032448,
+    "state": "Minnesota",
+    "county": "Saint Louis County",
+    "refresh_cadence_seconds": 300
+  },
+  "sThx7mQM3Uc": {
+    "name": "Two Harbors Boat Launch Cam",
+    "lat": 47.0150452,
+    "lon": -91.6651306,
+    "state": "Minnesota",
+    "county": "Lake County",
+    "source_url": "https://www.dnr.state.mn.us/water_access/harbors/two_harbors.html",
+    "refresh_cadence_seconds": 300
   }
 }

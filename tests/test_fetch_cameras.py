@@ -1203,6 +1203,189 @@ class FetchMergeTests(unittest.TestCase):
         self.assertTrue(result.succeeded)
         self.assertEqual(2, verifier.call_count)
 
+    def test_minnesota_511_accepts_only_strictly_verified_public_views(self):
+        hls_url = "https://video.dot.state.mn.us/public/C1.stream/playlist.m3u8"
+        image_url = "https://public.carsprogram.org/cameras/MN/C2-v1"
+        rejected_url = "https://video.dot.state.mn.us/public/C3.stream/playlist.m3u8"
+        inventory = [
+            {
+                "id": 101,
+                "public": True,
+                "name": "I-94 EB at Test Ave",
+                "lastUpdated": 1783855322694,
+                "location": {
+                    "latitude": 44.98,
+                    "longitude": -93.27,
+                    "routeId": "I-94",
+                    "cityReference": "in Minneapolis",
+                },
+                "views": [{"name": "I-94 EB at Test Ave", "type": "WMP", "url": hls_url}],
+            },
+            {
+                "id": 102,
+                "public": True,
+                "name": "T.H.61 Test View 1",
+                "lastUpdated": 1783855322694,
+                "location": {
+                    "latitude": 46.78,
+                    "longitude": -92.10,
+                    "routeId": "MN 61",
+                },
+                "views": [
+                    {
+                        "name": "T.H.61 Test View 1",
+                        "type": "STILL_IMAGE",
+                        "url": image_url,
+                        "imageTimestamp": 1783855112000,
+                    },
+                    {
+                        "name": "T.H.61 Test View 2",
+                        "type": "WMP",
+                        "url": rejected_url,
+                    },
+                ],
+            },
+        ]
+        with (
+            mock.patch.object(fetch_cameras, "MINNESOTA_511_MINIMUM_INVENTORY", 2),
+            mock.patch.object(fetch_cameras, "fetch_json", return_value=inventory),
+            mock.patch.object(
+                fetch_cameras,
+                "_retry_minnesota_hls",
+                return_value=({hls_url}, {rejected_url: "confirmed_dead:http_404"}),
+            ),
+            mock.patch.object(
+                fetch_cameras,
+                "_retry_minnesota_images",
+                return_value=(
+                    {"102:0"},
+                    {},
+                    {"102:0": ("hash", 20000, "2026-07-12T11:20:00+00:00")},
+                ),
+            ),
+            mock.patch.object(fetch_cameras, "atomic_write_json") as report_writer,
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Minnesota 511 (MnDOT IRIS)", fetch_cameras.fetch_minnesota_511
+            )
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual(2, len(result.cameras))
+        self.assertEqual({"hls", "image"}, {row["type"] for row in result.cameras})
+        self.assertTrue(all(row["state"] == "Minnesota" for row in result.cameras))
+        self.assertTrue(all(row["source"] == "dot" for row in result.cameras))
+        self.assertTrue(all(row["category"] == "traffic" for row in result.cameras))
+        self.assertEqual("EB", result.cameras[0]["direction"])
+        self.assertEqual("102:0", result.cameras[1]["provider_camera_id"])
+        report = report_writer.call_args.args[1]
+        self.assertEqual(2, report["verified_live"])
+        self.assertEqual({"hls": 1, "image": 1}, report["verified_by_type"])
+        self.assertEqual("confirmed_dead:http_404", report["rejected"][0]["failure_class"])
+
+    def test_minnesota_511_rejects_a_truncated_inventory(self):
+        with (
+            mock.patch.object(fetch_cameras, "MINNESOTA_511_MINIMUM_INVENTORY", 2),
+            mock.patch.object(fetch_cameras, "fetch_json", return_value=[{"id": 1}]),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Minnesota 511 (MnDOT IRIS)", fetch_cameras.fetch_minnesota_511
+            )
+        self.assertFalse(result.succeeded)
+        self.assertIn("truncated_inventory:1", result.error)
+
+    def test_minnesota_hls_retries_only_transient_failures_at_lower_concurrency(self):
+        live_url = "https://video.dot.state.mn.us/public/live.m3u8"
+        dead_url = "https://video.dot.state.mn.us/public/dead.m3u8"
+        with (
+            mock.patch.object(
+                fetch_cameras,
+                "verify_live_hls",
+                side_effect=[
+                    (
+                        set(),
+                        {
+                            live_url: "transient_network:http_503",
+                            dead_url: "confirmed_dead:http_404",
+                        },
+                    ),
+                    ({live_url}, {}),
+                ],
+            ) as verifier,
+            mock.patch.object(fetch_cameras.time, "sleep"),
+        ):
+            verified, errors = fetch_cameras._retry_minnesota_hls(
+                [live_url, dead_url], retry_delay=0
+            )
+        self.assertEqual({live_url}, verified)
+        self.assertEqual({dead_url: "confirmed_dead:http_404"}, errors)
+        self.assertEqual([live_url], verifier.call_args_list[1].args[0])
+        self.assertEqual(8, verifier.call_args_list[1].kwargs["workers"])
+
+    def test_minnesota_usgs_requires_every_curated_current_image(self):
+        feed = {
+            "provider_camera_id": "MN_Test_River",
+            "name": "Test River",
+            "lat": 45.0,
+            "lon": -94.0,
+            "county": "Test County",
+            "site": "USGS-00000000",
+        }
+        expected_url = (
+            "https://usgs-nims-images.s3.amazonaws.com/overlay/"
+            "MN_Test_River/MN_Test_River_newest.jpg"
+        )
+        with (
+            mock.patch.object(
+                fetch_cameras, "MINNESOTA_USGS_NIMS_FEEDS", (feed,)
+            ),
+            mock.patch.object(
+                fetch_cameras,
+                "verify_current_jpeg_images",
+                return_value=(
+                    {"MN_Test_River"},
+                    {},
+                    {
+                        "MN_Test_River": (
+                            "hash",
+                            20000,
+                            "2026-07-12T11:00:00+00:00",
+                        )
+                    },
+                ),
+            ) as verifier,
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Minnesota USGS verified",
+                fetch_cameras.fetch_minnesota_usgs_verified,
+            )
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual(1, len(result.cameras))
+        row = result.cameras[0]
+        self.assertEqual(expected_url, row["url"])
+        self.assertEqual("USGS-00000000", row["source_url"].split("/")[-2])
+        self.assertEqual("river", row["category"])
+        self.assertEqual("MN_Test_River", row["provider_camera_id"])
+        candidates = verifier.call_args.args[0]
+        self.assertEqual(7200, candidates[0]["max_age_seconds"])
+
+    def test_minnesota_usgs_retains_last_known_good_on_any_failed_image(self):
+        with (
+            mock.patch.object(
+                fetch_cameras,
+                "verify_current_jpeg_images",
+                return_value=(set(), {"missing": "confirmed_dead:http_404"}, {}),
+            ),
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Minnesota USGS verified",
+                fetch_cameras.fetch_minnesota_usgs_verified,
+            )
+        self.assertFalse(result.succeeded)
+        self.assertIn("truncated_verified_inventory", result.error)
+
 
 if __name__ == "__main__":
     unittest.main()
