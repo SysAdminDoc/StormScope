@@ -1,9 +1,16 @@
 {
   "name": "stormscope",
-  "version": "0.76.0",
+  "version": "0.77.0",
   "private": true,
   "description": "Live weather radar and webcam map",
+  "packageManager": "npm@11.13.0",
+  "engines": {
+    "node": ">=18",
+    "npm": ">=9"
+  },
   "scripts": {
+    "preflight": "python scripts/preflight.py",
+    "check": "python scripts/check.py",
     "test": "node --test tests/*.test.js",
     "smoke": "node tests/browser-smoke.js",
     "smoke:browsers": "node tests/cross-browser-smoke.js"

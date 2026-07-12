@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.76.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.77.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
 [![Cameras](https://img.shields.io/badge/cameras-36%2C592-cyan)]()
@@ -79,12 +79,19 @@ npx serve .
 
 Open `http://localhost:8000` in your browser.
 
-Install the local quality-gate dependency once:
+Install the complete pinned local toolchain from a clean checkout:
 
 ```bash
-npm install
-npx playwright install chromium
+python -m venv .venv
+# Windows: .venv\Scripts\activate
+# macOS/Linux: source .venv/bin/activate
+python -m pip install -r requirements-dev.txt
+npm ci
+npx playwright install chromium firefox webkit
+python scripts/preflight.py
 ```
+
+The preflight reports every actual version and install path before work starts. Supported versions are Python `>=3.10,<4`, Node.js `>=18`, npm `>=9`, curl `>=8`, Ruff `0.15.20`, yt-dlp `2026.6.9`, and Playwright `1.61.1` with its pinned Chromium, Firefox, and WebKit engines installed. Python tools are exact-pinned in `requirements-dev.txt`; Node tooling is exact-locked by `package-lock.json` and declares npm `11.13.0` as the development package manager.
 
 Run the complete local regression gate before changing or publishing the app:
 
@@ -92,7 +99,7 @@ Run the complete local regression gate before changing or publishing the app:
 python scripts/check.py
 ```
 
-The gate uses Playwright Chromium for the exhaustive smoke and reduced Firefox/WebKit contracts for boot, search, modal cleanup, cached offline shell, and HLS branch behavior. Install all three local engines with `npx playwright install chromium firefox webkit`; the Windows WebKit port uses an injected native-HLS capability to exercise that branch because the port does not ship the platform media stack.
+The gate runs the preflight first, then uses Playwright Chromium for the exhaustive smoke and reduced Firefox/WebKit contracts for boot, search, modal cleanup, cached offline shell, and HLS branch behavior. The Windows WebKit port uses an injected native-HLS capability to exercise that branch because the port does not ship the platform media stack.
 
 It validates the camera corpus and deterministic shards, verifies vendored dependency/license hashes plus expiring supplemental CVE dispositions, runs Python units, lint, JavaScript syntax/contracts and service-worker tests, and enforces a real headless desktop/mobile/modal/offline/cache/accessibility smoke. The smoke requires the first camera shard to render within 2.5 seconds on the local Chromium test profile.
 

@@ -5,6 +5,7 @@ CODEX_CHANGELOG.md
 .env.*
 *.log
 node_modules/
+.venv/
 __pycache__/
 .DS_Store
 Thumbs.db

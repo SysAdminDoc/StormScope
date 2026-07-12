@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.77.0 - 2026-07-12
+
+- Added a single fail-fast local toolchain preflight that reports actual/supported versions and paths for Python, Node.js, npm, curl, Ruff, yt-dlp, Playwright, Chromium, Firefox, and WebKit, aggregating every missing or incompatible requirement before exiting nonzero.
+- Exact-pinned Python development tools in `requirements-dev.txt`, added the Python/Ruff floor in `pyproject.toml`, declared Node/npm engines and npm package-manager version, switched setup to reproducible `npm ci`, and made the complete regression gate run preflight first. Added parser/range regression tests and clean-setup documentation. Service-worker cache bumped to v50.
+
 ## v0.76.0 - 2026-07-12
 
 - Added a compact short-height layout for 844×390 and 667×375 landscape viewports. Panels now stay within the viewport and scroll internally, search results retain a usable minimum region, modal/monitor media compresses without hiding headers, and the full radar timeline remains reachable.
