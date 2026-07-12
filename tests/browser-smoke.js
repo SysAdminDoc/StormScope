@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 const { chromium } = require('@playwright/test');
+const sceneCodec = require('../js/scene-codec.js');
 
 async function assertSurfaceWithinViewport(page, selector, label) {
   const bounds = await page.locator(selector).evaluate((element) => {
@@ -650,6 +651,70 @@ async function main() {
     await page.locator('#saved-state-status').filter({ hasText: 'View saved locally.' }).waitFor({ state: 'visible' });
     assert.equal(await page.locator('#saved-views option', { hasText: 'Smoke view' }).count(), 1);
     await page.getByRole('button', { name: 'Toggle layers panel' }).click();
+
+    const sceneFixture = await page.evaluate(() => {
+      const camera = window._stormscope.getCameraResults()[0];
+      return { cameraId: String(camera.id), cameraName: camera.name, frameTime: window._stormscope.getRadarFrameTime() };
+    });
+    const sharedScene = {
+      map: { lat: 39.75, lon: -98.25, zoom: 6 },
+      layers: { radar: true, cameras: true, coverage: false, alerts: true, lightning: false, wildfires: false },
+      radar: { opacity: 0.48, palette: 'contrast', speed: 400, frameTime: sceneFixture.frameTime },
+      alertSeverity: 'severe',
+      cameraFilters: {
+        query: sceneFixture.cameraName, state: '', source: '', type: '', sort: 'distance', healthy: false
+      },
+      activeCameraId: sceneFixture.cameraId
+    };
+    const scenePage = await context.newPage();
+    scenePage.baseURL = baseURL + '#' + sceneCodec.toHash(sharedScene);
+    await addNetworkFixtures(scenePage);
+    await waitForApp(scenePage);
+    await scenePage.locator('#camera-modal').waitFor({ state: 'visible' });
+    const restoredScene = await scenePage.evaluate(() => ({
+      scene: window._stormscope.captureSharedScene(),
+      activeCameraId: window._stormscope.getActiveCameraId(),
+      frameTime: window._stormscope.getRadarFrameTime(),
+      favoriteOnly: document.getElementById('camera-favorites').checked
+    }));
+    assert.ok(Math.abs(restoredScene.scene.map.lat - sharedScene.map.lat) < 0.01);
+    assert.ok(Math.abs(restoredScene.scene.map.lon - sharedScene.map.lon) < 0.01);
+    assert.equal(restoredScene.scene.map.zoom, sharedScene.map.zoom);
+    assert.deepEqual(restoredScene.scene.layers, sharedScene.layers);
+    assert.equal(restoredScene.scene.radar.opacity, sharedScene.radar.opacity);
+    assert.equal(restoredScene.scene.radar.palette, sharedScene.radar.palette);
+    assert.equal(restoredScene.scene.radar.speed, sharedScene.radar.speed);
+    assert.ok(Math.abs(restoredScene.frameTime - sharedScene.radar.frameTime) <= 30 * 60 * 1000);
+    assert.equal(restoredScene.scene.alertSeverity, sharedScene.alertSeverity);
+    assert.deepEqual(restoredScene.scene.cameraFilters, sharedScene.cameraFilters);
+    assert.equal(restoredScene.activeCameraId, sharedScene.activeCameraId);
+    assert.equal(restoredScene.favoriteOnly, false);
+
+    await scenePage.evaluate(() => {
+      window.__copiedScene = null;
+      Object.defineProperty(navigator, 'share', { configurable: true, value: undefined });
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: { writeText(value) { window.__copiedScene = value; return Promise.resolve(); } }
+      });
+    });
+    await scenePage.locator('#modal-close').click();
+    await scenePage.getByRole('button', { name: 'Toggle layers panel' }).click();
+    await scenePage.locator('#share-scene').click();
+    await scenePage.locator('#saved-state-status').filter({ hasText: 'Web Share was unavailable; the scene link was copied instead.' })
+      .waitFor({ state: 'visible' });
+    assert.match(await scenePage.evaluate(() => window.__copiedScene), /#scene=1\./);
+    assert.equal((await scenePage.evaluate(() => window.__copiedScene)).includes('favorite'), false);
+    await scenePage.close();
+
+    const invalidScenePage = await context.newPage();
+    invalidScenePage.baseURL = baseURL + '#scene=0.e30';
+    await addNetworkFixtures(invalidScenePage);
+    await waitForApp(invalidScenePage, false);
+    await invalidScenePage.locator('#saved-state-status')
+      .filter({ hasText: 'Shared scene link is invalid or unsupported; local state was preserved.' }).waitFor({ state: 'attached' });
+    assert.equal(await invalidScenePage.locator('#fatal-recovery').isHidden(), true);
+    await invalidScenePage.close();
 
     await page.evaluate(() => navigator.serviceWorker.ready);
     await page.reload({ waitUntil: 'domcontentloaded' });

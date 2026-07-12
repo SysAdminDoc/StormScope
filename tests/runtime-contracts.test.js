@@ -8,6 +8,7 @@ const app = fs.readFileSync(path.join(root, 'js', 'app.js'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'css', 'style.css'), 'utf8');
 const contextLayers = fs.readFileSync(path.join(root, 'js', 'context-layers.js'), 'utf8');
+const serviceWorker = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const cameraData = JSON.parse(fs.readFileSync(path.join(root, 'data', 'cameras.json'), 'utf8'));
 const i18n = require('../js/i18n.js');
 
@@ -142,6 +143,20 @@ test('deterministic runtime status copy never exposes raw localization bypasses'
   assert.doesNotMatch(app, /\(cam\.health \|\| 'unknown'\) \+ ' feed'/);
   assert.match(app, /radarReasonLabel\(radarProviderSelection\.degradationReason\)/);
   assert.match(app, /sourceLabel\(camera\.source \|\| camera\.type\)/);
+});
+
+test('versioned scene links load before the app and remain available offline', () => {
+  const savedStatePosition = html.indexOf('js/saved-state.js');
+  const sceneCodecPosition = html.indexOf('js/scene-codec.js');
+  const appPosition = html.indexOf('js/app.js');
+  assert.ok(savedStatePosition >= 0 && sceneCodecPosition > savedStatePosition);
+  assert.ok(appPosition > sceneCodecPosition);
+  assert.match(html, /id="copy-scene"/);
+  assert.match(html, /id="share-scene"/);
+  assert.match(app, /StormScopeSceneCodec\.fromHash\(location\.hash\)/);
+  assert.match(app, /navigator\.share/);
+  assert.match(app, /navigator\.clipboard\.writeText/);
+  assert.match(serviceWorker, /\.\/js\/scene-codec\.js/);
 });
 
 test('fatal recovery keeps shell cache and exports redacted diagnostics', () => {

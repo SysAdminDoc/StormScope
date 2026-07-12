@@ -497,12 +497,13 @@ button:focus-visible {
 }
 
 .saved-views-panel { display: grid; gap: 7px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 12px; }
-.saved-view-row, .saved-view-actions { display: flex; gap: 6px; }
+.saved-view-row, .saved-view-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .saved-views-panel input, .saved-views-panel select, .saved-views-panel button { min-width: 0; padding: 7px 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-dark); color: var(--text); font: inherit; }
 .saved-views-panel input, .saved-views-panel select { width: 100%; }
 .saved-views-panel button { flex: 1; cursor: pointer; }
 .saved-views-panel button:disabled { opacity: 0.45; cursor: not-allowed; }
 .saved-state-status { min-height: 1.4em; line-height: 1.4; }
+#scene-link-output { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 10px; }
 
 .search-panel { position: fixed; top: calc(74px + env(safe-area-inset-top)); right: calc(12px + env(safe-area-inset-right)); z-index: 1050; width: min(390px, calc(100% - 24px)); max-height: calc(100vh - 98px - env(safe-area-inset-bottom)); overflow: hidden; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-panel); backdrop-filter: blur(var(--blur)); }
 .search-heading-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; }

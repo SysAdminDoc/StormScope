@@ -2,7 +2,7 @@
   'use strict';
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.78.0';
+  var APP_VERSION = '0.79.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -72,6 +72,10 @@
   var searchRenderMetrics = { fullRenders: 0, windowRenders: 0, markerSyncs: 0 };
   var savedStore = null;
   var saveLastViewTimer = null;
+  var startupSharedScene = null;
+  var startupSceneError = false;
+  var pendingSceneFrameTime = null;
+  var pendingSceneCameraId = null;
   var cameraDataTimestamp = null;
   var diagnostics = StormScopeDiagnostics.create();
   var radarWasPlaying = false;
@@ -309,6 +313,20 @@
     radarFrames = discovery.frames;
     if (!radarFrames.length) throw new Error('selected provider returned no frames');
     radarIndex = radarFrames.length - 1;
+    if (pendingSceneFrameTime != null) {
+      var nearestIndex = 0;
+      var nearestDistance = Infinity;
+      radarFrames.forEach(function (frame, index) {
+        var distance = Math.abs(Number(frame.time) - pendingSceneFrameTime);
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestIndex = index;
+        }
+      });
+      if (nearestDistance <= 30 * 60 * 1000) radarIndex = nearestIndex;
+      else setSavedStateStatus(tr('views.sceneFrameExpired'), true);
+      pendingSceneFrameTime = null;
+    }
     updateRadarScrubber();
     updateRadarProviderUI();
     updateCoverageLayer();
@@ -1059,6 +1077,12 @@
       });
       updateDataFreshness();
       scheduleSearchRender();
+      if (pendingSceneCameraId != null) {
+        var sharedCamera = allCameras.find(function (camera) { return String(camera.id) === pendingSceneCameraId; });
+        if (sharedCamera) openCameraModal(sharedCamera);
+        else setSavedStateStatus(tr('views.sceneCameraUnavailable'), true);
+        pendingSceneCameraId = null;
+      }
     } catch (e) {
       if (e.name === 'AbortError') return;
       document.getElementById('camera-count').textContent = tr('camera.failed');
@@ -1375,6 +1399,72 @@
     };
   }
 
+  function captureSharedScene() {
+    var snapshot = captureViewSnapshot();
+    var filters = cameraSearchFilters();
+    return {
+      map: { lat: snapshot.center.lat, lon: snapshot.center.lon, zoom: snapshot.zoom },
+      layers: snapshot.layers,
+      radar: {
+        opacity: radarOpacity,
+        palette: radarPalette,
+        speed: radarAnimationSpeed,
+        frameTime: radarFrames[radarIndex] ? radarFrames[radarIndex].time : null
+      },
+      alertSeverity: document.getElementById('alert-severity').value,
+      cameraFilters: {
+        query: filters.query,
+        state: filters.state,
+        source: filters.source,
+        type: filters.type,
+        sort: document.getElementById('camera-sort').value,
+        healthy: filters.healthy
+      },
+      activeCameraId: activeCamera ? activeCamera.id : null
+    };
+  }
+
+  function sharedSceneUrl() {
+    var url = new URL(location.href);
+    url.hash = StormScopeSceneCodec.toHash(captureSharedScene());
+    return url.toString();
+  }
+
+  function applySharedScene(scene) {
+    applyViewSnapshot({
+      center: { lat: scene.map.lat, lon: scene.map.lon },
+      zoom: scene.map.zoom,
+      layers: scene.layers,
+      opacity: { radar: scene.radar.opacity }
+    });
+    radarPalette = scene.radar.palette;
+    radarAnimationSpeed = scene.radar.speed;
+    document.getElementById('radar-palette').value = radarPalette;
+    document.getElementById('radar-speed').value = String(radarAnimationSpeed);
+    applyRadarPalette();
+    document.getElementById('alert-severity').value = scene.alertSeverity;
+    document.getElementById('camera-query').value = scene.cameraFilters.query;
+    document.getElementById('camera-state').value = scene.cameraFilters.state;
+    document.getElementById('camera-source').value = scene.cameraFilters.source;
+    document.getElementById('camera-type').value = scene.cameraFilters.type;
+    document.getElementById('camera-sort').value = scene.cameraFilters.sort;
+    document.getElementById('camera-healthy').checked = scene.cameraFilters.healthy;
+    document.getElementById('camera-favorites').checked = false;
+    pendingSceneFrameTime = scene.radar.frameTime;
+    pendingSceneCameraId = scene.activeCameraId;
+    setSavedStateStatus(tr('views.sceneLoaded'));
+  }
+
+  function readStartupSharedScene() {
+    try {
+      return StormScopeSceneCodec.fromHash(location.hash);
+    } catch (error) {
+      startupSceneError = true;
+      diagnostics.capture(error, 'scene-url');
+      return null;
+    }
+  }
+
   function applyViewSnapshot(snapshot) {
     if (!snapshot) return;
     map.setView([snapshot.center.lat, snapshot.center.lon], snapshot.zoom);
@@ -1456,14 +1546,70 @@
     }, 400);
   }
 
-  function initSavedState() {
+  function initSavedState(options) {
+    options = options || {};
     savedStore = StormScopeSavedState.createStore();
     var storeStatus = savedStore.getStatus();
     refreshSavedViews();
     if (storeStatus.recoveredFromBackup) setSavedStateStatus(tr('views.recovered'));
     else if (storeStatus.loadError) setSavedStateStatus(tr('views.corrupt'), true);
     else if (!storeStatus.persistent) setSavedStateStatus(tr('views.sessionOnly'), true);
-    applyViewSnapshot(savedStore.getLastView());
+    if (options.restoreLastView !== false) applyViewSnapshot(savedStore.getLastView());
+  }
+
+  function showManualSceneLink(url) {
+    var output = document.getElementById('scene-link-output');
+    output.value = url;
+    output.classList.remove('hidden');
+    document.getElementById('scene-link-label').classList.remove('hidden');
+    output.focus();
+    output.select();
+  }
+
+  async function copySceneUrl(url) {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      try {
+        await navigator.clipboard.writeText(url);
+        return true;
+      } catch (error) { /* try the synchronous fallback */ }
+    }
+    showManualSceneLink(url);
+    if (typeof document.execCommand === 'function' && document.execCommand('copy')) return true;
+    return false;
+  }
+
+  async function copyCurrentScene() {
+    try {
+      var url = sharedSceneUrl();
+      var copied = await copySceneUrl(url);
+      setSavedStateStatus(tr(copied ? 'views.sceneCopied' : 'views.sceneCopyManual'), !copied);
+      return copied;
+    } catch (error) {
+      setSavedStateStatus(tr('views.sceneCopyFailed'), true);
+      return false;
+    }
+  }
+
+  async function shareCurrentScene() {
+    var url;
+    try { url = sharedSceneUrl(); } catch (error) {
+      setSavedStateStatus(tr('views.sceneShareFailed'), true);
+      return;
+    }
+    if (typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ title: tr('app.title'), text: tr('views.sceneShareText'), url: url });
+        setSavedStateStatus(tr('views.sceneShared'));
+        return;
+      } catch (error) {
+        if (error && error.name === 'AbortError') {
+          setSavedStateStatus(tr('views.sceneShareCanceled'));
+          return;
+        }
+      }
+    }
+    var copied = await copySceneUrl(url);
+    setSavedStateStatus(tr(copied ? 'views.sceneShareFallback' : 'views.sceneCopyManual'), !copied);
   }
 
   function updateDataFreshness(failed) {
@@ -2786,6 +2932,8 @@
       };
       reader.readAsText(file);
     });
+    document.getElementById('copy-scene').addEventListener('click', function () { copyCurrentScene(); });
+    document.getElementById('share-scene').addEventListener('click', function () { shareCurrentScene(); });
 
     document.addEventListener('keydown', function (e) {
       if (e.key !== 'Escape') return;
@@ -3108,7 +3256,10 @@
     initMap();
     initWeatherUnits();
     initRadarPreferences();
-    initSavedState();
+    startupSharedScene = readStartupSharedScene();
+    initSavedState({ restoreLastView: !startupSharedScene });
+    if (startupSharedScene) applySharedScene(startupSharedScene);
+    else if (startupSceneError) setSavedStateStatus(tr('views.sceneInvalid'), true);
     bindUI();
     updateMonitorSelectionUi();
     initRadar();
@@ -3128,6 +3279,10 @@
     getCameraLoadMetrics: function () { return Object.assign({}, cameraLoadMetrics); },
     getCameraResults: function () { return currentCameraResults.slice(); },
     getSearchRenderMetrics: function () { return Object.assign({}, searchRenderMetrics); },
+    captureSharedScene: captureSharedScene,
+    getSharedSceneUrl: sharedSceneUrl,
+    getActiveCameraId: function () { return activeCamera ? String(activeCamera.id) : null; },
+    getRadarFrameTime: function () { return radarFrames[radarIndex] ? radarFrames[radarIndex].time : null; },
     getMonitorState: function () {
       return { selected: monitorSelection.count(), players: monitorRegistry ? monitorRegistry.count() : 0 };
     },

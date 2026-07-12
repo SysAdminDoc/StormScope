@@ -166,6 +166,12 @@
         <button id="import-state" type="button">Import</button>
         <input id="import-state-file" class="hidden" type="file" accept="application/json,.json">
       </div>
+      <div class="saved-view-actions">
+        <button id="copy-scene" type="button">Copy scene link</button>
+        <button id="share-scene" type="button">Share scene</button>
+      </div>
+      <label id="scene-link-label" class="hidden" for="scene-link-output">Scene link</label>
+      <input id="scene-link-output" class="hidden" type="text" readonly>
       <div id="saved-state-status" class="saved-state-status" role="status" aria-live="polite"></div>
     </div>
   </div>
@@ -296,6 +302,7 @@
   <script src="js/i18n.js"></script>
   <script src="js/camera-store.js"></script>
   <script src="js/saved-state.js"></script>
+  <script src="js/scene-codec.js"></script>
   <script src="js/multi-camera.js"></script>
   <script src="js/context-layers.js"></script>
   <script src="js/diagnostics.js"></script>

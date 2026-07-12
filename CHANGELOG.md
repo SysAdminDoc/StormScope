@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.79.0 - 2026-07-12
+
+- Added bounded versioned scene links that restore map center/zoom, public layer state, radar opacity/palette/playback speed/nearest frame, alert severity, camera filters, and an active camera while excluding favorites, saved views, locale, theme, and unknown private fields.
+- Added Copy and Web Share actions with clipboard/manual fallbacks, safe old/invalid-link recovery that preserves local state, offline codec caching, and unit/runtime/headless browser coverage. Service-worker cache bumped to v52.
+
 ## v0.78.0 - 2026-07-12
 
 - Added deterministic release packaging with strict parity checks across package metadata, app runtime, README badge, latest changelog, lockfile, and every tool user agent. Packaging requires a clean committed tree, rejects stale/newer tags and stale artifacts, and writes exactly `dist/StormScope-vX.Y.Z.zip`.
