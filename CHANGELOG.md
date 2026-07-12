@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.45.0 - 2026-07-12
+
+### +19 verified official Puerto Rico ACT traffic cameras
+- Added the Puerto Rico Highways and Transportation Authority's public 21-row ITS inventory using exact provider IDs, coordinates, bilingual location metadata, direct same-origin image paths, and canonical per-camera source pages. No geocoding is used and the three existing Puerto Rico EarthCam views remain distinct.
+- Each candidate must return a real nontrivial JPEG, a current Puerto Rico-local provider timestamp no more than two minutes old, and an advancing timestamp or frame hash across repeated probes. A short probe is followed by a bounded 60-second retry for slower roadway updates; **19 cameras advanced**.
+- Rejected two real-but-frozen placeholder frames: SAN JUAN-CAM 07 has not updated since April 20, 2026, and SAN JUAN-CAM 30 since March 1, 2026. A transient HTTP 500 in an earlier pass aborted the provider refresh and preserved all last-known-good rows; the successful retry returned the complete verified set.
+- Recorded ACT attribution, copyright/usage posture, 30-second observed refresh cadence, source URLs, and verification evidence in the ignored report. Corpus **33,615 → 33,634**; Puerto Rico **3 → 22**; deterministic shards and localized counts rebuilt; service-worker cache bumped to v22.
+
 ## v0.44.0 - 2026-07-12
 
 ### Complete verified coverage across all 50 states: 120 WV511 HLS cameras

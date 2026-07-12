@@ -357,6 +357,72 @@ class FetchMergeTests(unittest.TestCase):
         with self.assertRaises(fetch_cameras.IncompleteProviderError):
             fetch_cameras._parse_wv511_inventory(payload)
 
+    def test_pr_act_image_verification_requires_advancing_current_snapshots(self):
+        candidate = {"camera_id": "13"}
+        first = (100, "hash-one", 4000, "2026-07-12T03:30:00-04:00")
+        second = (103, "hash-two", 4100, "2026-07-12T03:30:03-04:00")
+        with (
+            mock.patch.object(fetch_cameras, "_pr_act_snapshot", side_effect=[first, second]),
+            mock.patch.object(fetch_cameras.time, "sleep"),
+        ):
+            verified, errors, snapshots = fetch_cameras.verify_pr_act_images(
+                [candidate], probe_interval=0, workers=1
+            )
+        self.assertEqual({"13"}, verified)
+        self.assertEqual({}, errors)
+        self.assertEqual(second, snapshots["13"])
+
+    def test_pr_act_uses_exact_provider_coordinates_and_current_image_metadata(self):
+        inventory = {
+            "d": {
+                "Success": True,
+                "Cctv": [
+                    {
+                        "Id": 13,
+                        "Name": "26-0.7_02 NB-IPV",
+                        "LocationEn": "PR-26 Miramar",
+                        "Latitude": 18.456976,
+                        "Longitude": -66.080456,
+                        "ImageUrl": "/images/cameras/26-0.7_02_MD-IPV.jpg",
+                    }
+                ],
+            }
+        }
+        snapshot = (1783841403, "hash", 54004, "2026-07-12T03:30:03-04:00")
+        with (
+            mock.patch.object(fetch_cameras, "PR_ACT_MINIMUM_INVENTORY", 1),
+            mock.patch.object(fetch_cameras, "post_json", return_value=inventory),
+            mock.patch.object(
+                fetch_cameras,
+                "verify_pr_act_images",
+                return_value=({"13"}, {}, {"13": snapshot}),
+            ),
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Puerto Rico (ACT/ITS)", fetch_cameras.fetch_pr_act
+            )
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual(1, len(result.cameras))
+        row = result.cameras[0]
+        self.assertEqual("Puerto Rico", row["state"])
+        self.assertEqual("PR-26 Miramar (26-0.7_02 NB-IPV)", row["name"])
+        self.assertEqual(18.456976, row["lat"])
+        self.assertEqual(-66.080456, row["lon"])
+        self.assertEqual("NB", row["direction"])
+        self.assertEqual("13", row["provider_camera_id"])
+        self.assertEqual(
+            "https://its.act.pr.gov/images/cameras/26-0.7_02_MD-IPV.jpg",
+            row["url"],
+        )
+        self.assertEqual("2026-07-12T03:30:03-04:00", row["provider_timestamp"])
+        self.assertEqual(30, row["refresh_cadence_seconds"])
+        self.assertEqual(
+            "https://its.act.pr.gov/en/TrafficImage.aspx?Large=1&id=13",
+            row["source_url"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

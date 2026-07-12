@@ -20,6 +20,7 @@ data/us_city_livestream_report*.json
 data/oktraffic_discovery_report*.json
 data/deldot_discovery_report*.json
 data/wv511_discovery_report*.json
+data/pr_act_discovery_report*.json
 ROADMAP.md
 Roadmap_Blocked.md
 RESEARCH.md

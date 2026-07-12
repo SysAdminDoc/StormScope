@@ -6,6 +6,7 @@ Usage: python scripts/fetch_cameras.py
 """
 import argparse
 import concurrent.futures
+import hashlib
 import json
 import gzip
 import html
@@ -16,6 +17,7 @@ import time
 import urllib.request
 import urllib.error
 import urllib.parse
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Callable
@@ -1612,6 +1614,278 @@ def _http_bytes(url, headers=None, data=None, method=None, timeout=30):
     return raw
 
 
+# ── Puerto Rico (ACT/ITS) — exact public inventory + current still metadata ──
+PR_ACT_MINIMUM_INVENTORY = 20
+PR_ACT_TIMEZONE = timezone(timedelta(hours=-4))
+
+
+def _pr_act_snapshot(candidate):
+    camera_id = int(candidate['camera_id'])
+    metadata_url = 'https://its.act.pr.gov/en/TrafficImage.aspx/GetImageData'
+    player_url = f'https://its.act.pr.gov/en/TrafficImage.aspx?Large=1&id={camera_id}'
+    payload = post_json(
+        metadata_url,
+        {'id': camera_id},
+        headers={
+            'Origin': 'https://its.act.pr.gov',
+            'Referer': player_url,
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        timeout=20,
+    )
+    metadata = payload.get('d') or {}
+    image_source = str(metadata.get('ImageSource', '')).strip()
+    if urllib.parse.unquote(image_source) != urllib.parse.unquote(candidate['image_path']):
+        raise ValueError('placeholder:metadata_image_mismatch')
+    timestamp_text = str(metadata.get('DateTime', '')).strip()
+    try:
+        provider_time = datetime.strptime(
+            timestamp_text, '%m/%d/%Y %I:%M:%S %p'
+        ).replace(tzinfo=PR_ACT_TIMEZONE)
+    except ValueError as exc:
+        raise ValueError('placeholder:invalid_provider_timestamp') from exc
+    age_seconds = (datetime.now(timezone.utc) - provider_time.astimezone(timezone.utc)).total_seconds()
+    if age_seconds < -120 or age_seconds > 120:
+        raise ValueError(f'placeholder:stale_provider_timestamp:{int(age_seconds)}')
+
+    image_url = candidate['url'] + '?' + urllib.parse.urlencode({'DateTime': timestamp_text})
+    request = urllib.request.Request(
+        image_url,
+        headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0',
+            'Accept': 'image/*,*/*',
+            'Referer': player_url,
+        },
+    )
+    response = urllib.request.urlopen(request, timeout=20, context=ctx)
+    content_type = (response.headers.get('Content-Type') or '').lower()
+    body = response.read()
+    if (not body.startswith(_IMAGE_MAGIC)
+            or 'image' not in content_type
+            or len(body) < 1024):
+        raise ValueError('placeholder:not_a_current_image')
+    return (
+        int(provider_time.timestamp()),
+        hashlib.sha256(body).hexdigest(),
+        len(body),
+        provider_time.isoformat(),
+    )
+
+
+def verify_pr_act_images(candidates, probe_interval=6.0, workers=8):
+    def probe_all():
+        snapshots = {}
+        errors = {}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {
+                executor.submit(_pr_act_snapshot, candidate): candidate['camera_id']
+                for candidate in candidates
+            }
+            for future in concurrent.futures.as_completed(futures):
+                camera_id = futures[future]
+                try:
+                    snapshots[camera_id] = future.result()
+                except Exception as exc:
+                    if isinstance(exc, urllib.error.HTTPError):
+                        if exc.code in {404, 410}:
+                            reason = f'confirmed_dead:http_{exc.code}'
+                        elif exc.code == 429:
+                            reason = 'rate_limited:http_429'
+                        elif exc.code in {401, 403}:
+                            reason = f'authentication_required:http_{exc.code}'
+                        else:
+                            reason = f'transient_network:http_{exc.code}'
+                    else:
+                        reason = str(exc)
+                        if not reason.startswith(('placeholder:', 'confirmed_dead:')):
+                            reason = f'transient_network:{reason}'
+                    errors[camera_id] = reason
+        return snapshots, errors
+
+    first, first_errors = probe_all()
+    if probe_interval:
+        time.sleep(probe_interval)
+    second, second_errors = probe_all()
+    verified = {
+        candidate['camera_id'] for candidate in candidates
+        if candidate['camera_id'] in first and candidate['camera_id'] in second
+        and (
+            second[candidate['camera_id']][0] > first[candidate['camera_id']][0]
+            or second[candidate['camera_id']][1] != first[candidate['camera_id']][1]
+        )
+    }
+    errors = {}
+    for candidate in candidates:
+        camera_id = candidate['camera_id']
+        if camera_id in verified:
+            continue
+        first_error = first_errors.get(camera_id)
+        second_error = second_errors.get(camera_id)
+        if first_error and second_error:
+            first_class = first_error.split(':', 1)[0]
+            second_class = second_error.split(':', 1)[0]
+            if first_class == second_class:
+                errors[camera_id] = second_error
+            else:
+                errors[camera_id] = (
+                    f'transient_network:inconsistent_probes:{first_class},{second_class}'
+                )
+        elif first_error or second_error:
+            detail = first_error or second_error
+            errors[camera_id] = f'transient_network:inconsistent_probes:{detail}'
+        else:
+            errors[camera_id] = 'confirmed_not_live:not_advancing'
+    return verified, errors, second
+
+
+def fetch_pr_act():
+    inventory_url = 'https://its.act.pr.gov/en/Default.aspx/GetCctv'
+    source_page = 'https://its.act.pr.gov/en/TrafficCameras.aspx'
+    payload = post_json(
+        inventory_url,
+        {},
+        headers={
+            'Origin': 'https://its.act.pr.gov',
+            'Referer': source_page,
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        timeout=30,
+    )
+    result = payload.get('d') or {}
+    records = result.get('Cctv') or []
+    if not result.get('Success') or len(records) < PR_ACT_MINIMUM_INVENTORY:
+        raise IncompleteProviderError(
+            f'Puerto Rico ACT inventory incomplete ({len(records)} rows)'
+        )
+    candidates = []
+    seen_ids = set()
+    seen_urls = set()
+    for record in records:
+        camera_id = str(record.get('Id', '')).strip()
+        image_path = str(record.get('ImageUrl', '')).strip()
+        try:
+            lat = float(record.get('Latitude'))
+            lon = float(record.get('Longitude'))
+        except (TypeError, ValueError):
+            continue
+        if (not camera_id.isdigit()
+                or camera_id in seen_ids
+                or not image_path.startswith('/images/cameras/')
+                or not (17.8 <= lat <= 18.6 and -67.5 <= lon <= -65.1)):
+            continue
+        image_url = urllib.parse.urljoin(
+            'https://its.act.pr.gov', urllib.parse.quote(image_path, safe='/')
+        )
+        if image_url in seen_urls:
+            continue
+        raw_name = str(record.get('Name', '')).strip()
+        location = str(record.get('LocationEn', '')).strip()
+        if location and raw_name and location.casefold() != raw_name.casefold():
+            name = f'{location} ({raw_name})'
+        else:
+            name = location or raw_name
+        if not name:
+            continue
+        direction_match = re.search(r'\b(NB|SB|EB|WB)\b', f'{raw_name} {location}', re.I)
+        candidates.append({
+            'camera_id': camera_id,
+            'name': name,
+            'lat': lat,
+            'lon': lon,
+            'url': image_url,
+            'image_path': image_path,
+            'direction': direction_match.group(1).upper() if direction_match else '',
+        })
+        seen_ids.add(camera_id)
+        seen_urls.add(image_url)
+    if len(candidates) != len(records):
+        raise IncompleteProviderError(
+            f'Puerto Rico ACT inventory validation rejected '
+            f'{len(records) - len(candidates)} of {len(records)} rows'
+        )
+
+    verified, verification_errors, snapshots = verify_pr_act_images(candidates)
+    retry_candidates = [
+        candidate for candidate in candidates
+        if verification_errors.get(candidate['camera_id']) ==
+        'confirmed_not_live:not_advancing'
+    ]
+    if retry_candidates:
+        retry_verified, retry_errors, retry_snapshots = verify_pr_act_images(
+            retry_candidates, probe_interval=60.0, workers=8
+        )
+        verified.update(retry_verified)
+        snapshots.update(retry_snapshots)
+        for candidate in retry_candidates:
+            camera_id = candidate['camera_id']
+            if camera_id in retry_verified:
+                verification_errors.pop(camera_id, None)
+            else:
+                verification_errors[camera_id] = retry_errors.get(
+                    camera_id, 'confirmed_not_live:not_advancing'
+                )
+    rejected = []
+    count = 0
+    for candidate in sorted(candidates, key=lambda item: int(item['camera_id'])):
+        camera_id = candidate['camera_id']
+        if camera_id not in verified:
+            reason = verification_errors.get(camera_id, 'transient_network:incomplete')
+            rejected.append({
+                'provider_camera_id': camera_id,
+                'name': candidate['name'],
+                'failure_class': reason.split(':', 1)[0],
+                'detail': reason,
+            })
+            continue
+        player_url = f'https://its.act.pr.gov/en/TrafficImage.aspx?Large=1&id={camera_id}'
+        add_camera(
+            candidate['name'], candidate['lat'], candidate['lon'], candidate['url'],
+            'image', 'Puerto Rico', '', candidate['direction'], 'dot', player_url, 30,
+        )
+        cameras[-1]['provider_camera_id'] = camera_id
+        cameras[-1]['provider_timestamp'] = snapshots[camera_id][3]
+        count += 1
+
+    failure_counts = {}
+    for item in rejected:
+        key = item['failure_class']
+        failure_counts[key] = failure_counts.get(key, 0) + 1
+    atomic_write_json(
+        DATA_DIR / 'pr_act_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'Puerto Rico (ACT/ITS)',
+            'inventory_url': inventory_url,
+            'source_url': source_page,
+            'geographic_scope': 'Puerto Rico; current public ACT camera inventory',
+            'attribution': 'Puerto Rico Highways and Transportation Authority (ACT)',
+            'license_or_usage_terms': (
+                'ACT pages state copyright and All rights reserved; no explicit camera '
+                'reuse license is displayed. StormScope links the public live images '
+                'in place and does not mirror them.'
+            ),
+            'refresh_cadence_seconds': 30,
+            'inventory_count': len(records),
+            'verified_live': count,
+            'rejected': len(rejected),
+            'rejected_by_class': failure_counts,
+            'rejections': sorted(rejected, key=lambda item: int(item['provider_camera_id'])),
+        },
+    )
+    transient = [
+        item for item in rejected
+        if item['failure_class'] in {
+            'transient_network', 'rate_limited', 'authentication_required'
+        }
+    ]
+    if transient:
+        raise IncompleteProviderError(
+            f'Puerto Rico ACT had {len(transient)} retryable image failures'
+        )
+    print(f'  Puerto Rico ACT image verification: {count}/{len(records)} advancing')
+    return count
+
+
 # ── West Virginia (WV511) — official map inventory + per-camera live HLS ──
 WV511_COUNTIES = {
     'BER': 'Berkeley',
@@ -2102,6 +2376,7 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
         ('Wyoming DOT', fetch_wyoming),
         ('Maryland (CHART)', fetch_maryland_chart),
         ('West Virginia (WV511)', fetch_wv511),
+        ('Puerto Rico (ACT/ITS)', fetch_pr_act),
         ('Florida (ArcGIS)', fetch_fl_arcgis),
         ('Georgia DOT (DataTables)', lambda: fetch_511_datatables(
             'https://511ga.org', 'Georgia', 'https://511ga.org/cctv')),

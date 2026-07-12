@@ -1,7 +1,7 @@
-[![Version](https://img.shields.io/badge/version-0.44.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.45.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
-[![Cameras](https://img.shields.io/badge/cameras-33%2C615-cyan)]()
+[![Cameras](https://img.shields.io/badge/cameras-33%2C634-cyan)]()
 [![Live Site](https://img.shields.io/badge/live_site-open_StormScope-7c3aed)](https://sysadmindoc.github.io/StormScope/)
 
 # StormScope
@@ -16,7 +16,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 - **Accessible Radar Timeline** — Direct frame scrubbing, manual-only/0.5×/1×/2× playback, explicit frame age and light/moderate/heavy scale text, plus standard, color-vision-friendly, and high-contrast presentations
 - **Official Weather Alerts** — Viewport-scoped NWS watches, warnings, and advisories with severity polygons and accessible details
 - **Optional Hazard Context** — Keyless NOAA lightning density and viewport-bounded NIFC wildfire perimeters start off, show freshness and attribution, fail independently, and stay below warnings and cameras
-- **33,615 Live Cameras** — Traffic, weather, park, EarthCam, LiveBeaches, and webcam feeds across all 50 US states plus Washington, D.C., territories, and international locations
+- **33,634 Live Cameras** — Traffic, weather, park, EarthCam, LiveBeaches, and webcam feeds across all 50 US states plus Washington, D.C., territories, and international locations
 - **Fast Camera Discovery** — Progressive state shards make the map interactive before the full corpus loads; accessible search, health/source/type filters, health-first name/distance sorting, and a virtualized result list stay synchronized with the map
 - **Local Favorites and Views** — Favorite cameras, restore the last map/layer/opacity state, save named views, and validate portable JSON imports/exports without an account
 - **English and Spanish UI** — Live language switching covers controls, recovery states, weather/radar labels, WMO conditions, alerts, dates, numbers, and units with deterministic English fallback
@@ -32,7 +32,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 
 ## Camera Coverage
 
-33,615 cameras across all 50 US states plus Washington, D.C.:
+33,634 cameras across all 50 US states plus Washington, D.C.:
 
 | State | Cameras | | State | Cameras |
 |-------|--------:|-|-------|--------:|
@@ -56,7 +56,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 | Nevada | 661 | | Mississippi | 160 |
 | Alabama | 597 | | Maine | 146 |
 
-Plus: Rhode Island (139), West Virginia (120 WV511 streams: 119 healthy and one retryable degraded), Vermont (93), Montana (39), and the remaining lower-count US states, international country/territory buckets, 172 active National Park webcams, 275 EarthCam Network feeds, 4 LiveBeaches direct embeds, and 437 playback-verified YouTube streams.
+Plus: Rhode Island (139), West Virginia (120 WV511 streams: 119 healthy and one retryable degraded), Vermont (93), Montana (39), Puerto Rico (22, including 19 advancing official ACT traffic cameras), and the remaining lower-count US states and territories, international country buckets, 172 active National Park webcams, 275 EarthCam Network feeds, 4 LiveBeaches direct embeds, and 437 playback-verified YouTube streams.
 
 ## Quick Start
 
@@ -130,7 +130,7 @@ Run the data fetcher to pull fresh camera data from all state DOT APIs:
 python scripts/fetch_cameras.py
 ```
 
-This queries 30+ live sources and transactionally merges DOT/NPS results into `data/cameras.json`. Provider failures retain their last-known-good rows, curated sources are preserved, schema and coverage gates run before replacement, and the previous valid dataset is saved as `data/cameras.json.bak`. Use `--provider Oklahoma`, `--provider Delaware`, or `--provider "West Virginia"` for a bounded provider-only refresh; HLS feeds must advance across two media-playlist probes before acceptance. Restore the rollback copy with:
+This queries 30+ live sources and transactionally merges DOT/NPS results into `data/cameras.json`. Provider failures retain their last-known-good rows, curated sources are preserved, schema and coverage gates run before replacement, and the previous valid dataset is saved as `data/cameras.json.bak`. Use `--provider Oklahoma`, `--provider Delaware`, `--provider "West Virginia"`, or `--provider "Puerto Rico"` for a bounded provider-only refresh; HLS feeds must advance across two media-playlist probes, while ACT images must expose current provider timestamps and advancing frames. Restore the rollback copy with:
 
 ```bash
 python scripts/fetch_cameras.py --rollback
