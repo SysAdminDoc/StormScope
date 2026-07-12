@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.76.0 - 2026-07-12
+
+- Added a compact short-height layout for 844×390 and 667×375 landscape viewports. Panels now stay within the viewport and scroll internally, search results retain a usable minimum region, modal/monitor media compresses without hiding headers, and the full radar timeline remains reachable.
+- Extended headless rendered QA across both dark and light themes for layers, alerts, search, camera modal, multi-camera monitor, and radar controls. Each surface is screenshot-captured in memory and every key control is focused and scrolled into view. Service-worker cache bumped to v49.
+
 ## v0.75.0 - 2026-07-12
 
 - Completed deterministic Spanish runtime localization for all 16 compass directions, CAP severity/urgency/certainty vocabulary, camera source taxonomy, radar degradation reasons, unavailable timestamps, and service-worker cache/recovery failures.

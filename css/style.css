@@ -1236,3 +1236,66 @@ button:focus-visible {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+@media (max-height: 500px) and (max-width: 900px) {
+  #header {
+    top: calc(6px + env(safe-area-inset-top));
+    left: calc(6px + env(safe-area-inset-left));
+    right: calc(6px + env(safe-area-inset-right));
+    padding: 6px 10px;
+  }
+
+  #header h1 { font-size: 14px; }
+  #data-freshness { display: none; }
+  .status-chip { min-height: 24px; padding: 2px 6px; }
+
+  .panel,
+  .search-panel,
+  .alerts-panel {
+    top: calc(54px + env(safe-area-inset-top));
+    max-height: calc(100vh - 62px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    overscroll-behavior: contain;
+  }
+
+  .search-panel {
+    right: calc(6px + env(safe-area-inset-right));
+    overflow-y: auto;
+    padding: 10px;
+  }
+
+  .camera-results-scroll {
+    height: min(150px, 30vh);
+    min-height: 90px;
+  }
+
+  .alerts-panel {
+    left: calc(6px + env(safe-area-inset-left));
+  }
+
+  #radar-controls {
+    bottom: calc(4px + env(safe-area-inset-bottom));
+    padding: 4px 8px;
+  }
+
+  .radar-scrubber-row { margin-top: 3px; }
+
+  .modal-content {
+    width: calc(100% - 12px);
+    max-height: calc(100vh - 8px);
+  }
+
+  .modal-header { padding: 8px 12px; }
+  .modal-feed { min-height: 120px; }
+  .modal-feed img,
+  .modal-feed video { max-height: 52vh; }
+  .camera-provenance,
+  .modal-weather { padding: 10px 12px; }
+
+  .monitor-content { height: calc(100vh - 8px); }
+  .monitor-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 8px; }
+  .monitor-player,
+  .monitor-link-fallback { min-height: 110px; }
+  .monitor-player img,
+  .monitor-player video,
+  .monitor-player iframe { height: 130px; }
+}

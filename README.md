@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.75.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.76.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
 [![Cameras](https://img.shields.io/badge/cameras-36%2C592-cyan)]()
@@ -31,7 +31,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 - **Light and Dark Themes** — Glassmorphism UI with a matching CartoDB dark/light basemap; the Appearance control offers Match system (respects `prefers-color-scheme`), Always dark, and Always light, and the choice persists locally
 - **No API Keys** — Runs entirely client-side with free, keyless APIs
 - **Installable PWA** — Offline camera/radar fallback, visible cache/freshness state, safe cache recovery, and deterministic update activation
-- **Mobile Responsive** — Works on desktop and mobile browsers
+- **Mobile Responsive** — Portrait and short-height landscape layouts keep layers, alerts, search results, camera details, multi-camera monitoring, and the radar timeline internally scrollable and keyboard reachable in both themes
 
 ## Camera Coverage
 

@@ -6,6 +6,81 @@ const http = require('node:http');
 const path = require('node:path');
 const { chromium } = require('@playwright/test');
 
+async function assertSurfaceWithinViewport(page, selector, label) {
+  const bounds = await page.locator(selector).evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom,
+      width: window.innerWidth, height: window.innerHeight };
+  });
+  assert.ok(bounds.top >= -1 && bounds.left >= -1, `${label} starts outside viewport: ${JSON.stringify(bounds)}`);
+  assert.ok(bounds.right <= bounds.width + 1 && bounds.bottom <= bounds.height + 1,
+    `${label} ends outside viewport: ${JSON.stringify(bounds)}`);
+}
+
+async function assertControlsReachable(page, containerSelector, selectors) {
+  for (const selector of selectors) {
+    const reachable = await page.locator(selector).evaluate((element, containerSelector) => {
+      element.focus();
+      element.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      const rect = element.getBoundingClientRect();
+      const container = element.closest(containerSelector).getBoundingClientRect();
+      return document.activeElement === element && rect.bottom > Math.max(0, container.top) &&
+        rect.top < Math.min(window.innerHeight, container.bottom) && rect.right > 0 && rect.left < window.innerWidth;
+    }, containerSelector);
+    assert.equal(reachable, true, `${selector} must be keyboard reachable in ${containerSelector}`);
+  }
+}
+
+async function exerciseLandscapeLayout(page, theme) {
+  const layersToggle = page.getByRole('button', { name: 'Toggle layers panel' });
+  if (await layersToggle.getAttribute('aria-expanded') !== 'true') await layersToggle.click();
+  await page.locator('#app-theme').selectOption(theme);
+  await page.locator('#radar-speed').selectOption('800');
+  if (!await page.locator('#toggle-alerts').isChecked()) await page.locator('#toggle-alerts').check();
+  await assertSurfaceWithinViewport(page, '#layers-panel', `${theme} layers`);
+  await assertControlsReachable(page, '#layers-panel', ['#toggle-radar', '#alert-severity', '#app-locale', '#clear-cache']);
+  assert.ok((await page.screenshot()).length > 1000);
+  await layersToggle.click();
+
+  await page.locator('#alerts-status').filter({ hasText: /alert|alerta/ }).waitFor({ state: 'visible' });
+  await assertSurfaceWithinViewport(page, '#alerts-panel', `${theme} alerts`);
+  assert.ok((await page.screenshot()).length > 1000);
+
+  const searchToggle = page.getByRole('button', { name: /Find cameras|Buscar cámaras/ });
+  await searchToggle.click();
+  await page.locator('#search-panel').waitFor({ state: 'visible' });
+  await assertSurfaceWithinViewport(page, '#search-panel', `${theme} search`);
+  await assertControlsReachable(page, '#search-panel', [
+    '#camera-query', '#camera-state', '#camera-source', '#camera-type', '#camera-sort',
+    '#camera-healthy', '#camera-favorites', '#camera-results-scroll'
+  ]);
+  assert.ok((await page.screenshot()).length > 1000);
+
+  const firstResult = page.locator('.camera-result:visible').first();
+  await firstResult.locator('.camera-result-open').click();
+  await page.locator('#camera-modal').waitFor({ state: 'visible' });
+  await assertSurfaceWithinViewport(page, '#camera-modal .modal-content', `${theme} camera modal`);
+  await page.locator('#modal-close').focus();
+  assert.equal(await page.locator('#modal-close').evaluate((element) => document.activeElement === element), true);
+  assert.ok((await page.screenshot()).length > 1000);
+  await page.locator('#modal-close').click();
+
+  if ((await page.evaluate(() => window._stormscope.getMonitorState().selected)) < 2) {
+    await page.locator('.camera-result:visible .monitor-result').nth(0).click();
+    await page.locator('.camera-result:visible .monitor-result').nth(1).click();
+  }
+  await page.locator('#open-monitor').click();
+  await page.locator('#monitor-modal').waitFor({ state: 'visible' });
+  await assertSurfaceWithinViewport(page, '#monitor-modal .modal-content', `${theme} monitor`);
+  assert.ok((await page.screenshot()).length > 1000);
+  await page.locator('#monitor-close').click();
+  await searchToggle.click();
+
+  await page.waitForFunction(() => !document.getElementById('radar-play').disabled);
+  await assertSurfaceWithinViewport(page, '#radar-controls', `${theme} radar timeline`);
+  await assertControlsReachable(page, '#radar-controls', ['#radar-prev', '#radar-play', '#radar-next', '#radar-scrubber']);
+}
+
 const root = path.resolve(__dirname, '..');
 const pixel = fs.readFileSync(path.join(root, 'assets', 'icon-192.png'));
 const mimeTypes = {
@@ -640,6 +715,18 @@ async function main() {
     await mobile.getByRole('button', { name: 'Toggle layers panel' }).click();
     assert.equal(await mobile.getByRole('button', { name: 'Toggle layers panel' }).getAttribute('aria-expanded'), 'true');
     await mobile.getByRole('region', { name: 'Map layers' }).waitFor({ state: 'visible' });
+
+    for (const viewport of [{ width: 844, height: 390 }, { width: 667, height: 375 }]) {
+      const landscape = await context.newPage();
+      landscape.baseURL = baseURL;
+      await landscape.setViewportSize(viewport);
+      await addNetworkFixtures(landscape);
+      await waitForApp(landscape, false);
+      assert.equal(await landscape.locator('html').evaluate((element) => element.scrollWidth > element.clientWidth), false);
+      await exerciseLandscapeLayout(landscape, 'dark');
+      await exerciseLandscapeLayout(landscape, 'light');
+      await landscape.close();
+    }
 
     assert.deepEqual(errors, []);
     console.log('Headless desktop/mobile/modal/offline/cache/accessibility smoke passed.');
