@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.41.0 - 2026-07-12
+
+### +41 more playback-verified fixed-location YouTube live cameras (396 → 437)
+- Second bounded YouTube discovery pass over 22 beach/pier/harbor/plaza queries plus the `See.Cam`/`SeeJH` operator families. **124 streams verified live** via the player + yt-dlp `is_live` gate.
+- Manually vetted all 63 geocode candidates; **rejected 22** false placements and non-fixed feeds: "Blind Donkey … Cruz Bay, St John USVI" → Santa Cruz, **California**; "Newburyport Waterfront" → **Missouri**; "Pompano Beach Underwater Pier" → **Las Vegas**; "Fort Lauderdale … Elbo Room" → Kokomo, **Indiana** (geocoder matched the word "LIVING"); "Town Square … SeeJH.com" → **Nevada**; generic "Pier Camera"/"Lifeguard HQ"; "AC Boardwalk" → **Sweden**; and bare city/county-centroid placements.
+- Accepted **41** streams whose named venue geocoded to the correct point in the correct state (Florida beaches & Keys, Clearwater/Panama City/Destin/Fort Myers resorts, Acadia & Bar Harbor Maine, San Diego Shelter Island, SF Pier 39, Outer Banks Avalon Pier, Dauphin Island Sea Lab AL, Ashland OR plaza, Bedford WY, Katmai Brooks Falls bear cam, plus international Fuerteventura Airport and Montego Bay). Two coordinates were **hand-corrected** where the geocoder resolved to a park HQ / bay centroid instead of the camera: Katmai Brooks Falls and the Inn at Bay Harbor.
+- Each accepted stream stored a curated coordinate override and was re-verified live immediately before writing. Corpus 33,454 → **33,495**; rebuilt 45 shards; service-worker cache v18.
+
 ## v0.40.0 - 2026-07-12
 
 ### +27 playback-verified fixed-location YouTube live cameras (369 → 396)
