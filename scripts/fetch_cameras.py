@@ -1172,22 +1172,74 @@ def fetch_wyoming():
         return 0
 
 
-# ── Maryland CHART ──
+# ── Maryland CHART (live HLS via per-camera Wowza server) ──
 def fetch_maryland_chart():
     try:
-        data = fetch_json('https://chart.maryland.gov/DataFeeds/GetCamerasJson', timeout=20)
-        count = 0
+        api_url = 'https://chart.maryland.gov/DataFeeds/GetCamerasJson'
+        data = fetch_json(api_url, timeout=20)
         items = data if isinstance(data, list) else data.get('cameras', [])
+        candidates = []
+        seen = set()
         for cam in items:
-            lat = cam.get('lat') or cam.get('latitude')
-            lon = cam.get('lon') or cam.get('longitude')
-            name = cam.get('description', '') or cam.get('name', 'MD Camera')
-            img_url = cam.get('imageUrl', '') or cam.get('url', '')
-            if not img_url:
+            if cam.get('commMode') != 'ONLINE':
                 continue
-            add_camera(name, lat, lon, img_url, detect_type(img_url),
-                       'Maryland', '', '', 'dot')
+            cam_ip = str(cam.get('cctvIp') or '').strip()
+            cam_id = str(cam.get('id') or '').strip()
+            if not cam_ip.endswith('.sha.maryland.gov') or not cam_id:
+                continue
+            stream_url = f'https://{cam_ip}/rtplive/{cam_id}/playlist.m3u8'
+            if stream_url in seen:
+                continue
+            seen.add(stream_url)
+            candidates.append((cam, stream_url))
+        verified_urls, verification_errors = verify_live_hls(
+            [stream_url for _, stream_url in candidates]
+        )
+        count = 0
+        rejected = []
+        for cam, stream_url in candidates:
+            if stream_url not in verified_urls:
+                rejected.append({
+                    'provider_camera_id': cam.get('id'),
+                    'name': cam.get('name') or cam.get('description'),
+                    'url': stream_url,
+                    'failure_class': verification_errors.get(
+                        stream_url, 'transient_network:verification_incomplete'
+                    ),
+                })
+                continue
+            before = len(cameras)
+            name = cam.get('description', '') or cam.get('name', 'Maryland Camera')
+            source_url = cam.get('publicVideoURL') or api_url
+            if not str(source_url).startswith('https://'):
+                source_url = api_url
+            add_camera(name, cam.get('lat'), cam.get('lon'), stream_url, 'hls',
+                       'Maryland', '', '', 'dot', source_url, 10)
+            if len(cameras) == before:
+                rejected.append({
+                    'provider_camera_id': cam.get('id'),
+                    'name': name,
+                    'url': stream_url,
+                    'failure_class': 'location_ambiguous:invalid_coordinates',
+                })
+                continue
+            cameras[-1]['provider_camera_id'] = str(cam.get('id'))
             count += 1
+        atomic_write_json(
+            DATA_DIR / 'maryland_chart_discovery_report.json',
+            {
+                'generated_at': utc_now_iso(),
+                'provider': 'Maryland (CHART)',
+                'source_url': api_url,
+                'attribution': 'Maryland Department of Transportation State Highway Administration',
+                'inventory_total': len(items),
+                'candidates': len(candidates),
+                'verified_live': count,
+                'rejected': rejected,
+            },
+            indent=2,
+        )
+        print(f'  Maryland CHART HLS verification: {count}/{len(candidates)} advancing')
         return count
     except Exception as e:
         print(f'  Maryland CHART: {e}')

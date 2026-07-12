@@ -1,0 +1,227 @@
+{
+  "generated_at": "2026-07-12T01:19:33Z",
+  "provider": "Maryland (CHART)",
+  "source_url": "https://chart.maryland.gov/DataFeeds/GetCamerasJson",
+  "attribution": "Maryland Department of Transportation State Highway Administration",
+  "inventory_total": 553,
+  "candidates": 550,
+  "verified_live": 514,
+  "rejected": [
+    {
+      "provider_camera_id": "0f019fd7443a0032004606363d235daa",
+      "name": "I-95 N OF MD 279 EX 109 (C-001)",
+      "url": "https://strmr5.sha.maryland.gov/rtplive/0f019fd7443a0032004606363d235daa/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "31017318000800e50063d336c4235c0a",
+      "name": "WPL C-501 at Gantry N-1",
+      "url": "https://strmr3.sha.maryland.gov/rtplive/31017318000800e50063d336c4235c0a/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "0000309302ce009e0052fa36c4235c0a",
+      "name": "I-95 N AT I-695 (C-024B)",
+      "url": "https://strmr5.sha.maryland.gov/rtplive/0000309302ce009e0052fa36c4235c0a/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "e4ff858700010075004d823633235daa",
+      "name": "MC110",
+      "url": "https://strmr5.sha.maryland.gov/rtplive/e4ff858700010075004d823633235daa/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "8000825e004200a9005fd336c4235c0a",
+      "name": "403051",
+      "url": "https://strmr3.sha.maryland.gov/rtplive/8000825e004200a9005fd336c4235c0a/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "7e0106cf00240070004602366d235daa",
+      "name": "316055",
+      "url": "https://strmr3.sha.maryland.gov/rtplive/7e0106cf00240070004602366d235daa/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "c5ff65d2008900a1004f823633235daa",
+      "name": "Paint Branch Pkwy at MFRI",
+      "url": "https://strmr10.sha.maryland.gov/rtplive/c5ff65d2008900a1004f823633235daa/playlist.m3u8",
+      "failure_class": "confirmed_dead:http_404"
+    },
+    {
+      "provider_camera_id": "bb01285801f700d700437a45351f0214",
+      "name": "424001",
+      "url": "https://strmr5.sha.maryland.gov/rtplive/bb01285801f700d700437a45351f0214/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "bd000b0500ea00af004502366d235daa",
+      "name": "Ardwick Ardmore Rd at Pennsy Dr",
+      "url": "https://strmr10.sha.maryland.gov/rtplive/bd000b0500ea00af004502366d235daa/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "1a0172df2d83001300503336c4235c0a",
+      "name": "WPL C-511 at Gantry N-19 MP 3.9",
+      "url": "https://strmr3.sha.maryland.gov/rtplive/1a0172df2d83001300503336c4235c0a/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "8701c10d073d000800447a45351f0214",
+      "name": "710001",
+      "url": "https://strmr5.sha.maryland.gov/rtplive/8701c10d073d000800447a45351f0214/playlist.m3u8",
+      "failure_class": "transient_network:http_503"
+    },
+    {
+      "provider_camera_id": "9d00119e00770051004de33696235daa",
+      "name": "316044",
+      "url": "https://strmr5.sha.maryland.gov/rtplive/9d00119e00770051004de33696235daa/playlist.m3u8",
+      "failure_class": "transient_network:http_503"
+    },
+    {
+      "provider_camera_id": "3101502603df0077004d823633235daa",
+      "name": "MC10",
+      "url": "https://strmr5.sha.maryland.gov/rtplive/3101502603df0077004d823633235daa/playlist.m3u8",
+      "failure_class": "transient_network:http_503"
+    },
+    {
+      "provider_camera_id": "95ff27b100a900b4004b823633235daa",
+      "name": "713010",
+      "url": "https://strmr5.sha.maryland.gov/rtplive/95ff27b100a900b4004b823633235daa/playlist.m3u8",
+      "failure_class": "transient_network:http_503"
+    },
+    {
+      "provider_camera_id": "0f000df40056008d004be2369e235daa",
+      "name": "403014",
+      "url": "https://strmr5.sha.maryland.gov/rtplive/0f000df40056008d004be2369e235daa/playlist.m3u8",
+      "failure_class": "transient_network:http_503"
+    },
+    {
+      "provider_camera_id": "0e016c1f00a400250064d336c4235c0a",
+      "name": "WPL C-500.2B US 50 WB WHITEHALL RD EAST",
+      "url": "https://strmr5.sha.maryland.gov/rtplive/0e016c1f00a400250064d336c4235c0a/playlist.m3u8",
+      "failure_class": "transient_network:http_503"
+    },
+    {
+      "provider_camera_id": "3b00149c00e000a6004e3436c4235c0a",
+      "name": "I-695 N OF Ex 17 (403037)",
+      "url": "https://strmr5.sha.maryland.gov/rtplive/3b00149c00e000a6004e3436c4235c0a/playlist.m3u8",
+      "failure_class": "transient_network:http_503"
+    },
+    {
+      "provider_camera_id": "6900ed9d0021000a005ed336c4235c0a",
+      "name": "old I-95/495 AT MD 210 (316010)",
+      "url": "https://strmr5.sha.maryland.gov/rtplive/6900ed9d0021000a005ed336c4235c0a/playlist.m3u8",
+      "failure_class": "transient_network:http_503"
+    },
+    {
+      "provider_camera_id": "c600bd2b00070075004d823633235daa",
+      "name": "I-495 & River Rd (MD 190)",
+      "url": "https://strmr5.sha.maryland.gov/rtplive/c600bd2b00070075004d823633235daa/playlist.m3u8",
+      "failure_class": "transient_network:http_503"
+    },
+    {
+      "provider_camera_id": "bc001dc100950059004d06363d235daa",
+      "name": "ICC MD 200 WB AT NEEDWOOD RD, MM 5.1 (C-209)",
+      "url": "https://strmr5.sha.maryland.gov/rtplive/bc001dc100950059004d06363d235daa/playlist.m3u8",
+      "failure_class": "transient_network:http_503"
+    },
+    {
+      "provider_camera_id": "67017443019100e300441a366e230214",
+      "name": "I-895 N OF EASTERN AVE (C-034)",
+      "url": "https://strmr5.sha.maryland.gov/rtplive/67017443019100e300441a366e230214/playlist.m3u8",
+      "failure_class": "transient_network:http_503"
+    },
+    {
+      "provider_camera_id": "9600f63a001d0096005dd336c4235c0a",
+      "name": "502003",
+      "url": "https://strmr5.sha.maryland.gov/rtplive/9600f63a001d0096005dd336c4235c0a/playlist.m3u8",
+      "failure_class": "transient_network:http_503"
+    },
+    {
+      "provider_camera_id": "4c01ba5800f700d700437a45351f0214",
+      "name": "403010",
+      "url": "https://strmr5.sha.maryland.gov/rtplive/4c01ba5800f700d700437a45351f0214/playlist.m3u8",
+      "failure_class": "transient_network:http_503"
+    },
+    {
+      "provider_camera_id": "3301a05801f700d700437a45351f0214",
+      "name": "316008",
+      "url": "https://strmr5.sha.maryland.gov/rtplive/3301a05801f700d700437a45351f0214/playlist.m3u8",
+      "failure_class": "transient_network:http_503"
+    },
+    {
+      "provider_camera_id": "6f01dd5800f700d700437a45351f0214",
+      "name": "502015",
+      "url": "https://strmr5.sha.maryland.gov/rtplive/6f01dd5800f700d700437a45351f0214/playlist.m3u8",
+      "failure_class": "transient_network:http_503"
+    },
+    {
+      "provider_camera_id": "f70054e703e00077004d823633235daa",
+      "name": "MC11",
+      "url": "https://strmr5.sha.maryland.gov/rtplive/f70054e703e00077004d823633235daa/playlist.m3u8",
+      "failure_class": "transient_network:http_503"
+    },
+    {
+      "provider_camera_id": "480010fc00bf00580045e2369e235daa",
+      "name": "MD 24 AT MD 924 (412004)",
+      "url": "https://strmr5.sha.maryland.gov/rtplive/480010fc00bf00580045e2369e235daa/playlist.m3u8",
+      "failure_class": "transient_network:http_503"
+    },
+    {
+      "provider_camera_id": "f6ff8097001e00bd004e3336c4235c0a",
+      "name": "ICC MD 200E E of US29 MM 16.2 (C-222)",
+      "url": "https://strmr5.sha.maryland.gov/rtplive/f6ff8097001e00bd004e3336c4235c0a/playlist.m3u8",
+      "failure_class": "transient_network:http_503"
+    },
+    {
+      "provider_camera_id": "ce0018ce01bd00590054fa36c4235c0a",
+      "name": "ICC MD 200 WB W OF US 1, MM 20.1 (C228)",
+      "url": "https://strmr5.sha.maryland.gov/rtplive/ce0018ce01bd00590054fa36c4235c0a/playlist.m3u8",
+      "failure_class": "transient_network:http_503"
+    },
+    {
+      "provider_camera_id": "2f009e8a00e50039004606363d235daa",
+      "name": "C026",
+      "url": "https://strmr5.sha.maryland.gov/rtplive/2f009e8a00e50039004606363d235daa/playlist.m3u8",
+      "failure_class": "transient_network:http_503"
+    },
+    {
+      "provider_camera_id": "d8000e99005e00ba004a02366d235daa",
+      "name": "316031",
+      "url": "https://strmr5.sha.maryland.gov/rtplive/d8000e99005e00ba004a02366d235daa/playlist.m3u8",
+      "failure_class": "transient_network:http_503"
+    },
+    {
+      "provider_camera_id": "52ff0db500bd00a8004be2369e235daa",
+      "name": "403013",
+      "url": "https://strmr5.sha.maryland.gov/rtplive/52ff0db500bd00a8004be2369e235daa/playlist.m3u8",
+      "failure_class": "transient_network:http_503"
+    },
+    {
+      "provider_camera_id": "7a00f61e0084002f005dd336c4235c0a",
+      "name": "I-895 S of Boston St",
+      "url": "https://strmr3.sha.maryland.gov/rtplive/7a00f61e0084002f005dd336c4235c0a/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "050160c100cc005f0063d336c4235c0a",
+      "name": "WPL C-513 at Gantry N-26",
+      "url": "https://strmr3.sha.maryland.gov/rtplive/050160c100cc005f0063d336c4235c0a/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "fb00dde002650075004d823633235daa",
+      "name": "MC72",
+      "url": "https://strmr5.sha.maryland.gov/rtplive/fb00dde002650075004d823633235daa/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    },
+    {
+      "provider_camera_id": "6202603d2d7f001300503336c4235c0a",
+      "name": "WPL C-508 at Gantry S-12 MP 34.3",
+      "url": "https://strmr3.sha.maryland.gov/rtplive/6202603d2d7f001300503336c4235c0a/playlist.m3u8",
+      "failure_class": "transient_network:The read operation timed out"
+    }
+  ]
+}

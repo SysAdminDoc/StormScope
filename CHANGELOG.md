@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.37.0 - 2026-07-11
+
+### Recovered Maryland CHART live cameras (+514 verified HLS)
+- Repaired the broken Maryland CHART fetcher, which had silently returned zero because the feed no longer exposes an `imageUrl` field. Each `ONLINE` camera now streams from its per-camera Wowza server via `https://{cctvIp}/rtplive/{id}/playlist.m3u8` (`strmr3/strmr5/strmr10.sha.maryland.gov`).
+- Accepted only playlists whose media segments advanced across two probes: **523 of 550** online cameras verified live, 27 non-advancing playlists rejected to the ignored report. Corpus 30,151 → **30,665**; Maryland grows from 9 remnant rows to 523.
+- Added the `*.sha.maryland.gov` streaming hosts to the CSP `media-src`/`connect-src`, bumped the service-worker cache version, and rebuilt the 41 deterministic shards.
+- Audited three other stale state fetchers: Minnesota (`tr.511mn.org` DNS retired) and Iowa (`tr.511ia.org` now an SPA) need new endpoints (research); New Mexico's snapshot host serves HTTP only (443 refused) and cannot meet the HTTPS/CSP contract — all left retryable.
+
 ## v0.36.0 - 2026-07-11
 
 ### New England 511 state-label correction (223 false geocodes fixed)
