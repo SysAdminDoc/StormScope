@@ -52,16 +52,65 @@
     return longitude;
   }
 
-  function envelopeUrl(west, south, east, north) {
+  function envelopeUrl(west, south, east, north, offset, pageSize) {
     var parameters = new URLSearchParams({
       where: "attr_IncidentTypeCategory='WF'",
       geometry: [west, south, east, north].join(','),
       geometryType: 'esriGeometryEnvelope', inSR: '4326',
       spatialRel: 'esriSpatialRelIntersects',
       outFields: 'OBJECTID,poly_IncidentName,poly_GISAcres,poly_DateCurrent,attr_PercentContained,attr_IncidentTypeCategory',
-      returnGeometry: 'true', outSR: '4326', f: 'geojson', resultRecordCount: '2000'
+      returnGeometry: 'true', outSR: '4326', f: 'geojson',
+      orderByFields: 'OBJECTID ASC',
+      resultOffset: String(offset || 0),
+      resultRecordCount: String(pageSize || 2000)
     });
     return providers.wildfires.layerUrl + '/query?' + parameters.toString();
+  }
+
+  function transferLimitExceeded(payload) {
+    return Boolean(payload && (
+      payload.exceededTransferLimit ||
+      payload.properties && payload.properties.exceededTransferLimit
+    ));
+  }
+
+  async function fetchWildfirePages(options) {
+    options = options || {};
+    var urls = options.urls;
+    var fetchPage = options.fetchPage;
+    var pageSize = Math.max(1, Math.min(2000, Number(options.pageSize) || 2000));
+    var maxPages = Math.max(1, Number(options.maxPages) || 100);
+    if (!Array.isArray(urls) || !urls.length || typeof fetchPage !== 'function') {
+      throw new TypeError('wildfire page URLs and fetch callback are required');
+    }
+    var features = [];
+    var pageCount = 0;
+    for (var urlIndex = 0; urlIndex < urls.length; urlIndex += 1) {
+      var offset = 0;
+      var complete = false;
+      while (!complete) {
+        if (pageCount >= maxPages) throw new Error('NIFC wildfire pagination exceeded the page cap');
+        var pageUrl = new URL(urls[urlIndex]);
+        pageUrl.searchParams.set('orderByFields', 'OBJECTID ASC');
+        pageUrl.searchParams.set('resultOffset', String(offset));
+        pageUrl.searchParams.set('resultRecordCount', String(pageSize));
+        var payload = await fetchPage(pageUrl.toString(), options.signal);
+        pageCount += 1;
+        if (!payload || payload.type !== 'FeatureCollection' || !Array.isArray(payload.features)) {
+          throw new TypeError('NIFC wildfire page is not GeoJSON');
+        }
+        features.push.apply(features, payload.features);
+        complete = !transferLimitExceeded(payload);
+        if (!complete && payload.features.length === 0) {
+          throw new Error('NIFC wildfire pagination made no progress');
+        }
+        offset += payload.features.length;
+      }
+    }
+    return {
+      collection: normalizeWildfireCollection({ type: 'FeatureCollection', features: features }),
+      pageCount: pageCount
+    };
   }
 
   function buildWildfireQueries(bounds) {
@@ -116,6 +165,8 @@
     providers: providers,
     parseLightningCapabilities: parseLightningCapabilities,
     buildWildfireQueries: buildWildfireQueries,
+    fetchWildfirePages: fetchWildfirePages,
+    transferLimitExceeded: transferLimitExceeded,
     normalizeWildfireCollection: normalizeWildfireCollection,
     parseWildfireMetadata: parseWildfireMetadata,
     freshness: freshness

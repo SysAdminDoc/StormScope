@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.69.0 - 2026-07-12
+
+- NIFC wildfire queries now paginate in stable `OBJECTID ASC` order using the service's advertised page size until ArcGIS clears `exceededTransferLimit`, including the GeoJSON `properties` form used by the live service.
+- Added bounded page caps, no-progress rejection, abort propagation, dateline-page deduplication, and a monotonically guarded request generation. A failed later page cannot replace a complete wildfire layer; the prior snapshot remains visible with an explicit incomplete state.
+- Expanded unit and headless fixtures to require multiple pages and prove page-two geometry renders. Service-worker cache bumped to v44.
+
 ## v0.68.0 - 2026-07-12
 
 - Enforced RainViewer's public request limit with a pure rolling 60-second budget capped at a conservative 90 requests. Every radar tile, invisible preload tile, coverage tile, and center-sampling image is reserved before the browser can start its request.

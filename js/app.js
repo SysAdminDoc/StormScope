@@ -94,6 +94,7 @@
   var lightningStatusState = 'off';
   var wildfireLayer = null;
   var wildfireAbort = null;
+  var wildfireGeneration = 0;
   var wildfireRefreshTimer = null;
   var wildfireMoveTimer = null;
   var wildfireUpdatedAt = null;
@@ -625,7 +626,7 @@
       setContextStatusElement('wildfire-status', tr('context.loading'), 'loading');
       return;
     }
-    if (wildfireStatusState === 'error') {
+    if (wildfireStatusState === 'error' || wildfireStatusState === 'incomplete') {
       setContextStatusElement('wildfire-status', tr(wildfireLayer ? 'context.refreshFailed' : 'context.unavailable'), 'error');
       return;
     }
@@ -731,6 +732,8 @@
     if (!document.getElementById('toggle-wildfires').checked || document.hidden) return;
     if (wildfireAbort) wildfireAbort.abort();
     wildfireAbort = new AbortController();
+    var generation = ++wildfireGeneration;
+    var signal = wildfireAbort.signal;
     wildfireStatusState = 'loading';
     renderWildfireStatus();
     try {
@@ -739,19 +742,22 @@
       var urls = StormScopeContextLayers.buildWildfireQueries({
         west: bounds.getWest(), south: bounds.getSouth(), east: bounds.getEast(), north: bounds.getNorth()
       });
-      var requests = [provider.layerUrl + '?f=pjson'].concat(urls).map(function (url) {
-        return fetch(url, { cache: 'no-store', signal: wildfireAbort.signal }).then(function (response) {
-          if (!response.ok) throw new Error('HTTP ' + response.status);
-          return response.json();
-        });
+      var metadataResponse = await fetch(provider.layerUrl + '?f=pjson', { cache: 'no-store', signal: signal });
+      if (!metadataResponse.ok) throw new Error('HTTP ' + metadataResponse.status);
+      var metadata = StormScopeContextLayers.parseWildfireMetadata(await metadataResponse.json());
+      var paged = await StormScopeContextLayers.fetchWildfirePages({
+        urls: urls,
+        pageSize: metadata.maxRecordCount,
+        signal: signal,
+        fetchPage: function (url, pageSignal) {
+          return fetch(url, { cache: 'no-store', signal: pageSignal }).then(function (response) {
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            return response.json();
+          });
+        }
       });
-      var payloads = await Promise.all(requests);
-      var metadata = StormScopeContextLayers.parseWildfireMetadata(payloads[0]);
-      var merged = { type: 'FeatureCollection', features: [] };
-      payloads.slice(1).forEach(function (payload) {
-        if (payload && Array.isArray(payload.features)) merged.features.push.apply(merged.features, payload.features);
-      });
-      var collection = StormScopeContextLayers.normalizeWildfireCollection(merged);
+      if (generation !== wildfireGeneration) return;
+      var collection = paged.collection;
       var nextLayer = L.geoJSON(collection, {
         pane: 'contextVectorPane',
         style: { color: '#ff6b35', weight: 2, opacity: 0.9, fillColor: '#ff6b35', fillOpacity: 0.09 },
@@ -769,14 +775,16 @@
       renderWildfireStatus();
     } catch (error) {
       if (error.name === 'AbortError') return;
-      wildfireStatusState = 'error';
+      if (generation !== wildfireGeneration) return;
+      wildfireStatusState = wildfireLayer ? 'incomplete' : 'error';
       renderWildfireStatus();
     } finally {
-      scheduleWildfireRefresh();
+      if (generation === wildfireGeneration) scheduleWildfireRefresh();
     }
   }
 
   function disableWildfires() {
+    wildfireGeneration += 1;
     if (wildfireAbort) wildfireAbort.abort();
     clearTimeout(wildfireRefreshTimer);
     clearTimeout(wildfireMoveTimer);

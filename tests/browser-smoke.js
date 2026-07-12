@@ -77,16 +77,17 @@ async function addNetworkFixtures(page, metrics) {
       return;
     }
     if (url.startsWith('https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query')) {
+      const offset = Number(new URL(url).searchParams.get('resultOffset') || 0);
       await route.fulfill({
         contentType: 'application/geo+json',
         body: JSON.stringify({ type: 'FeatureCollection', features: [{
           type: 'Feature',
-          geometry: { type: 'Polygon', coordinates: [[[-100, 39], [-99, 39], [-99, 40], [-100, 40], [-100, 39]]] },
+          geometry: { type: 'Polygon', coordinates: [[[-100 + offset, 39], [-99 + offset, 39], [-99 + offset, 40], [-100 + offset, 40], [-100 + offset, 39]]] },
           properties: {
-            OBJECTID: 1, poly_IncidentName: 'Fixture Fire', poly_GISAcres: 1250,
+            OBJECTID: offset + 1, poly_IncidentName: 'Fixture Fire ' + (offset + 1), poly_GISAcres: 1250,
             poly_DateCurrent: Date.now() - 600000, attr_PercentContained: 35, attr_IncidentTypeCategory: 'WF'
           }
-        }] })
+        }], properties: { exceededTransferLimit: offset === 0 } })
       });
       return;
     }
@@ -255,7 +256,7 @@ async function main() {
     await page.locator('#toggle-lightning').check();
     await page.locator('#toggle-wildfires').check();
     await page.locator('#lightning-status').filter({ hasText: '15 min density' }).waitFor({ state: 'visible' });
-    await page.locator('#wildfire-status').filter({ hasText: '1 wildfire perimeters' }).waitFor({ state: 'visible' });
+    await page.locator('#wildfire-status').filter({ hasText: '2 wildfire perimeters' }).waitFor({ state: 'visible' });
     assert.deepEqual(await page.evaluate(() => window._stormscope.getContextState()), {
       lightning: true, wildfires: true, lightningStatus: 'ready', wildfireStatus: 'ready',
       rasterZ: '325', vectorZ: '390', warningZ: '400', cameraZ: '600'
@@ -290,7 +291,7 @@ async function main() {
     await page.locator('#toggle-lightning').check();
     await page.locator('#toggle-wildfires').check();
     await page.locator('#lightning-status').filter({ hasText: 'Official data unavailable' }).waitFor({ state: 'visible' });
-    await page.locator('#wildfire-status').filter({ hasText: '1 wildfire perimeters' }).waitFor({ state: 'visible' });
+    await page.locator('#wildfire-status').filter({ hasText: '2 wildfire perimeters' }).waitFor({ state: 'visible' });
     assert.deepEqual(await page.evaluate(() => window._stormscope.getContextState()), {
       lightning: false, wildfires: true, lightningStatus: 'error', wildfireStatus: 'ready',
       rasterZ: '325', vectorZ: '390', warningZ: '400', cameraZ: '600'

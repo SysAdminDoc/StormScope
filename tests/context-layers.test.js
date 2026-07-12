@@ -29,8 +29,50 @@ test('wildfire queries are viewport bounded and split safely across the dateline
   assert.equal(query.searchParams.get('geometry'), '-125,30,-65,50');
   assert.equal(query.searchParams.get('where'), "attr_IncidentTypeCategory='WF'");
   assert.equal(query.searchParams.get('f'), 'geojson');
+  assert.equal(query.searchParams.get('orderByFields'), 'OBJECTID ASC');
+  assert.equal(query.searchParams.get('resultOffset'), '0');
   const dateline = context.buildWildfireQueries({ west: 170, south: 45, east: 190, north: 70 });
   assert.equal(dateline.length, 2);
+});
+
+test('wildfire pagination follows transfer flags and deduplicates dateline pages', async () => {
+  const geometry = { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [0, 0]]] };
+  const urls = context.buildWildfireQueries({ west: 170, south: 45, east: 190, north: 70 });
+  const offsets = [];
+  const result = await context.fetchWildfirePages({
+    urls,
+    pageSize: 1,
+    fetchPage: async url => {
+      const parsed = new URL(url);
+      const offset = Number(parsed.searchParams.get('resultOffset'));
+      offsets.push(offset);
+      const id = parsed.searchParams.get('geometry').startsWith('170') ? 1 : (offset ? 2 : 1);
+      return {
+        type: 'FeatureCollection',
+        properties: { exceededTransferLimit: !parsed.searchParams.get('geometry').startsWith('170') && offset === 0 },
+        features: [{ type: 'Feature', geometry, properties: { OBJECTID: id, attr_IncidentTypeCategory: 'WF' } }]
+      };
+    }
+  });
+  assert.deepEqual(offsets, [0, 0, 1]);
+  assert.deepEqual(result.collection.features.map(feature => feature.properties.OBJECTID), [1, 2]);
+  assert.equal(result.pageCount, 3);
+});
+
+test('wildfire pagination rejects no-progress and page-cap responses', async () => {
+  const url = context.buildWildfireQueries({ west: -125, south: 30, east: -65, north: 50 });
+  await assert.rejects(context.fetchWildfirePages({
+    urls: url,
+    fetchPage: async () => ({ type: 'FeatureCollection', exceededTransferLimit: true, features: [] })
+  }), /no progress/);
+  await assert.rejects(context.fetchWildfirePages({
+    urls: url,
+    maxPages: 1,
+    fetchPage: async () => ({
+      type: 'FeatureCollection', exceededTransferLimit: true,
+      features: [{ type: 'Feature', geometry: { type: 'Polygon', coordinates: [] }, properties: { OBJECTID: 1, attr_IncidentTypeCategory: 'WF' } }]
+    })
+  }), /page cap/);
 });
 
 test('wildfire responses retain unique wildfire polygons and expose metadata freshness', () => {
