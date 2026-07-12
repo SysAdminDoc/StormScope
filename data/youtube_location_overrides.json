@@ -1489,5 +1489,12 @@
     "lon": -64.6823639,
     "state": "U.S. Virgin Islands",
     "county": "St. Croix"
+  },
+  "5p_KGD4fJZs": {
+    "name": "earthTV White House Cam",
+    "lat": 38.90098,
+    "lon": -77.03648,
+    "state": "DC",
+    "county": "Washington"
   }
 }

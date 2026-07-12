@@ -82,6 +82,8 @@ test('static CSP removes inline script execution and mirrors trusted frame hosts
   assert.match(csp[1], /https:\/\/\*\.abbeyroad\.com/);
   assert.match(csp[1], /https:\/\/\*\.esbnyc\.com/);
   assert.match(csp[1], /https:\/\/\*\.ipcamlive\.com/);
+  assert.match(csp[1], /https:\/\/nzp-wowza01\.si\.edu/);
+  assert.match(csp[1], /https:\/\/nzp-wowza02\.si\.edu/);
   assert.doesNotMatch(html, /<script(?![^>]*\bsrc=)[^>]*>/i);
   assert.match(app, /navigator\.serviceWorker\.register\('sw\.js'\)/);
 

@@ -474,6 +474,42 @@ class FetchMergeTests(unittest.TestCase):
             referer=row["url"],
         )
 
+    def test_smithsonian_accepts_only_advancing_first_party_zoo_hls(self):
+        urls = [
+            "https://nzp-wowza02.si.edu/live_edge_nmr/nmr_1080_all.smil/playlist.m3u8",
+            "https://nzp-wowza02.si.edu/live_edge_nmr_02/nmr_02_1080_all.smil/playlist.m3u8",
+            "https://nzp-wowza01.si.edu/live_edge_lion/smil:lion01_all.smil/playlist.m3u8",
+        ]
+        with (
+            mock.patch.object(
+                fetch_cameras, "verify_live_hls", return_value=(set(urls), {})
+            ) as verifier,
+            mock.patch.object(fetch_cameras, "atomic_write_json"),
+        ):
+            result = fetch_cameras.run_fetcher(
+                "Smithsonian National Zoo",
+                fetch_cameras.fetch_smithsonian_national_zoo,
+            )
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual(3, len(result.cameras))
+        self.assertEqual(["11305", "11307", "11330"], [
+            row["provider_camera_id"] for row in result.cameras
+        ])
+        self.assertTrue(all(row["source"] == "smithsonian" for row in result.cameras))
+        self.assertTrue(all(row["type"] == "hls" for row in result.cameras))
+        self.assertTrue(all(row["state"] == "DC" for row in result.cameras))
+        self.assertEqual(2, sum(
+            row["lat"] == 38.930417 and row["lon"] == -77.048944
+            for row in result.cameras
+        ))
+        verifier.assert_called_once_with(
+            urls,
+            probe_interval=8.0,
+            workers=3,
+            referer="https://nationalzoo.si.edu/webcams",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.49.0 - 2026-07-12
+
+### +4 verified Washington, D.C. wildlife and landmark cameras
+- Added three first-party Smithsonian National Zoo HLS cameras: two distinct Naked Mole-Rat views at the official Small Mammal House location and the Lion Cam at the official Great Cats exhibit. Every manifest lacked `#EXT-X-ENDLIST`, exposed available media segments, and advanced across repeated eight-second probes; replay-scheduled panda and elephant feeds were rejected outside their stated live hours.
+- Added earthTV's fixed White House YouTube camera using the operator's exact Associated Press building coordinate. The canonical 11-character ID was independently verified live, public, embed-enabled, and backed by active HLS formats; StormScope stores only the YouTube ID and does not retain the direct media URL.
+- Added a dedicated `smithsonian` schema/runtime source, source filter, exact Zoo media CSP allowlist, provider refresh with transactional retention, ignored attribution/license report, and regression/browser coverage. U.S. Senate Capitol and Union Station rail cameras remain `location_ambiguous`; EarthTV's direct player is licensing-restricted; DC EarthCam/NPS results were duplicates or dead.
+- DDOT research covered 250 official location rows and 314 asset rows but found no public media URLs. Operational feeds are restricted, the old 2023 SkyVDN family produced 20/20 HTTP 404s with a mismatched TLS certificate, and the public DDOT app repeatedly returned HTTP 500; all remain excluded or retryable. Corpus **33,661 -> 33,665**; DC **5 -> 9**; YouTube **462 -> 463**; Smithsonian **0 -> 3**; service-worker cache bumped to v25.
+
 ## v0.48.0 - 2026-07-12
 
 ### Prevent Census-city false geocodes for state-name collisions

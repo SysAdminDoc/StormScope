@@ -1993,6 +1993,106 @@ def fetch_guam_gntf():
     return 1
 
 
+def fetch_smithsonian_national_zoo():
+    source_root = 'https://nationalzoo.si.edu/webcams'
+    candidates = [
+        {
+            'provider_camera_id': '11305',
+            'name': 'Smithsonian National Zoo Naked Mole-Rat Cam 1',
+            'lat': 38.930417,
+            'lon': -77.048944,
+            'url': ('https://nzp-wowza02.si.edu/live_edge_nmr/'
+                    'nmr_1080_all.smil/playlist.m3u8'),
+            'source_url': 'https://nationalzoo.si.edu/webcams/naked-mole-rat-cam',
+            'refresh_cadence_seconds': 11,
+        },
+        {
+            'provider_camera_id': '11307',
+            'name': 'Smithsonian National Zoo Naked Mole-Rat Cam 2',
+            'lat': 38.930417,
+            'lon': -77.048944,
+            'url': ('https://nzp-wowza02.si.edu/live_edge_nmr_02/'
+                    'nmr_02_1080_all.smil/playlist.m3u8'),
+            'source_url': 'https://nationalzoo.si.edu/webcams/naked-mole-rat-cam',
+            'refresh_cadence_seconds': 17,
+        },
+        {
+            'provider_camera_id': '11330',
+            'name': 'Smithsonian National Zoo Lion Cam',
+            'lat': 38.928487,
+            'lon': -77.046557,
+            'url': ('https://nzp-wowza01.si.edu/live_edge_lion/'
+                    'smil:lion01_all.smil/playlist.m3u8'),
+            'source_url': 'https://nationalzoo.si.edu/webcams/lion-cam',
+            'refresh_cadence_seconds': 11,
+        },
+    ]
+    verified, errors = verify_live_hls(
+        [item['url'] for item in candidates],
+        probe_interval=8.0,
+        workers=3,
+        referer=source_root,
+    )
+    accepted = []
+    rejected = []
+    for item in candidates:
+        if item['url'] not in verified:
+            detail = errors.get(item['url'], 'transient_network:verification_incomplete')
+            rejected.append({
+                'provider_camera_id': item['provider_camera_id'],
+                'name': item['name'],
+                'failure_class': detail.split(':', 1)[0],
+                'detail': detail,
+            })
+            continue
+        add_camera(
+            item['name'], item['lat'], item['lon'], item['url'], 'hls',
+            'DC', 'Washington', '', 'smithsonian', item['source_url'],
+            item['refresh_cadence_seconds'],
+        )
+        cameras[-1]['provider_camera_id'] = item['provider_camera_id']
+        cameras[-1]['category'] = 'wildlife'
+        accepted.append({
+            'provider_camera_id': item['provider_camera_id'],
+            'name': item['name'],
+            'lat': item['lat'],
+            'lon': item['lon'],
+            'url': item['url'],
+            'source_url': item['source_url'],
+            'refresh_cadence_seconds': item['refresh_cadence_seconds'],
+        })
+    atomic_write_json(
+        DATA_DIR / 'smithsonian_discovery_report.json',
+        {
+            'generated_at': utc_now_iso(),
+            'provider': 'Smithsonian National Zoo',
+            'geographic_scope': 'National Zoo, Washington, DC',
+            'location_evidence_urls': [
+                'https://nationalzoo.si.edu/animals/exhibits/small-mammal-house',
+                'https://nationalzoo.si.edu/animals/exhibits/great-cats',
+            ],
+            'attribution': 'Smithsonian National Zoo',
+            'license_or_usage_terms': (
+                'Smithsonian Terms permit personal, educational, and noncommercial '
+                'fair use with source attribution. StormScope hotlinks the first-party '
+                'live playlists and does not copy or rehost media.'
+            ),
+            'terms_url': 'https://www.si.edu/termsofuse',
+            'verified_live': len(accepted),
+            'rejected': len(rejected),
+            'accepted': accepted,
+            'rejections': rejected,
+        },
+    )
+    if any(item['failure_class'] in {
+            'transient_network', 'rate_limited', 'authentication_required'
+            } for item in rejected):
+        raise IncompleteProviderError('Smithsonian camera verification was incomplete')
+    print(f'  Smithsonian National Zoo HLS verification: '
+          f'{len(accepted)}/{len(candidates)} advancing')
+    return len(accepted)
+
+
 # ── West Virginia (WV511) — official map inventory + per-camera live HLS ──
 WV511_COUNTIES = {
     'BER': 'Berkeley',
@@ -2485,6 +2585,7 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
         ('West Virginia (WV511)', fetch_wv511),
         ('Puerto Rico (ACT/ITS)', fetch_pr_act),
         ('Guam (GNTF/IPCamLive)', fetch_guam_gntf),
+        ('Smithsonian National Zoo', fetch_smithsonian_national_zoo),
         ('Florida (ArcGIS)', fetch_fl_arcgis),
         ('Georgia DOT (DataTables)', lambda: fetch_511_datatables(
             'https://511ga.org', 'Georgia', 'https://511ga.org/cctv')),
