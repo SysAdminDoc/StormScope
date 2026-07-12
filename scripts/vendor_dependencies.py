@@ -15,11 +15,12 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from datetime import date
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST = ROOT / "vendor" / "dependencies.json"
-USER_AGENT = "StormScope/0.69.0 vendor-audit"
+USER_AGENT = "StormScope/0.70.0 vendor-audit"
 
 
 def sha256(data: bytes) -> str:
@@ -28,7 +29,7 @@ def sha256(data: bytes) -> str:
 
 def read_manifest(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
-    if payload.get("schema") != 1 or not isinstance(payload.get("packages"), list):
+    if payload.get("schema") != 2 or not isinstance(payload.get("packages"), list):
         raise ValueError("unsupported vendor manifest")
     return payload
 
@@ -61,6 +62,53 @@ def verify(manifest: dict[str, Any], root: Path = ROOT) -> list[str]:
     return failures
 
 
+def validate_advisory_dispositions(manifest: dict[str, Any], today: date | None = None) -> list[str]:
+    failures: list[str] = []
+    current = today or date.today()
+    for package in manifest["packages"]:
+        for advisory in package.get("supplemental_advisories", []):
+            label = f"{package['name']} {advisory.get('id', 'unknown')}"
+            try:
+                reviewed = date.fromisoformat(advisory["reviewed_on"])
+                expires = date.fromisoformat(advisory["expires_on"])
+            except (KeyError, TypeError, ValueError):
+                failures.append(f"{label}: malformed review dates")
+                continue
+            if expires < current:
+                failures.append(f"{label}: disposition expired {expires.isoformat()}")
+            if expires <= reviewed or (expires - reviewed).days > 180:
+                failures.append(f"{label}: review validity must be 1-180 days")
+            if advisory.get("status") not in {"affected", "mitigated", "not_affected_by_usage"}:
+                failures.append(f"{label}: invalid disposition status")
+            if not str(advisory.get("reason") or "").strip():
+                failures.append(f"{label}: disposition reason is required")
+            references = advisory.get("references")
+            if not isinstance(references, list) or not references or not all(
+                isinstance(url, str) and url.startswith("https://") for url in references
+            ):
+                failures.append(f"{label}: HTTPS advisory references are required")
+    return failures
+
+
+def stable_version(value: Any) -> tuple[int, int, int] | None:
+    if not isinstance(value, str):
+        return None
+    parts = value.split(".")
+    if len(parts) != 3 or any(not part.isdigit() for part in parts):
+        return None
+    return tuple(int(part) for part in parts)  # type: ignore[return-value]
+
+
+def latest_stable_version(metadata: dict[str, Any]) -> str:
+    latest = metadata.get("dist-tags", {}).get("latest")
+    if stable_version(latest) is not None:
+        return latest
+    stable = [version for version in metadata.get("versions", {}) if stable_version(version) is not None]
+    if not stable:
+        raise ValueError("npm metadata contains no stable semantic version")
+    return max(stable, key=lambda version: stable_version(version) or (0, 0, 0))
+
+
 def request_bytes(url: str, data: bytes | None = None, content_type: str | None = None) -> bytes:
     headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
     if content_type:
@@ -85,7 +133,7 @@ def check_updates(manifest: dict[str, Any]) -> list[str]:
     attention: list[str] = []
     for package in manifest["packages"]:
         metadata = package_metadata(package["name"])
-        latest = metadata.get("dist-tags", {}).get("latest")
+        latest = latest_stable_version(metadata)
         status = "current" if latest == package["version"] else f"newer stable {latest}"
         print(f"{package['name']}: pinned {package['version']} • {status}")
         if latest != package["version"]:
@@ -152,6 +200,7 @@ def main() -> int:
         if args.rebuild:
             rebuild(manifest, args.destination.resolve())
         failures = verify(manifest, args.destination.resolve() if args.rebuild else ROOT)
+        failures.extend(validate_advisory_dispositions(manifest))
         attention = check_updates(manifest) if args.check_updates else []
         if args.behavior:
             subprocess.run(["node", "tests/browser-smoke.js"], cwd=ROOT, check=True)

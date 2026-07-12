@@ -84,7 +84,11 @@ async function addNetworkFixtures(page, metrics) {
           type: 'Feature',
           geometry: { type: 'Polygon', coordinates: [[[-100 + offset, 39], [-99 + offset, 39], [-99 + offset, 40], [-100 + offset, 40], [-100 + offset, 39]]] },
           properties: {
-            OBJECTID: offset + 1, poly_IncidentName: 'Fixture Fire ' + (offset + 1), poly_GISAcres: 1250,
+            OBJECTID: offset + 1,
+            poly_IncidentName: offset === 0
+              ? '<img src=x onerror=window.__wildfireInjected=true>'
+              : 'Fixture Fire ' + (offset + 1),
+            poly_GISAcres: 1250,
             poly_DateCurrent: Date.now() - 600000, attr_PercentContained: 35, attr_IncidentTypeCategory: 'WF'
           }
         }], properties: { exceededTransferLimit: offset === 0 } })
@@ -257,6 +261,26 @@ async function main() {
     await page.locator('#toggle-wildfires').check();
     await page.locator('#lightning-status').filter({ hasText: '15 min density' }).waitFor({ state: 'visible' });
     await page.locator('#wildfire-status').filter({ hasText: '2 wildfire perimeters' }).waitFor({ state: 'visible' });
+    const popupOpened = await page.evaluate(() => {
+      window.__wildfireInjected = false;
+      let opened = false;
+      window._stormscope.getMap().eachLayer(layer => {
+        if (opened || typeof layer.getLayers !== 'function') return;
+        const child = layer.getLayers().find(item => item.feature && item.feature.properties &&
+          String(item.feature.properties.poly_IncidentName).startsWith('<img'));
+        if (child) {
+          child.openPopup();
+          opened = true;
+        }
+      });
+      return opened;
+    });
+    assert.equal(popupOpened, true);
+    const hostilePopup = page.locator('.leaflet-popup-content');
+    await hostilePopup.waitFor({ state: 'visible' });
+    assert.match(await hostilePopup.textContent(), /<img src=x onerror=window\.__wildfireInjected=true>/);
+    assert.equal(await hostilePopup.locator('img').count(), 0);
+    assert.equal(await page.evaluate(() => window.__wildfireInjected), false);
     assert.deepEqual(await page.evaluate(() => window._stormscope.getContextState()), {
       lightning: true, wildfires: true, lightningStatus: 'ready', wildfireStatus: 'ready',
       rasterZ: '325', vectorZ: '390', warningZ: '400', cameraZ: '600'

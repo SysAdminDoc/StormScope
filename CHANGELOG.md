@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.70.0 - 2026-07-12
+
+- Expanded the vendored dependency manifest to schema v2 with reviewed supplemental security advisories. Leaflet CVE-2025-69993 now has an explicit 90-day disposition tied to StormScope's DOM/`textContent` popup construction; the local gate fails on expiry, malformed dates, review windows over 180 days, missing reasons, or missing HTTPS references.
+- npm update selection now rejects prerelease/canary `latest` tags and falls back to the highest stable semantic version. OSV checks remain active during live update audits.
+- Added unit coverage for disposition expiry and stable-version selection plus a rendered hostile NIFC popup regression proving provider strings create no elements and execute no handlers.
+
 ## v0.69.0 - 2026-07-12
 
 - NIFC wildfire queries now paginate in stable `OBJECTID ASC` order using the service's advertised page size until ArcGIS clears `exceededTransferLimit`, including the GeoJSON `properties` form used by the live service.

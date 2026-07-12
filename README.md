@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.69.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.70.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
 [![Cameras](https://img.shields.io/badge/cameras-36%2C592-cyan)]()
@@ -90,7 +90,7 @@ Run the complete local regression gate before changing or publishing the app:
 python scripts/check.py
 ```
 
-It validates the camera corpus and deterministic shards, verifies vendored dependency/license hashes, runs Python units, lint, JavaScript syntax/contracts and service-worker tests, and enforces a real headless desktop/mobile/modal/offline/cache/accessibility smoke. The smoke requires the first camera shard to render within 2.5 seconds on the local Chromium test profile.
+It validates the camera corpus and deterministic shards, verifies vendored dependency/license hashes plus expiring supplemental CVE dispositions, runs Python units, lint, JavaScript syntax/contracts and service-worker tests, and enforces a real headless desktop/mobile/modal/offline/cache/accessibility smoke. The smoke requires the first camera shard to render within 2.5 seconds on the local Chromium test profile.
 
 Audit exact vendored versions, licenses, newer stable releases, and OSV advisories while also exercising Leaflet 1.9.4, markercluster 1.5.3, and HLS.js 1.6.16 in Chromium:
 
