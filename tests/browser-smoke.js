@@ -456,6 +456,13 @@ async function main() {
     assert.equal(playbackContract.lastVerified, observedCamera.lastVerified);
     assert.ok(playbackContract.observation.expires_at > playbackContract.now);
     assert.ok(playbackContract.observation.expires_at <= playbackContract.now + 6 * 60 * 60 * 1000);
+    const provenance = page.locator('.camera-provenance');
+    await provenance.getByRole('heading', { name: 'Feed details' }).waitFor({ state: 'visible' });
+    assert.equal(await provenance.locator('dt').count(), 7);
+    assert.match(await page.locator('#modal-local-observation').textContent(), /Playable.*image advanced on refresh/);
+    assert.ok((await page.locator('#modal-provider').textContent()).trim().length > 0);
+    assert.ok((await page.locator('#modal-feed-type').textContent()).trim().length > 0);
+    assert.equal(await page.locator('#modal-cam-health').getAttribute('title'), null);
     await page.getByRole('button', { name: 'Close camera viewer' }).click();
     await page.locator('#camera-modal').waitFor({ state: 'hidden' });
     assert.equal(await page.locator('#modal-feed video, #modal-feed iframe, #modal-feed img').count(), 0);

@@ -250,6 +250,18 @@
         <div id="modal-feed" class="modal-feed">
           <div id="feed-loading" class="feed-loading">Loading camera feed…</div>
         </div>
+        <section class="camera-provenance" aria-labelledby="camera-provenance-heading">
+          <h3 id="camera-provenance-heading">Feed details</h3>
+          <dl>
+            <div><dt>Provider frame time</dt><dd id="modal-provider-frame-time"></dd></div>
+            <div><dt>StormScope verification</dt><dd id="modal-verification-time"></dd></div>
+            <div><dt>Local playback observation</dt><dd id="modal-local-observation"></dd></div>
+            <div><dt>Source / provider</dt><dd id="modal-provider"></dd></div>
+            <div><dt>Feed type</dt><dd id="modal-feed-type"></dd></div>
+            <div><dt>Refresh cadence</dt><dd id="modal-refresh-cadence"></dd></div>
+            <div><dt>Degraded reason</dt><dd id="modal-degraded-reason"></dd></div>
+          </dl>
+        </section>
         <div id="modal-weather" class="modal-weather">
           <div id="weather-loading" class="weather-loading" role="status">Fetching weather…</div>
           <div id="weather-data" class="weather-data hidden"></div>

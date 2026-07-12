@@ -830,6 +830,43 @@ button:focus-visible {
   display: block;
 }
 
+.camera-provenance {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+}
+
+.camera-provenance h3 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.camera-provenance dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 20px;
+  margin: 0;
+}
+
+.camera-provenance dl > div {
+  min-width: 0;
+}
+
+.camera-provenance dt {
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.camera-provenance dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 13px;
+}
+
 .feed-loading {
   color: var(--text-dim);
   font-size: 14px;
@@ -1150,6 +1187,10 @@ button:focus-visible {
   .modal-feed img,
   .modal-feed video {
     max-height: 45vh;
+  }
+
+  .camera-provenance dl {
+    grid-template-columns: 1fr;
   }
 
   #radar-controls {

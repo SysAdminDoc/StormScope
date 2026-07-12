@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.74.0 - 2026-07-12
+
+- Added an accessible, always-visible camera feed-details panel for provider frame time, StormScope verification time, device-local playback observation, source/provider, feed type, refresh cadence, and degraded reason. Missing provider evidence is stated explicitly instead of being inferred.
+- Local playback results update the open panel immediately without mutating durable provider health. Removed the verification-only hover tooltip and added Chromium regression coverage for the semantic details list. Service-worker cache bumped to v47.
+
 ## v0.73.0 - 2026-07-12
 
 - Added a bounded 50-entry local diagnostics ring for `error` and `unhandledrejection`, with URL and coordinate redaction before persistence. Synchronous boot failures and uncaught runtime failures show a localized recovery banner with reload, runtime-cache reset, and diagnostics export actions.

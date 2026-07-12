@@ -1,6 +1,6 @@
 {
   "name": "stormscope",
-  "version": "0.73.0",
+  "version": "0.74.0",
   "private": true,
   "description": "Live weather radar and webcam map",
   "scripts": {

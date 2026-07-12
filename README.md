@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.73.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.74.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
 [![Cameras](https://img.shields.io/badge/cameras-36%2C592-cyan)]()
@@ -18,6 +18,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 - **Optional Hazard Context** — Keyless NOAA lightning density and complete paginated, viewport-bounded NIFC wildfire perimeters start off, show freshness and attribution, fail independently, retain the last complete snapshot, and stay below warnings and cameras
 - **36,592 Indexed Cameras** — 13,071 verified healthy, 1 degraded, and 23,520 not yet verified across traffic, FAA, NOAA/NWS, USGS, NRAO, park, university, provider, and webcam sources
 - **Fast Camera Discovery** — Progressive state shards make the map interactive before the full corpus loads; accessible search, health/source/type filters, health-first name/distance sorting, and a virtualized result list stay synchronized with the map without reclustering on scroll; Arrow/Page/Home/End navigation crosses unrendered slices
+- **Visible Feed Provenance** — Every camera viewer distinguishes provider frame time, StormScope verification, expiring device-local playback evidence, provider/source, feed type, cadence, and degraded reason without relying on hover text
 - **Local Favorites and Views** — Favorite cameras, restore the last map/layer/opacity state, save named views, and validate portable JSON imports/exports without an account
 - **Recoverable Diagnostics** — Runtime failures enter a bounded local ring buffer and show reload/cache-reset actions; a redacted export includes versions, provider state, cache totals, corpus generation, and errors without feed URLs, coordinates, favorites, or saved views
 - **English and Spanish UI** — Live language switching covers controls, recovery states, weather/radar labels, WMO conditions, alerts, dates, numbers, and units with deterministic English fallback

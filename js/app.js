@@ -2,7 +2,7 @@
   'use strict';
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.73.0';
+  var APP_VERSION = '0.74.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -972,6 +972,7 @@
     cameraObservations[cameraHealthKey(cam)] = observation;
     cam.local_observation = observation;
     persistCameraObservations();
+    if (activeCamera === cam) updateModalCameraHealth(cam);
   }
 
   async function loadCameras() {
@@ -1592,7 +1593,41 @@
     var health = cam.health || 'unknown';
     healthEl.className = 'health-badge health-' + health;
     healthEl.textContent = tr('camera.health.' + health);
-    healthEl.title = cam.last_verified ? tr('camera.lastVerified', { time: localTime(cam.last_verified) }) : '';
+    healthEl.removeAttribute('title');
+
+    var providerFrameTime = cam.provider_timestamp || cam.provider_image_timestamp || cam.provider_record_time || cam.provider_updated;
+    var observation = cam.local_observation;
+    var observationText = tr('camera.provenance.unavailable');
+    if (observation && observation.observed_at) {
+      var outcomeKey = 'camera.observation.outcome.' + observation.outcome;
+      var reasonKey = 'camera.observation.reason.' + observation.reason;
+      observationText = tr('camera.provenance.observation', {
+        outcome: tr(outcomeKey),
+        time: localTime(observation.observed_at),
+        reason: observation.reason ? tr(reasonKey) : tr('camera.provenance.notApplicable')
+      });
+    }
+
+    var failureKey = cam.failure_class
+      ? 'camera.failure.' + cam.failure_class
+      : 'camera.provenance.notApplicable';
+    var feedTypeKey = 'camera.feedType.' + (cam.type || 'unknown');
+    var providerName = cam.provider || cam.source || tr('camera.provenance.unavailable');
+    var cadence = Number(cam.refresh_cadence_seconds);
+
+    document.getElementById('modal-provider-frame-time').textContent = providerFrameTime
+      ? localTime(providerFrameTime)
+      : tr('camera.provenance.unavailable');
+    document.getElementById('modal-verification-time').textContent = cam.last_verified
+      ? localTime(cam.last_verified)
+      : tr('camera.provenance.unavailable');
+    document.getElementById('modal-local-observation').textContent = observationText;
+    document.getElementById('modal-provider').textContent = providerName;
+    document.getElementById('modal-feed-type').textContent = tr(feedTypeKey);
+    document.getElementById('modal-refresh-cadence').textContent = Number.isFinite(cadence) && cadence > 0
+      ? tr('camera.provenance.cadenceSeconds', { count: localNumber(cadence) })
+      : tr('camera.provenance.unavailable');
+    document.getElementById('modal-degraded-reason').textContent = tr(failureKey);
   }
 
   function closeCameraModal() {
