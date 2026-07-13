@@ -2,7 +2,7 @@
   'use strict';
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.87.0';
+  var APP_VERSION = '0.88.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -107,6 +107,12 @@
   var satelliteLatestTime = null;
   var satelliteStatusState = 'off';
   var satelliteAttributionAdded = false;
+  var tropicalLayer = null;
+  var tropicalAbort = null;
+  var tropicalRefreshTimer = null;
+  var tropicalStatusState = 'off';
+  var tropicalStorms = [];
+  var tropicalAttributionAdded = false;
   var lightningLayer = null;
   var lightningAbort = null;
   var lightningRefreshTimer = null;
@@ -135,19 +141,19 @@
   var WORKFLOW_PRESETS = Object.freeze({
     severe: {
       center: { lat: 39.5, lon: -98.5 }, zoom: 5,
-      layers: { radar: true, cameras: true, coverage: true, alerts: true, satellite: false, lightning: true, wildfires: false },
+      layers: { radar: true, cameras: true, coverage: true, alerts: true, satellite: false, lightning: true, wildfires: false, tropical: true },
       opacity: { radar: 0.7 }, radar: { palette: 'colorblind', speed: 800 }, alertSeverity: 'severe',
       cameraFilters: { query: '', state: '', source: '', type: '', sort: 'distance', healthy: true, favorites: false }, dataMode: 'auto'
     },
     wildfire: {
       center: { lat: 39, lon: -112 }, zoom: 5,
-      layers: { radar: false, cameras: true, coverage: false, alerts: true, satellite: true, lightning: false, wildfires: true },
+      layers: { radar: false, cameras: true, coverage: false, alerts: true, satellite: true, lightning: false, wildfires: true, tropical: false },
       opacity: { radar: 0.55 }, radar: { palette: 'standard', speed: 0 }, alertSeverity: 'moderate',
       cameraFilters: { query: '', state: '', source: '', type: '', sort: 'distance', healthy: true, favorites: false }, dataMode: 'auto'
     },
     travel: {
       center: { lat: 38.5, lon: -96 }, zoom: 5,
-      layers: { radar: true, cameras: true, coverage: false, alerts: true, satellite: false, lightning: false, wildfires: false },
+      layers: { radar: true, cameras: true, coverage: false, alerts: true, satellite: false, lightning: false, wildfires: false, tropical: false },
       opacity: { radar: 0.55 }, radar: { palette: 'colorblind', speed: 0 }, alertSeverity: 'moderate',
       cameraFilters: { query: '', state: '', source: '', type: '', sort: 'distance', healthy: true, favorites: false }, dataMode: 'auto'
     }
@@ -250,6 +256,8 @@
     map.getPane('satellitePane').style.pointerEvents = 'none';
     map.createPane('contextVectorPane');
     map.getPane('contextVectorPane').style.zIndex = '390';
+    map.createPane('tropicalPane');
+    map.getPane('tropicalPane').style.zIndex = '395';
 
     basemapLayer = L.tileLayer(basemapTileUrl(resolveTheme(themePreference)), {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
@@ -920,6 +928,167 @@
     lightningLayer = null;
     lightningStatusState = 'off';
     renderLightningStatus();
+  }
+
+  function renderTropicalStatus() {
+    var key = tropicalStatusState === 'off' ? 'context.tropicalOff'
+      : tropicalStatusState === 'loading' ? 'context.loading'
+        : tropicalStatusState === 'no-active' ? 'context.tropicalNone'
+          : tropicalStatusState === 'partial' ? 'context.tropicalPartial'
+            : tropicalStatusState === 'error' ? 'context.unavailable' : 'context.tropicalActive';
+    setContextStatusElement('tropical-status', tr(key, { count: localNumber(tropicalStorms.length) }),
+      tropicalStatusState === 'error' || tropicalStatusState === 'partial' ? 'error' : tropicalStatusState);
+    var list = document.getElementById('tropical-storm-list');
+    list.replaceChildren();
+    tropicalStorms.forEach(function (storm) {
+      var item = document.createElement('li');
+      var name = document.createElement('strong');
+      name.textContent = ((storm.classification ? storm.classification + ' ' : '') + storm.name).trim();
+      var detail = document.createElement('span');
+      detail.textContent = tr('context.tropicalFeature', {
+        product: tr('context.tropical.center'), time: contextTimestamp(storm.issuedAt)
+      });
+      item.appendChild(name);
+      item.appendChild(detail);
+      list.appendChild(item);
+    });
+  }
+
+  function tropicalPopup(feature) {
+    var properties = feature.properties || {};
+    var container = document.createElement('div');
+    container.className = 'context-popup';
+    var heading = document.createElement('strong');
+    heading.textContent = properties.classification + ' ' + properties.stormName;
+    container.appendChild(heading);
+    var detail = document.createElement('span');
+    detail.textContent = tr('context.tropicalFeature', {
+      product: tr('context.tropical.' + (properties.kind === 'forecast-point' ? 'track' : properties.kind)),
+      time: contextTimestamp(properties.issuance)
+    });
+    container.appendChild(detail);
+    if (properties.intensity != null) {
+      var intensity = document.createElement('span');
+      intensity.textContent = tr('context.tropicalIntensity', {
+        wind: localNumber(properties.intensity), pressure: properties.pressure == null ? tr('weather.unknown') : localNumber(properties.pressure)
+      });
+      container.appendChild(intensity);
+    }
+    var link = document.createElement('a');
+    link.href = properties.advisoryUrl;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = tr('context.tropicalAdvisory');
+    container.appendChild(link);
+    appendNearbyCameraSection(container, feature._nearbyGeometry || feature.geometry, tr('incident.camerasNearTropical'));
+    return container;
+  }
+
+  function tropicalStyle(feature) {
+    var kind = feature.properties && feature.properties.kind;
+    if (kind === 'cone') return { color: '#f4a261', weight: 2, fillColor: '#f4a261', fillOpacity: 0.16 };
+    if (kind === 'watches') {
+      var watchStyle = StormScopeTropicalCyclones.warningStyle(feature.properties.tcww || feature.properties.wwcode);
+      watchStyle.fillOpacity = 0;
+      return watchStyle;
+    }
+    return { color: '#ffffff', weight: 3, dashArray: kind === 'track' ? '7 5' : null, fillOpacity: 0 };
+  }
+
+  async function fetchTropicalProduct(kind, signal) {
+    try {
+      var response = await fetch(StormScopeTropicalCyclones.buildQueryUrl(kind), { cache: 'no-store', signal: signal });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      return { ok: true, collection: await response.json() };
+    } catch (error) {
+      if (error.name === 'AbortError') throw error;
+      return { ok: false, error: error };
+    }
+  }
+
+  async function refreshTropical() {
+    if (!document.getElementById('toggle-tropical').checked || document.hidden) return;
+    if (tropicalAbort) tropicalAbort.abort();
+    tropicalAbort = new AbortController();
+    var signal = tropicalAbort.signal;
+    tropicalStatusState = 'loading';
+    renderTropicalStatus();
+    try {
+      var kinds = Object.keys(StormScopeTropicalCyclones.LAYERS);
+      var responses = await Promise.all(kinds.map(function (kind) { return fetchTropicalProduct(kind, signal); }));
+      var input = {};
+      kinds.forEach(function (kind, index) { input[kind] = responses[index]; });
+      var snapshot = StormScopeTropicalCyclones.normalizeSnapshot(input);
+      if (snapshot.state === 'unavailable') {
+        tropicalStatusState = 'error';
+        renderTropicalStatus();
+        return;
+      }
+      if (snapshot.state === 'no-active') {
+        if (tropicalLayer) map.removeLayer(tropicalLayer);
+        tropicalLayer = null;
+        tropicalStorms = [];
+        tropicalStatusState = 'no-active';
+        renderTropicalStatus();
+        return;
+      }
+      if (!snapshot.storms.length) {
+        tropicalStatusState = 'partial';
+        renderTropicalStatus();
+        return;
+      }
+      tropicalStorms = snapshot.storms;
+      var features = [];
+      tropicalStorms.forEach(function (storm) {
+        var nearbyFeature = storm.features.find(function (feature) { return feature.properties.kind === 'cone'; }) ||
+          storm.features.find(function (feature) { return feature.properties.kind === 'track'; }) || storm.currentPoint;
+        storm.features.forEach(function (feature) {
+          feature._nearbyGeometry = nearbyFeature && nearbyFeature.geometry;
+          features.push(feature);
+        });
+      });
+      var nextLayer = L.geoJSON({ type: 'FeatureCollection', features: features }, {
+        pane: 'tropicalPane', style: tropicalStyle,
+        pointToLayer: function (feature, latlng) {
+          return L.circleMarker(latlng, { pane: 'tropicalPane', radius: feature.properties.kind === 'center' ? 8 : 5,
+            color: '#ffffff', weight: 2, fillColor: '#ff2d55', fillOpacity: 0.9 });
+        },
+        onEachFeature: function (feature, layer) {
+          layer.bindPopup(function () { return tropicalPopup(feature); }, { autoPan: false, maxWidth: 390, maxHeight: 380 });
+        }
+      }).addTo(map);
+      if (tropicalLayer) map.removeLayer(tropicalLayer);
+      tropicalLayer = nextLayer;
+      if (!tropicalAttributionAdded) {
+        map.attributionControl.addAttribution('<a href="https://www.nhc.noaa.gov/gis/" target="_blank" rel="noopener noreferrer">NOAA NHC</a>');
+        tropicalAttributionAdded = true;
+      }
+      tropicalStatusState = snapshot.state;
+      renderTropicalStatus();
+    } catch (error) {
+      if (error.name === 'AbortError') return;
+      tropicalStatusState = 'error';
+      renderTropicalStatus();
+    } finally {
+      clearTimeout(tropicalRefreshTimer);
+      if (document.getElementById('toggle-tropical').checked) {
+        tropicalRefreshTimer = setTimeout(refreshTropical, StormScopeTropicalCyclones.REFRESH_MS);
+      }
+    }
+  }
+
+  function disableTropical() {
+    if (tropicalAbort) tropicalAbort.abort();
+    clearTimeout(tropicalRefreshTimer);
+    if (tropicalLayer) map.removeLayer(tropicalLayer);
+    tropicalLayer = null;
+    tropicalStorms = [];
+    if (tropicalAttributionAdded) {
+      map.attributionControl.removeAttribution('<a href="https://www.nhc.noaa.gov/gis/" target="_blank" rel="noopener noreferrer">NOAA NHC</a>');
+      tropicalAttributionAdded = false;
+    }
+    tropicalStatusState = 'off';
+    renderTropicalStatus();
   }
 
   function wildfirePopup(feature) {
@@ -1774,7 +1943,8 @@
         alerts: document.getElementById('toggle-alerts').checked,
         satellite: document.getElementById('toggle-satellite').checked,
         lightning: document.getElementById('toggle-lightning').checked,
-        wildfires: document.getElementById('toggle-wildfires').checked
+        wildfires: document.getElementById('toggle-wildfires').checked,
+        tropical: document.getElementById('toggle-tropical').checked
       },
       opacity: { radar: radarOpacity }
     };
@@ -1903,6 +2073,11 @@
       document.getElementById('toggle-wildfires').checked = layers.wildfires;
       if (layers.wildfires) refreshWildfires();
       else disableWildfires();
+    }
+    if (typeof layers.tropical === 'boolean') {
+      document.getElementById('toggle-tropical').checked = layers.tropical;
+      if (layers.tropical) refreshTropical();
+      else disableTropical();
     }
     if (snapshot.opacity && typeof snapshot.opacity.radar === 'number') {
       radarOpacity = snapshot.opacity.radar;
@@ -3527,6 +3702,12 @@
       scheduleLastViewSave();
     });
 
+    document.getElementById('toggle-tropical').addEventListener('change', function () {
+      if (this.checked) refreshTropical();
+      else disableTropical();
+      scheduleLastViewSave();
+    });
+
     document.getElementById('alert-severity').addEventListener('change', fetchNwsAlerts);
 
     document.getElementById('radar-opacity').addEventListener('input', function () {
@@ -3968,11 +4149,13 @@
         if (alertAbort) alertAbort.abort();
         if (lightningAbort) lightningAbort.abort();
         if (satelliteAbort) satelliteAbort.abort();
+        if (tropicalAbort) tropicalAbort.abort();
         if (wildfireAbort) wildfireAbort.abort();
         clearTimeout(alertRefreshTimer);
         clearTimeout(lightningRefreshTimer);
         clearTimeout(satelliteRefreshTimer);
         clearTimeout(satelliteMoveTimer);
+        clearTimeout(tropicalRefreshTimer);
         clearTimeout(wildfireRefreshTimer);
         return;
       }
@@ -3988,6 +4171,7 @@
       fetchNwsAlerts();
       if (document.getElementById('toggle-lightning').checked) refreshLightning();
       if (document.getElementById('toggle-satellite').checked) refreshSatellite();
+      if (document.getElementById('toggle-tropical').checked) refreshTropical();
       if (document.getElementById('toggle-wildfires').checked) refreshWildfires();
     });
 
@@ -3996,6 +4180,7 @@
       initRadar();
       if (document.getElementById('toggle-lightning').checked) refreshLightning();
       if (document.getElementById('toggle-satellite').checked) refreshSatellite();
+      if (document.getElementById('toggle-tropical').checked) refreshTropical();
       if (document.getElementById('toggle-wildfires').checked) refreshWildfires();
     });
     window.addEventListener('offline', updateConnectionState);
@@ -4007,6 +4192,7 @@
       clearTimeout(lightningRefreshTimer);
       clearTimeout(satelliteRefreshTimer);
       clearTimeout(satelliteMoveTimer);
+      clearTimeout(tropicalRefreshTimer);
       clearTimeout(wildfireRefreshTimer);
       clearTimeout(wildfireMoveTimer);
       setRadarPlaying(false);
@@ -4015,6 +4201,7 @@
       if (alertAbort) alertAbort.abort();
       if (lightningAbort) lightningAbort.abort();
       if (satelliteAbort) satelliteAbort.abort();
+      if (tropicalAbort) tropicalAbort.abort();
       if (wildfireAbort) wildfireAbort.abort();
       if (summaryWildfireAbort) summaryWildfireAbort.abort();
       if (cameraStore) cameraStore.cancel();
@@ -4054,7 +4241,8 @@
         radarStatus: radarProviderSelection && radarProviderSelection.degradationReason || 'ready',
         alerts: { status: activeAlerts.length ? 'ready' : 'none', count: activeAlerts.length },
         lightning: lightningStatusState,
-        wildfires: wildfireStatusState
+        wildfires: wildfireStatusState,
+        tropical: { status: tropicalStatusState, count: tropicalStorms.length }
       },
       cache: await cacheDiagnosticSummary()
     });
@@ -4185,14 +4373,18 @@
     getContextState: function () {
       return {
         satellite: Boolean(satelliteLayer), lightning: Boolean(lightningLayer), wildfires: Boolean(wildfireLayer),
+        tropical: Boolean(tropicalLayer),
         satelliteStatus: satelliteStatusState,
         lightningStatus: lightningStatusState, wildfireStatus: wildfireStatusState,
+        tropicalStatus: tropicalStatusState, tropicalCount: tropicalStorms.length,
         rasterZ: map.getPane('contextRasterPane').style.zIndex,
         satelliteZ: map.getPane('satellitePane').style.zIndex,
         vectorZ: map.getPane('contextVectorPane').style.zIndex,
+        tropicalZ: map.getPane('tropicalPane').style.zIndex,
         warningZ: map.getPane('overlayPane').style.zIndex || '400',
         cameraZ: map.getPane('markerPane').style.zIndex || '600'
       };
-    }
+    },
+    refreshTropical: refreshTropical
   };
 })();

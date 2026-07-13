@@ -251,6 +251,8 @@ test('weather routing, units, freshness, and accessibility contracts are integra
 
 test('official context layers are optional, attributed, and cannot obscure warnings or cameras', () => {
   assert.match(html, /js\/context-layers\.js/);
+  assert.match(html, /js\/tropical-cyclones\.js/);
+  assert.match(serviceWorker, /\.\/js\/tropical-cyclones\.js/);
   assert.match(html, /<input[^>]*type="checkbox"[^>]*id="toggle-lightning"[^>]*>/);
   assert.match(html, /<input[^>]*type="checkbox"[^>]*id="toggle-wildfires"[^>]*>/);
   assert.match(html, /id="lightning-status"[^>]*role="status"/);

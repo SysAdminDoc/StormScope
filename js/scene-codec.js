@@ -9,7 +9,8 @@
   var VERSION = 1;
   var PREFIX = VERSION + '.';
   var MAX_TOKEN_LENGTH = 2048;
-  var LAYERS = ['radar', 'cameras', 'coverage', 'alerts', 'lightning', 'wildfires', 'satellite'];
+  var LAYERS = ['radar', 'cameras', 'coverage', 'alerts', 'lightning', 'wildfires', 'satellite', 'tropical'];
+  var MAX_LAYER_BITS = (1 << LAYERS.length) - 1;
   var PALETTES = ['standard', 'colorblind', 'contrast'];
   var SPEEDS = [0, 400, 800, 1600];
   var SEVERITIES = ['all', 'minor', 'moderate', 'severe', 'extreme'];
@@ -51,6 +52,10 @@
     var filters = objectValue(source.cameraFilters, 'scene camera filters');
     var normalizedLayers = {};
     LAYERS.forEach(function (name) {
+      if (name === 'tropical' && layers[name] == null) {
+        normalizedLayers[name] = false;
+        return;
+      }
       if (typeof layers[name] !== 'boolean') throw new TypeError('scene layer ' + name + ' must be boolean');
       normalizedLayers[name] = layers[name];
     });
@@ -106,7 +111,7 @@
   function expand(value) {
     var source = objectValue(value, 'scene payload');
     if (source.v !== VERSION) throw new RangeError('scene version is unsupported');
-    if (!Array.isArray(source.m) || source.m.length !== 3 || !Number.isInteger(source.l) || source.l < 0 || source.l > 63 ||
+    if (!Array.isArray(source.m) || source.m.length !== 3 || !Number.isInteger(source.l) || source.l < 0 || source.l > MAX_LAYER_BITS ||
         !Array.isArray(source.r) || source.r.length !== 4 || !Array.isArray(source.f) || source.f.length !== 6) {
       throw new TypeError('scene payload shape is invalid');
     }

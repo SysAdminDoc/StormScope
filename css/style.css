@@ -511,10 +511,17 @@ button:focus-visible {
 .context-statuses a { color: var(--accent); text-decoration: none; }
 .context-statuses .error { color: var(--danger); }
 .context-statuses .stale { color: #ffd166; }
-.satellite-swatch, .lightning-swatch, .wildfire-swatch { width: 9px; height: 9px; border-radius: 2px; }
+.satellite-swatch, .tropical-swatch, .lightning-swatch, .wildfire-swatch { width: 9px; height: 9px; border-radius: 2px; }
 .satellite-swatch { background: linear-gradient(135deg, #2a9d8f, #e9c46a); }
+.tropical-swatch { position: relative; box-sizing: border-box; width: 10px; height: 10px; border: 2px dashed #f4a261; border-radius: 50%; background: transparent; }
+.tropical-swatch::after { position: absolute; inset: 2px; border-radius: 50%; background: #ff2d55; content: ''; }
 .lightning-swatch { background: linear-gradient(135deg, #00e5ff, #ff2d55); }
 .wildfire-swatch { border: 1px solid #ff6b35; background: rgba(255, 107, 53, 0.2); }
+.tropical-storm-list { grid-column: 2 / 4; display: grid; gap: 4px; margin: 1px 0 0; padding: 0; list-style: none; }
+.tropical-storm-list:empty { display: none; }
+.tropical-storm-list li { display: grid; gap: 2px; padding: 5px 7px; border: 1px dashed var(--border); border-radius: 6px; background: var(--bg-inset); }
+.tropical-storm-list strong { color: var(--text); font-size: 11px; }
+.tropical-storm-list span { color: var(--text-dim); }
 .context-popup { color: #1d1d25; font: 12px/1.45 system-ui, sans-serif; }
 .context-popup strong, .context-popup span, .context-popup a { display: block; }
 .context-popup a { margin-top: 5px; }

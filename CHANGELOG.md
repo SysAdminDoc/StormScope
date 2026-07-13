@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.88.0 - 2026-07-12
+
+- Added a default-off official NOAA NHC tropical-cyclone layer using the CORS-enabled forecast point, track, cone, and coastal watch/warning GeoJSON services. Advisory mismatches fail closed, feed states distinguish ready/partial/no-active/unavailable, and total failures retain the last good layer.
+- Added official advisory links, issue times, intensity, shape/dash-distinct watch styling, active-storm status, nearby-camera discovery using cone-first geometry, profile/scene persistence, lifecycle refresh, redacted diagnostics state, and headless happy/partial/no-active coverage. Service-worker cache bumped to v61.
+
 ## v0.87.0 - 2026-07-12
 
 - Added an optional, default-off NOAA NESDIS merged GOES East/West GeoColor layer from the official time-enabled 24-hour image service. Metadata supplies the authoritative latest frame; image exports are clamped to viewport pixels and 76.5° satellite coverage and split safely across the antimeridian.

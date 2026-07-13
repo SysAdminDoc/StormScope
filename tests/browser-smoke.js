@@ -196,6 +196,25 @@ async function addNetworkFixtures(page, metrics, options) {
       });
       return;
     }
+    if (url.includes('/NHC_tropical_weather_summary/MapServer/') && url.includes('/query')) {
+      const match = url.match(/MapServer\/(\d+)\/query/);
+      const layerId = match ? Number(match[1]) : -1;
+      const properties = { binnumber: 'AT1', stormname: 'ALPHA', stormtype: 'Hurricane', advisnum: '12',
+        advdate: Date.now() - 600000, idp_filedate: Date.now() - 300000, maxwind: 90, mslp: 970, tau: 0,
+        tcww: 'HWA' };
+      const geometries = {
+        5: [
+          { type: 'Feature', geometry: { type: 'Point', coordinates: [-90, 27] }, properties },
+          { type: 'Feature', geometry: { type: 'Point', coordinates: [-88, 29] }, properties: { ...properties, tau: 12 } }
+        ],
+        6: [{ type: 'Feature', geometry: { type: 'LineString', coordinates: [[-90, 27], [-88, 29]] }, properties }],
+        7: [{ type: 'Feature', geometry: { type: 'Polygon', coordinates: [[[-91, 26], [-89, 26], [-87, 29], [-89, 30], [-91, 26]]] }, properties }],
+        8: [{ type: 'Feature', geometry: { type: 'LineString', coordinates: [[-89, 28], [-87, 29]] }, properties }]
+      };
+      await route.fulfill({ contentType: 'application/geo+json', headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ type: 'FeatureCollection', features: geometries[layerId] || [] }) });
+      return;
+    }
     if (url.startsWith('https://mapservices.weather.noaa.gov/') && url.includes('WMSServer')) {
       await route.fulfill({ contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: pixel });
       return;
@@ -434,17 +453,19 @@ async function main() {
     const scrubber = page.locator('#radar-scrubber');
     assert.ok(Number(await scrubber.getAttribute('max')) > 0, 'radar timeline should expose multiple frames');
     assert.deepEqual(await page.evaluate(() => window._stormscope.getContextState()), {
-      satellite: false, lightning: false, wildfires: false, satelliteStatus: 'off',
-      lightningStatus: 'off', wildfireStatus: 'off', satelliteZ: '315',
-      rasterZ: '325', vectorZ: '390', warningZ: '400', cameraZ: '600'
+      satellite: false, lightning: false, wildfires: false, tropical: false, satelliteStatus: 'off',
+      lightningStatus: 'off', wildfireStatus: 'off', tropicalStatus: 'off', tropicalCount: 0, satelliteZ: '315',
+      rasterZ: '325', vectorZ: '390', tropicalZ: '395', warningZ: '400', cameraZ: '600'
     });
     await page.getByRole('button', { name: 'Toggle layers panel' }).click();
     await page.locator('#toggle-satellite').check();
     await page.locator('#toggle-lightning').check();
     await page.locator('#toggle-wildfires').check();
+    await page.locator('#toggle-tropical').check();
     await page.locator('#satellite-status').filter({ hasText: 'GOES GeoColor' }).waitFor({ state: 'visible' });
     await page.locator('#lightning-status').filter({ hasText: '15 min density' }).waitFor({ state: 'visible' });
     await page.locator('#wildfire-status').filter({ hasText: '2 wildfire perimeters' }).waitFor({ state: 'visible' });
+    await page.locator('#tropical-status').filter({ hasText: '1 active tropical cyclones' }).waitFor({ state: 'visible' });
     const popupOpened = await page.evaluate(() => {
       window.__wildfireInjected = false;
       let opened = false;
@@ -469,13 +490,50 @@ async function main() {
     assert.match(await hostilePopup.locator('.incident-camera-status').textContent(), /nearby camera/);
     assert.ok(await hostilePopup.locator('.incident-camera-map').count() > 0);
     assert.deepEqual(await page.evaluate(() => window._stormscope.getContextState()), {
-      satellite: true, lightning: true, wildfires: true, satelliteStatus: 'ready',
-      lightningStatus: 'ready', wildfireStatus: 'ready', satelliteZ: '315',
-      rasterZ: '325', vectorZ: '390', warningZ: '400', cameraZ: '600'
+      satellite: true, lightning: true, wildfires: true, tropical: true, satelliteStatus: 'ready',
+      lightningStatus: 'ready', wildfireStatus: 'ready', tropicalStatus: 'ready', tropicalCount: 1, satelliteZ: '315',
+      rasterZ: '325', vectorZ: '390', tropicalZ: '395', warningZ: '400', cameraZ: '600'
     });
+    const tropicalPopupOpened = await page.evaluate(() => {
+      let opened = false;
+      window._stormscope.getMap().eachLayer(layer => {
+        if (opened || typeof layer.getLayers !== 'function') return;
+        const child = layer.getLayers().find(item => item.feature && item.feature.properties &&
+          item.feature.properties.binNumber === 'AT1' && item.feature.properties.kind === 'cone');
+        if (child) { child.openPopup(); opened = true; }
+      });
+      return opened;
+    });
+    assert.equal(tropicalPopupOpened, true);
+    const tropicalPopup = page.locator('.leaflet-popup-content').filter({
+      has: page.getByRole('link', { name: 'Open official NHC advisory' })
+    });
+    await tropicalPopup.getByRole('link', { name: 'Open official NHC advisory' }).waitFor({ state: 'visible' });
+    assert.match(await tropicalPopup.getByRole('link', { name: 'Open official NHC advisory' }).getAttribute('href'),
+      /graphics_at1\.shtml$/);
+    await tropicalPopup.locator('.incident-camera-status').last().waitFor({ state: 'visible' });
+
+    const failCone = route => route.fulfill({ status: 503, body: 'fixture unavailable' });
+    await page.route('**/NHC_tropical_weather_summary/MapServer/7/query?**', failCone);
+    await page.evaluate(() => window._stormscope.refreshTropical());
+    await page.locator('#tropical-status').filter({ hasText: 'some official products unavailable' }).waitFor({ state: 'visible' });
+    assert.equal((await page.evaluate(() => window._stormscope.getContextState())).tropicalStatus, 'partial');
+    await page.unroute('**/NHC_tropical_weather_summary/MapServer/7/query?**', failCone);
+
+    const emptyTropical = route => route.fulfill({ contentType: 'application/geo+json',
+      body: JSON.stringify({ type: 'FeatureCollection', features: [] }) });
+    await page.route('**/NHC_tropical_weather_summary/MapServer/*/query?**', emptyTropical);
+    await page.evaluate(() => window._stormscope.refreshTropical());
+    await page.locator('#tropical-status').filter({ hasText: 'No active NHC tropical cyclones' }).waitFor({ state: 'visible' });
+    assert.deepEqual(await page.evaluate(() => {
+      const state = window._stormscope.getContextState();
+      return { tropical: state.tropical, status: state.tropicalStatus, count: state.tropicalCount };
+    }), { tropical: false, status: 'no-active', count: 0 });
+    await page.unroute('**/NHC_tropical_weather_summary/MapServer/*/query?**', emptyTropical);
     await page.locator('#toggle-satellite').uncheck();
     await page.locator('#toggle-lightning').uncheck();
     await page.locator('#toggle-wildfires').uncheck();
+    await page.locator('#toggle-tropical').uncheck();
     await page.locator('#radar-speed').selectOption('0');
     await page.locator('#radar-palette').selectOption('colorblind');
     assert.equal(await page.locator('#radar-play').isDisabled(), true);
@@ -509,9 +567,9 @@ async function main() {
     await page.locator('#lightning-status').filter({ hasText: 'Official data unavailable' }).waitFor({ state: 'visible' });
     await page.locator('#wildfire-status').filter({ hasText: '2 wildfire perimeters' }).waitFor({ state: 'visible' });
     assert.deepEqual(await page.evaluate(() => window._stormscope.getContextState()), {
-      satellite: false, lightning: false, wildfires: true, satelliteStatus: 'off',
-      lightningStatus: 'error', wildfireStatus: 'ready', satelliteZ: '315',
-      rasterZ: '325', vectorZ: '390', warningZ: '400', cameraZ: '600'
+      satellite: false, lightning: false, wildfires: true, tropical: false, satelliteStatus: 'off',
+      lightningStatus: 'error', wildfireStatus: 'ready', tropicalStatus: 'off', tropicalCount: 0, satelliteZ: '315',
+      rasterZ: '325', vectorZ: '390', tropicalZ: '395', warningZ: '400', cameraZ: '600'
     });
     await page.locator('#toggle-lightning').uncheck();
     await page.locator('#toggle-wildfires').uncheck();
@@ -874,7 +932,7 @@ async function main() {
     });
     const sharedScene = {
       map: { lat: 39.75, lon: -98.25, zoom: 6 },
-      layers: { radar: true, cameras: true, coverage: false, alerts: true, lightning: false, wildfires: false, satellite: false },
+      layers: { radar: true, cameras: true, coverage: false, alerts: true, lightning: false, wildfires: false, satellite: false, tropical: false },
       radar: { opacity: 0.48, palette: 'contrast', speed: 400, frameTime: sceneFixture.frameTime },
       alertSeverity: 'severe',
       cameraFilters: {
