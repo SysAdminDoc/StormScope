@@ -229,6 +229,15 @@ test('build-time radar configuration loads before providers and remains in the o
   assert.doesNotMatch(app, /URLSearchParams[^\n]*radar/i);
 });
 
+test('two-map comparison is packaged, budgeted, low-data aware, and lifecycle bound', () => {
+  assert.match(html, /js\/map-comparison\.js[\s\S]*js\/app\.js/);
+  assert.match(serviceWorker, /\.\/js\/map-comparison\.js/);
+  assert.match(app, /StormScopeMapComparison\.create/);
+  assert.match(app, /mapComparison\.setDocumentHidden\(document\.hidden\)/);
+  assert.match(app, /lowDataSuspendedLabel/);
+  assert.match(app, /getComparisonState/);
+});
+
 test('RainViewer requests are guarded before tile and sampling fetches', () => {
   assert.match(app, /createRollingRequestBudget\(\{ limit: 90, windowMs: 60000 \}\)/);
   assert.match(app, /function guardRainViewerTileLayer/);

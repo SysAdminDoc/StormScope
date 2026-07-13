@@ -7,6 +7,15 @@ const path = require('node:path');
 const { chromium } = require('@playwright/test');
 const sceneCodec = require('../js/scene-codec.js');
 
+async function collectJsHeap(page) {
+  const session = await page.context().newCDPSession(page);
+  await session.send('Performance.enable');
+  await session.send('HeapProfiler.collectGarbage');
+  const result = await session.send('Performance.getMetrics');
+  await session.detach();
+  return result.metrics.find((metric) => metric.name === 'JSHeapUsedSize').value;
+}
+
 async function assertSurfaceWithinViewport(page, selector, label) {
   const bounds = await page.locator(selector).evaluate((element) => {
     const rect = element.getBoundingClientRect();
@@ -1268,6 +1277,59 @@ async function main() {
     assert.ok(expectedDiagnosticError >= 0, 'the injected runtime failure must reach the page error channel');
     errors.splice(expectedDiagnosticError, 1);
 
+    if (await page.locator('#layers-panel').isHidden()) {
+      await page.getByRole('button', { name: 'Toggle layers panel' }).click();
+    }
+    const comparisonHeapBefore = await collectJsHeap(page);
+    await page.locator('#open-comparison').click();
+    await page.locator('#comparison-modal').waitFor({ state: 'visible' });
+    await page.waitForFunction(() => document.querySelectorAll('#comparison-modal .leaflet-container').length === 2);
+    await page.waitForFunction(() => !Array.from(document.querySelectorAll('[data-comparison-status]'))
+      .some((element) => /Loading comparison/.test(element.textContent)));
+    const comparisonMaps = await page.locator('.comparison-map').evaluateAll((elements) => elements.map((element) => ({
+      width: element.getBoundingClientRect().width,
+      height: element.getBoundingClientRect().height
+    })));
+    assert.ok(comparisonMaps.every((bounds) => bounds.width >= 400 && bounds.height >= 220));
+    await page.locator('[data-comparison-source="right"]').selectOption('radar');
+    await page.locator('[data-comparison-time="right"]').evaluate((element) => {
+      element.value = '0';
+      element.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    assert.notEqual(
+      await page.locator('[data-comparison-time="left"]').inputValue(),
+      await page.locator('[data-comparison-time="right"]').inputValue(),
+      'comparison panes must retain independent radar frame selections'
+    );
+    await page.evaluate(async () => {
+      for (let index = 0; index < 30; index += 1) {
+        window._stormscope.setComparisonView('left', [38 + index * 0.01, -98 - index * 0.01], 5 + index % 2);
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      }
+    });
+    const comparisonState = await page.evaluate(() => window._stormscope.getComparisonState());
+    assert.equal(comparisonState.paneCount, 2);
+    assert.ok(comparisonState.syncSamples >= 30);
+    assert.ok(comparisonState.syncP95Ms <= comparisonState.desktopSyncBudgetMs,
+      `comparison sync p95 exceeded desktop budget: ${JSON.stringify(comparisonState)}`);
+    assert.ok(comparisonState.estimatedDecodedBytes <= comparisonState.maxEstimatedMemoryBytes);
+    assert.ok(comparisonState.requestBudget.used <= comparisonState.requestBudget.limit);
+    const comparisonHeapAfter = await collectJsHeap(page);
+    assert.ok(comparisonHeapAfter - comparisonHeapBefore <= 32 * 1024 * 1024,
+      `comparison desktop JS heap delta exceeded 32 MiB: ${comparisonHeapAfter - comparisonHeapBefore}`);
+    await page.locator('[data-comparison-source="left"]').selectOption('hazards');
+    await page.locator('[data-comparison-source="right"]').selectOption('hazards');
+    await page.waitForFunction(() => Array.from(document.querySelectorAll('[data-comparison-status]'))
+      .every((element) => /NWS hazard/.test(element.textContent)));
+    const hazardRequestCount = networkMetrics.rainViewerRequests;
+    await page.evaluate(() => window._stormscope.setComparisonView('left', [40, -97], 6));
+    await page.waitForTimeout(300);
+    assert.equal(networkMetrics.rainViewerRequests, hazardRequestCount, 'hazard/hazard comparison must add no radar requests');
+    await page.locator('[data-comparison-close]').click();
+    await page.locator('#comparison-modal').waitFor({ state: 'hidden' });
+    assert.equal(await page.locator('#comparison-modal .leaflet-container').count(), 0);
+    assert.equal(await page.locator('.leaflet-container').count(), 1, 'comparison close must retain only the main map');
+
     const lowDataContext = await browser.newContext({ viewport: { width: 900, height: 700 } });
     await lowDataContext.addInitScript(() => {
       const connection = new EventTarget();
@@ -1294,6 +1356,17 @@ async function main() {
     await lowDataPage.getByRole('button', { name: 'Load camera catalog' }).click();
     await lowDataPage.locator('#camera-count').filter({ hasText: '36,592 indexed' }).waitFor({ state: 'visible' });
     assert.equal(lowDataShardRequests, 49);
+    await lowDataPage.getByRole('button', { name: 'Toggle layers panel' }).click();
+    await lowDataPage.locator('#open-comparison').click();
+    await lowDataPage.locator('#comparison-modal').waitFor({ state: 'visible' });
+    await lowDataPage.locator('[data-comparison-status="right"]')
+      .filter({ hasText: 'Paused by low-data mode' }).waitFor({ state: 'visible' });
+    const lowComparisonState = await lowDataPage.evaluate(() => window._stormscope.getComparisonState());
+    assert.equal(lowComparisonState.paneCount, 2);
+    assert.ok(lowComparisonState.requestBudget.used <= lowComparisonState.requestBudget.limit);
+    await lowDataPage.evaluate(() => window._stormscope.setComparisonDocumentHidden(true));
+    await lowDataPage.locator('#comparison-modal').waitFor({ state: 'hidden' });
+    assert.equal((await lowDataPage.evaluate(() => window._stormscope.getComparisonState())).active, false);
     await lowDataPage.getByRole('button', { name: 'Toggle layers panel' }).click();
     await lowDataPage.locator('#data-mode').selectOption('standard');
     await lowDataPage.reload({ waitUntil: 'domcontentloaded' });
@@ -1334,6 +1407,29 @@ async function main() {
     await mobile.getByRole('button', { name: 'Open situation summary' }).click();
     await mobile.locator('#situation-panel').waitFor({ state: 'visible' });
     await assertSurfaceWithinViewport(mobile, '#situation-panel', 'mobile situation summary');
+    await mobile.locator('#close-summary').click();
+    if (await mobile.locator('#layers-panel').isHidden()) {
+      await mobile.getByRole('button', { name: 'Toggle layers panel' }).click();
+    }
+    const mobileHeapBefore = await collectJsHeap(mobile);
+    await mobile.locator('#open-comparison').click();
+    await mobile.locator('#comparison-modal').waitFor({ state: 'visible' });
+    await mobile.waitForFunction(() => document.querySelectorAll('#comparison-modal .leaflet-container').length === 2);
+    const mobileComparisonBounds = await mobile.locator('.comparison-map').evaluateAll((elements) => elements.map((element) => {
+      const rect = element.getBoundingClientRect();
+      return { width: rect.width, height: rect.height };
+    }));
+    assert.ok(mobileComparisonBounds.every((bounds) => bounds.width >= 340 && bounds.height >= 240));
+    assert.equal(await mobile.locator('html').evaluate((element) => element.scrollWidth > element.clientWidth), false);
+    await mobile.evaluate(() => window._stormscope.setComparisonView('left', [39, -96], 6));
+    await mobile.waitForTimeout(100);
+    const mobileComparisonState = await mobile.evaluate(() => window._stormscope.getComparisonState());
+    assert.ok(mobileComparisonState.syncP95Ms <= mobileComparisonState.mobileSyncBudgetMs);
+    assert.ok(mobileComparisonState.estimatedDecodedBytes <= mobileComparisonState.maxEstimatedMemoryBytes);
+    const mobileHeapAfter = await collectJsHeap(mobile);
+    assert.ok(mobileHeapAfter - mobileHeapBefore <= 24 * 1024 * 1024,
+      `comparison mobile JS heap delta exceeded 24 MiB: ${mobileHeapAfter - mobileHeapBefore}`);
+    await mobile.locator('[data-comparison-close]').click();
 
     for (const viewport of [{ width: 844, height: 390 }, { width: 667, height: 375 }]) {
       const landscape = await context.newPage();

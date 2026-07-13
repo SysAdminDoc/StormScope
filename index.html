@@ -186,6 +186,8 @@
       </select>
     </div>
     <div id="radar-meta" class="radar-meta" role="status" aria-live="polite">Radar provider pending…</div>
+    <button id="open-comparison" class="comparison-open" type="button">Compare two maps</button>
+    <div id="comparison-launch-status" class="context-status" role="status" aria-live="polite"></div>
     <div id="radar-legend" class="radar-legend palette-standard" aria-label="Radar precipitation intensity scale: light, moderate, heavy">
       <i aria-hidden="true"></i>
       <div><span>Light</span><span>Moderate</span><span>Heavy</span></div>
@@ -374,6 +376,56 @@
     </div>
   </div>
 
+  <div id="comparison-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="comparison-heading">
+    <div class="modal-backdrop comparison-backdrop"></div>
+    <div class="modal-content comparison-content">
+      <div class="modal-header">
+        <div class="modal-title-area">
+          <h2 id="comparison-heading">Map comparison</h2>
+          <span class="modal-subtitle">Center and zoom stay synchronized. Each pane keeps its own source and radar time.</span>
+        </div>
+        <button class="modal-close-btn" type="button" data-comparison-close title="Close" aria-label="Close map comparison">&times;</button>
+      </div>
+      <div class="comparison-grid">
+        <section class="comparison-pane" aria-labelledby="comparison-left-heading">
+          <div class="comparison-toolbar">
+            <h3 id="comparison-left-heading">Left map</h3>
+            <label>Source
+              <select data-comparison-source="left">
+                <option value="radar">Radar</option>
+                <option value="satellite">Satellite</option>
+                <option value="hazards">NWS hazards</option>
+              </select>
+            </label>
+            <label>Radar time <span data-comparison-time-label="left"></span>
+              <input type="range" min="0" max="0" value="0" data-comparison-time="left">
+            </label>
+          </div>
+          <div class="comparison-map" data-comparison-map="left" aria-label="Left comparison map"></div>
+          <div class="comparison-status" data-comparison-status="left" role="status" aria-live="polite"></div>
+        </section>
+        <section class="comparison-pane" aria-labelledby="comparison-right-heading">
+          <div class="comparison-toolbar">
+            <h3 id="comparison-right-heading">Right map</h3>
+            <label>Source
+              <select data-comparison-source="right">
+                <option value="radar">Radar</option>
+                <option value="satellite">Satellite</option>
+                <option value="hazards">NWS hazards</option>
+              </select>
+            </label>
+            <label>Radar time <span data-comparison-time-label="right"></span>
+              <input type="range" min="0" max="0" value="0" data-comparison-time="right">
+            </label>
+          </div>
+          <div class="comparison-map" data-comparison-map="right" aria-label="Right comparison map"></div>
+          <div class="comparison-status" data-comparison-status="right" role="status" aria-live="polite"></div>
+        </section>
+      </div>
+      <p id="comparison-budget-status" class="comparison-budget-status" role="status" aria-live="polite"></p>
+    </div>
+  </div>
+
   <div id="camera-count" class="camera-count" role="status" aria-live="polite"></div>
 
   <script src="vendor/leaflet/leaflet.js"></script>
@@ -389,6 +441,7 @@
   <script src="js/saved-state.js"></script>
   <script src="js/scene-codec.js"></script>
   <script src="js/multi-camera.js"></script>
+  <script src="js/map-comparison.js"></script>
   <script src="js/context-layers.js"></script>
   <script src="js/tropical-cyclones.js"></script>
   <script src="js/flood-outlooks.js"></script>

@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.92.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.93.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
 [![Cameras](https://img.shields.io/badge/cameras-36%2C592-cyan)]()
@@ -14,6 +14,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 
 - **Live Weather Radar** — Animated RainViewer radar with official NOAA/NWS MRMS failover, source/age/coverage status, and adjustable opacity
 - **Accessible Radar Timeline** — Direct frame scrubbing, manual-only/0.5×/1×/2× playback, explicit frame age and light/moderate/heavy scale text, color-accessible palettes, and a rolling request budget that automatically falls back to NOAA before exceeding RainViewer's public limit
+- **Synchronized Map Comparison** — An opt-in two-pane workspace keeps center/zoom aligned while each pane independently selects radar time, GOES satellite, or current NWS hazards; low-data, hidden-tab, request, tile, decoded-memory, and frame-time budgets are enforced
 - **Official Weather Alerts** — Viewport-scoped NWS watches, warnings, and advisories with severity polygons and accessible details
 - **Incident Camera Context** — Alert and wildfire details rank up to eight non-offline cameras inside or within 50 km of the mapped boundary by durable verification evidence, distance, and bearing, with map/open actions and an atomic playable 2–4 camera monitor
 - **Accessible Situation Summary** — A keyboard-triggered semantic panel reports localized map position/zoom, center radar coverage/age/echo intensity, warning and independently loaded wildfire counts, and the globally nearest verified cameras; alerts and cameras open without moving the map
@@ -170,6 +171,12 @@ python scripts/package_release.py --check
 ```
 
 The packaged endpoint replaces RainViewer as the primary source and falls directly to NOAA/NWS MRMS when unhealthy. Runtime URL parameters and local storage cannot select or alter it. Disabling or changing the configuration with the same command removes the prior generated origins before adding the current allowlist.
+
+## Comparing Maps
+
+Open **Layers → Compare two maps**. The left pane starts on the latest radar frame and the right pane on the latest validated GOES GeoColor image. Either pane can independently select a radar frame, satellite, or the current normalized NWS hazard geometry while center and zoom remain synchronized. Comparison maps are temporary: closing the workspace or hiding the tab destroys their layers, requests, timers, and Leaflet instances.
+
+Comparison uses manual radar frames with no preload or animation, at most 72 comparison/basemap requests per rolling minute, at most 64 live tile nodes per pane, and a 32 MiB decoded-tile estimate ceiling. In low-data or Save-Data mode, only one network raster pane runs; choose NWS hazards in the other pane to activate its suspended radar or satellite selection.
 
 ## Refreshing Camera Data
 

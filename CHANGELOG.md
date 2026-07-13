@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.93.0 - 2026-07-12
+
+- Added an opt-in synchronized two-map comparison workspace with independent per-pane radar frame, latest validated GOES GeoColor, and current normalized NWS hazard selections. Opening pauses normal refresh/animation work; close or hidden-tab lifecycle destroys comparison layers, timers, handlers, and Leaflet instances before normal work resumes.
+- Enforced a 72-request rolling comparison ceiling, 64 tile nodes per pane, 32 MiB decoded-tile estimate, manual/no-preload radar, debounced satellite refresh, and low-data single-raster policy. Headless desktop/mobile gates cover independent time selection, synchronized p95 frame budgets, 32/24 MiB JS heap deltas, hazard zero-radar-request behavior, responsive bounds, and teardown. Added EN/ES and refreshed install screenshots. SW v66.
+
 ## v0.92.0 - 2026-07-12
 
 - Added an optional distribution-time RainViewer-v2-compatible radar endpoint with a fixed provider identity, explicit HTTPS discovery/tile allowlist, required attribution, declared zoom/history/freshness capabilities, generated immutable runtime configuration, and CSP synchronization. Unsafe or stale configuration blocks the release gate; no URL or local-state override exists.
