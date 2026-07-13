@@ -24,6 +24,7 @@ def run(*command: str) -> None:
 def main() -> int:
     node_tests = sorted(str(path.relative_to(ROOT)) for path in (ROOT / "tests").glob("*.test.js"))
     run(sys.executable, "scripts/preflight.py")
+    run(sys.executable, "scripts/build_radar_config.py", "--check-csp", "index.html")
     run(sys.executable, "scripts/package_release.py", "--check")
     run(sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py", "-v")
     run(sys.executable, "-m", "ruff", "check", "scripts", "tests")

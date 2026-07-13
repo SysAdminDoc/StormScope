@@ -2,7 +2,7 @@
   'use strict';
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.91.0';
+  var APP_VERSION = '0.92.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -25,7 +25,6 @@
     'ipcamlive.com',
     'rtsp.me'
   ]);
-  var RAINVIEWER_API_URL = 'https://api.rainviewer.com/public/weather-maps.json';
   var RAINVIEWER_COLOR_SCHEME = 2;
   var RAINVIEWER_MAX_NATIVE_ZOOM = 7;
   var RAINVIEWER_PRELOAD_RESERVE = 20;
@@ -341,35 +340,38 @@
     var health = {};
 
     try {
+      var primaryProviderId = StormScopeRadarProviders.primaryProviderId;
       try {
-        if (options.forceNoaa) throw new Error('RainViewer tile delivery failed');
-        discoveries.rainviewer = await discoverRainViewer(signal);
-        health.rainviewer = StormScopeRadarProviders.assessProviderHealth('rainviewer', {
-          latestFrame: discoveries.rainviewer.latestFrame,
+        if (options.forceNoaa) throw new Error('Primary radar tile delivery failed');
+        discoveries[primaryProviderId] = await discoverPrimaryRadar(signal);
+        health[primaryProviderId] = StormScopeRadarProviders.assessProviderHealth(primaryProviderId, {
+          latestFrame: discoveries[primaryProviderId].latestFrame,
           lastSuccessAt: Date.now()
         });
-      } catch (rainError) {
-        if (rainError.name === 'AbortError') throw rainError;
-        health.rainviewer = StormScopeRadarProviders.assessProviderHealth('rainviewer', {
-          error: rainError,
-          rateLimitedUntil: rainError.status === 429 ? Date.now() + 60000 : null,
+      } catch (primaryError) {
+        if (primaryError.name === 'AbortError') throw primaryError;
+        health[primaryProviderId] = StormScopeRadarProviders.assessProviderHealth(primaryProviderId, {
+          error: primaryError,
+          rateLimitedUntil: primaryError.status === 429 ? Date.now() + 60000 : null,
           consecutiveFailures: 1
         });
       }
 
-      if (!navigator.onLine && discoveries.rainviewer && discoveries.rainviewer.latestFrame) {
-        health.rainviewer = {
-          providerId: 'rainviewer',
+      if (!navigator.onLine && discoveries[primaryProviderId] && discoveries[primaryProviderId].latestFrame) {
+        health[primaryProviderId] = {
+          providerId: primaryProviderId,
           status: 'degraded',
           reason: 'cached-offline',
-          latestFrameAge: StormScopeRadarProviders.getFrameAge(discoveries.rainviewer.latestFrame, 'rainviewer'),
-          lastSuccessAt: discoveries.rainviewer.discoveredAt,
+          latestFrameAge: StormScopeRadarProviders.getFrameAge(
+            discoveries[primaryProviderId].latestFrame, primaryProviderId
+          ),
+          lastSuccessAt: discoveries[primaryProviderId].discoveredAt,
           consecutiveFailures: 0,
           checkedAt: Date.now()
         };
       }
 
-      if (navigator.onLine && (!health.rainviewer || health.rainviewer.status !== 'healthy')) {
+      if (navigator.onLine && (!health[primaryProviderId] || health[primaryProviderId].status !== 'healthy')) {
         try {
           discoveries['noaa-mrms'] = await discoverNoaa(signal);
           health['noaa-mrms'] = StormScopeRadarProviders.assessProviderHealth('noaa-mrms', {
@@ -410,9 +412,11 @@
     return response.json();
   }
 
-  async function discoverRainViewer(signal) {
-    var payload = await fetchRadarJson(RAINVIEWER_API_URL, signal);
-    return StormScopeRadarProviders.parseRainViewerDiscovery(payload, Date.now());
+  async function discoverPrimaryRadar(signal) {
+    var providerId = StormScopeRadarProviders.primaryProviderId;
+    var provider = StormScopeRadarProviders.providers[providerId];
+    var payload = await fetchRadarJson(provider.discovery.url, signal);
+    return StormScopeRadarProviders.parseXyzDiscovery(providerId, payload, Date.now());
   }
 
   async function discoverNoaa(signal) {
@@ -542,17 +546,17 @@
     if (!frame) return null;
     var provider = StormScopeRadarProviders.providers[radarProviderId];
     var layer;
-    if (radarProviderId === 'rainviewer') {
+    if (provider.tile.kind === 'xyz') {
       if (!radarHost) return null;
       layer = L.tileLayer(radarHost + frame.path + '/256/{z}/{x}/{y}/' + RAINVIEWER_COLOR_SCHEME + '/1_1.png', {
         opacity: radarOpacity,
         zIndex: 400,
-        maxNativeZoom: RAINVIEWER_MAX_NATIVE_ZOOM,
+        maxNativeZoom: provider.tile.maxNativeZoom,
         maxZoom: 18,
         crossOrigin: 'anonymous',
         attribution: '<a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>'
       });
-      guardRainViewerTileLayer(layer);
+      if (radarProviderId === 'rainviewer') guardRainViewerTileLayer(layer);
     } else if (radarProviderId === 'noaa-mrms') {
       var params = StormScopeRadarProviders.noaaWmsParameters(frame);
       var wmsOptions = {
@@ -578,7 +582,7 @@
       if (tileErrors < 3 || radarLayer !== layer) return;
       setTimeout(function () {
         if (radarLayer !== layer) return;
-        if (radarProviderId === 'rainviewer' && navigator.onLine) {
+        if (radarProviderId === StormScopeRadarProviders.primaryProviderId && navigator.onLine) {
           setRadarStatus(tr('radar.tileFallback'), false, true);
           initRadar({ forceNoaa: true, resumePlayback: radarPlaying });
         } else {
@@ -713,9 +717,12 @@
     var reason = radarProviderSelection.degradationReason
       ? ' • ' + tr('radar.degraded', { reason: radarReasonLabel(radarProviderSelection.degradationReason) })
       : '';
+    var resolution = radarProviderId === 'build-radar'
+      ? provider.resolution.label
+      : tr('radar.resolution.' + radarProviderId);
     document.getElementById('radar-meta').textContent = provider.label +
       (radarProviderSelection.isFallback ? tr('radar.fallbackSuffix') : '') + ' • ' +
-      tr('radar.resolution.' + radarProviderId) + ' • ' + StormScopeI18n.formatAge(age.ageMinutes, appLocale) + reason;
+      resolution + ' • ' + StormScopeI18n.formatAge(age.ageMinutes, appLocale) + reason;
     var source = document.getElementById('radar-source');
     source.textContent = provider.attribution.text;
     source.href = provider.attribution.url;
@@ -1874,27 +1881,29 @@
   }
 
   async function sampleRadarCenter(frame) {
-    if (!frame || radarProviderId !== 'rainviewer') {
+    var provider = StormScopeRadarProviders.providers[radarProviderId];
+    if (!frame || !provider || provider.tile.kind !== 'xyz') {
       radarSemanticState = StormScopeRadarProviders.classifyRadarState({ frame: frame, coverage: true });
       updateRadarTimeDisplay();
       return;
     }
     var token = ++radarSampleToken;
-    var zoom = Math.min(map.getZoom(), RAINVIEWER_MAX_NATIVE_ZOOM);
+    var zoom = Math.min(map.getZoom(), provider.tile.maxNativeZoom);
     var coordinate = centerTileCoordinate(zoom);
-    var pixels = await Promise.all([
-      sampleTilePixel(StormScopeRadarProviders.buildRainViewerCoverageUrl(
+    var coverageRequest = radarProviderId === 'rainviewer'
+      ? sampleTilePixel(StormScopeRadarProviders.buildRainViewerCoverageUrl(
         radarHost, zoom, coordinate.x, coordinate.y
-      ), coordinate),
-      sampleTilePixel(StormScopeRadarProviders.buildRainViewerTileUrl(
-        frame, zoom, coordinate.x, coordinate.y
       ), coordinate)
-    ]);
+      : Promise.resolve(null);
+    var pixels = await Promise.all([coverageRequest, sampleTilePixel(
+      StormScopeRadarProviders.buildXyzRadarTileUrl(frame, zoom, coordinate.x, coordinate.y),
+      coordinate
+    )]);
     if (token !== radarSampleToken || frame !== radarFrames[radarIndex]) return;
     var coveragePixel = pixels[0];
     var radarPixel = pixels[1];
     var intensity = StormScopeRadarProviders.classifyRainViewerPixel(radarPixel);
-    var covered = coveragePixel
+    var covered = radarProviderId !== 'rainviewer' ? true : coveragePixel
       ? !(coveragePixel[3] > 0 && coveragePixel[0] < 16 && coveragePixel[1] < 16 && coveragePixel[2] < 16)
       : null;
     radarSemanticState = StormScopeRadarProviders.classifyRadarState({

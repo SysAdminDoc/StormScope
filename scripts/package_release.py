@@ -14,6 +14,11 @@ import zipfile
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+try:
+    from build_radar_config import RadarConfigError, load_config, render_javascript, validate_html_csp
+except ModuleNotFoundError:  # pragma: no cover - package import during tests
+    from scripts.build_radar_config import RadarConfigError, load_config, render_javascript, validate_html_csp
+
 
 ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "dist"
@@ -71,6 +76,14 @@ def validate_version_surfaces(version: str) -> None:
             mismatches.append(f"{relative}={','.join(sorted(values)) or 'missing'}")
     if mismatches:
         raise PackagingError("Version surfaces do not match " + version + ": " + "; ".join(mismatches))
+
+
+def validate_radar_build_config() -> None:
+    config = load_config(ROOT / "config" / "radar-provider.json")
+    generated = (ROOT / "js" / "radar-build-config.js").read_text(encoding="utf-8")
+    if generated != render_javascript(config):
+        raise PackagingError("js/radar-build-config.js is stale; run scripts/build_radar_config.py")
+    validate_html_csp((ROOT / "index.html").read_text(encoding="utf-8"), config)
 
 
 def validate_repository_state(version: str) -> str:
@@ -188,6 +201,7 @@ def main() -> int:
     try:
         version = current_version()
         validate_version_surfaces(version)
+        validate_radar_build_config()
         print(f"Version parity passed for StormScope v{version}.")
         if args.check:
             return 0
@@ -201,11 +215,10 @@ def main() -> int:
         print(f"Files: {len(paths):,} tracked + {MANIFEST_NAME}")
         print(f"SHA256: {digest}")
         return 0
-    except (OSError, subprocess.CalledProcessError, PackagingError, zipfile.BadZipFile) as error:
+    except (OSError, RadarConfigError, subprocess.CalledProcessError, PackagingError, zipfile.BadZipFile) as error:
         print(f"Packaging failed: {error}", file=sys.stderr)
         return 1
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

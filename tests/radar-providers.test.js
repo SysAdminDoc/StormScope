@@ -96,6 +96,72 @@ function noaaFeature(subset, validTime, validEndTime, fileDate, objectId) {
   };
 }
 
+function loadWithBuildConfig(config) {
+  const context = { URL, globalThis: { StormScopeRadarBuildConfig: config } };
+  vm.runInNewContext(source, context, { filename: 'radar-providers.js' });
+  return context.globalThis.StormScopeRadarProviders;
+}
+
+test('build-time endpoint is immutable, allowlisted, capable, and NOAA-fallback compatible', () => {
+  const configured = loadWithBuildConfig({
+    enabled: true,
+    providerId: 'build-radar',
+    protocol: 'rainviewer-v2',
+    discoveryUrl: 'https://radar.example.test/public/weather-maps.json',
+    tileOrigins: ['https://tiles.example.test'],
+    attribution: { label: 'Regional Radar Cooperative', url: 'https://radar.example.test/about' },
+    capabilities: {
+      maxZoom: 8,
+      history: { enabled: true, windowMinutes: 180 },
+      freshness: { staleAfterMinutes: 15, failAfterMinutes: 30 }
+    }
+  });
+  assert.equal(configured.primaryProviderId, 'build-radar');
+  assert.equal(configured.providers['build-radar'].discovery.kind, 'rainviewer-compatible-json-timeline');
+  assert.equal(configured.providers['build-radar'].history.windowMinutes, 180);
+  assert.equal(configured.providers['build-radar'].attribution.required, true);
+  assert.ok(Object.isFrozen(configured.providers['build-radar']));
+
+  const discovery = configured.parseXyzDiscovery('build-radar', {
+    generated: NOW / 1000,
+    host: 'https://tiles.example.test',
+    radar: { past: [{ time: NOW / 1000, path: '/v2/radar/build_hash' }] }
+  }, NOW);
+  assert.equal(
+    configured.buildXyzRadarTileUrl(discovery.latestFrame, 8, 2, 3),
+    'https://tiles.example.test/v2/radar/build_hash/256/8/2/3/2/1_1.png'
+  );
+  assert.throws(() => configured.parseXyzDiscovery('build-radar', {
+    host: 'https://attacker.example', radar: { past: [] }
+  }), /untrusted tile host/);
+
+  const primary = configured.assessProviderHealth('build-radar', { error: new Error('down') }, NOW);
+  const noaa = configured.assessProviderHealth('noaa-mrms', {
+    latestFrame: { providerId: 'noaa-mrms', time: NOW - 5 * 60000 }
+  }, NOW);
+  const selection = configured.selectProvider({ 'build-radar': primary, 'noaa-mrms': noaa });
+  assert.equal(selection.selectedProviderId, 'noaa-mrms');
+  assert.equal(selection.primaryProviderId, 'build-radar');
+  assert.equal(selection.degradationReason, 'request-failed');
+});
+
+test('runtime rejects untrusted build configuration instead of accepting URL state', () => {
+  const base = {
+    enabled: true, providerId: 'build-radar', protocol: 'rainviewer-v2',
+    discoveryUrl: 'https://radar.example.test/timeline.json',
+    tileOrigins: ['https://tiles.example.test'],
+    attribution: { label: 'Radar', url: 'https://radar.example.test/about' },
+    capabilities: {
+      maxZoom: 7, history: { enabled: true, windowMinutes: 120 },
+      freshness: { staleAfterMinutes: 20, failAfterMinutes: 40 }
+    }
+  };
+  assert.throws(() => loadWithBuildConfig({ ...base, discoveryUrl: 'http://radar.example.test/timeline.json' }), /HTTPS/);
+  assert.throws(() => loadWithBuildConfig({ ...base, discoveryUrl: 'https://user:secret@radar.example.test/timeline.json' }), /credential-free/);
+  assert.throws(() => loadWithBuildConfig({ ...base, tileOrigins: ['https://*.example.test'] }), /explicit HTTPS/);
+  assert.throws(() => loadWithBuildConfig({ ...base, tileOrigins: ['https://tiles.example.test/path'] }), /explicit HTTPS/);
+});
+
 test('groups NOAA regional rasters into historical frames and builds WMS requests', () => {
   const firstStart = NOW - 20 * 60000;
   const secondStart = NOW - 10 * 60000;

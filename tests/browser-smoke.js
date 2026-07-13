@@ -133,6 +133,47 @@ async function addNetworkFixtures(page, metrics, options) {
   options = options || {};
   await page.route('**/*', async (route) => {
     const url = route.request().url();
+    if (options.customRadar && url.startsWith('http://127.0.0.1:') && new URL(url).pathname === '/') {
+      const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8').replace(
+        "connect-src 'self'",
+        "connect-src 'self' https://radar.example.test https://tiles.example.test"
+      );
+      await route.fulfill({ contentType: 'text/html; charset=utf-8', body: html });
+      return;
+    }
+    if (options.customRadar && url.endsWith('/js/radar-build-config.js')) {
+      const config = {
+        schemaVersion: 1, enabled: true, providerId: 'build-radar', protocol: 'rainviewer-v2',
+        discoveryUrl: 'https://radar.example.test/public/weather-maps.json',
+        tileOrigins: ['https://tiles.example.test'],
+        attribution: { label: 'Fixture Radar', url: 'https://radar.example.test/about' },
+        capabilities: {
+          maxZoom: 8,
+          freshness: { staleAfterMinutes: 15, failAfterMinutes: 30 },
+          history: { enabled: true, windowMinutes: 180 }
+        }
+      };
+      await route.fulfill({
+        contentType: 'text/javascript; charset=utf-8',
+        body: `globalThis.StormScopeRadarBuildConfig = Object.freeze(${JSON.stringify(config)});`
+      });
+      return;
+    }
+    if (options.customRadar && url === 'https://radar.example.test/public/weather-maps.json') {
+      await route.fulfill({
+        contentType: 'application/json',
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({
+          host: 'https://tiles.example.test',
+          radar: { past: [{ time: Math.floor(Date.now() / 1000) - 300, path: '/v2/radar/custom-latest' }] }
+        })
+      });
+      return;
+    }
+    if (options.customRadar && url.startsWith('https://tiles.example.test/')) {
+      await route.fulfill({ contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: pixel });
+      return;
+    }
     if (url === 'https://api.rainviewer.com/public/weather-maps.json') {
       await route.fulfill({
         contentType: 'application/json',
@@ -1305,6 +1346,21 @@ async function main() {
       await exerciseLandscapeLayout(landscape, 'light');
       await landscape.close();
     }
+
+    const customRadarContext = await browser.newContext({
+      viewport: { width: 1280, height: 720 },
+      serviceWorkers: 'block'
+    });
+    const customRadarPage = await customRadarContext.newPage();
+    customRadarPage.baseURL = baseURL;
+    customRadarPage.on('pageerror', (error) => errors.push(error.message));
+    await addNetworkFixtures(customRadarPage, {}, { customRadar: true });
+    await waitForApp(customRadarPage, false);
+    await customRadarPage.waitForFunction(() => /Fixture Radar/.test(document.querySelector('#radar-meta').textContent));
+    assert.equal(await customRadarPage.locator('#radar-source').textContent(), 'Fixture Radar');
+    assert.match(await customRadarPage.locator('#radar-meta').textContent(), /Configured tile pyramid through zoom 8/);
+    assert.equal(await customRadarPage.evaluate(() => window.StormScopeRadarProviders.primaryProviderId), 'build-radar');
+    await customRadarContext.close();
 
     assert.deepEqual(errors, []);
     console.log('Headless desktop/mobile/modal/offline/cache/accessibility smoke passed.');

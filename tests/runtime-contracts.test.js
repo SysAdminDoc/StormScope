@@ -16,7 +16,7 @@ const i18n = require('../js/i18n.js');
 test('RainViewer uses the 2026 past-radar contract', () => {
   assert.match(app, /RAINVIEWER_COLOR_SCHEME = 2/);
   assert.match(app, /RAINVIEWER_MAX_NATIVE_ZOOM = 7/);
-  assert.match(app, /parseRainViewerDiscovery/);
+  assert.match(app, /parseXyzDiscovery/);
   assert.match(app, /discoverNoaa/);
   assert.match(app, /selectProvider/);
   assert.match(app, /sampleRadarCenter/);
@@ -219,6 +219,14 @@ test('radar failover, coverage semantics, and NWS alerts are wired into the UI',
   assert.match(app, /alertNationalFetchedAt/);
   assert.match(css, /\.radar-legend/);
   assert.match(css, /\.alert-list-button\[data-severity="Extreme"\]/);
+});
+
+test('build-time radar configuration loads before providers and remains in the offline shell', () => {
+  assert.match(html, /js\/radar-build-config\.js[\s\S]*js\/radar-providers\.js/);
+  assert.match(serviceWorker, /\.\/js\/radar-build-config\.js/);
+  assert.match(app, /StormScopeRadarProviders\.primaryProviderId/);
+  assert.doesNotMatch(app, /localStorage[^\n]*radar[^\n]*provider/i);
+  assert.doesNotMatch(app, /URLSearchParams[^\n]*radar/i);
 });
 
 test('RainViewer requests are guarded before tile and sampling fetches', () => {

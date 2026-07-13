@@ -1,10 +1,10 @@
 (function (root, factory) {
   'use strict';
 
-  var api = factory();
+  var api = factory(root && root.StormScopeRadarBuildConfig);
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.StormScopeRadarProviders = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (buildConfig) {
   'use strict';
 
   // Primary contracts:
@@ -16,6 +16,7 @@
   var MINUTE_MS = 60000;
   var NOAA_SUBSETS = Object.freeze(['ALASKA', 'CARIB', 'CONUS', 'GUAM', 'HAWAII']);
   var RAINVIEWER_ID = 'rainviewer';
+  var BUILD_PROVIDER_ID = 'build-radar';
   var NOAA_ID = 'noaa-mrms';
   var NOAA_SERVICE_URL = 'https://mapservices.weather.noaa.gov/eventdriven/rest/services/radar/radar_base_reflectivity_time/ImageServer';
   var NOAA_WMS_URL = 'https://mapservices.weather.noaa.gov/eventdriven/services/radar/radar_base_reflectivity_time/ImageServer/WMSServer';
@@ -40,7 +41,7 @@
     FAILURE: 'failure'
   });
 
-  var PROVIDERS = deepFreeze({
+  var providerDefinitions = {
     rainviewer: {
       id: RAINVIEWER_ID,
       label: 'RainViewer',
@@ -142,7 +143,12 @@
         failAfterMinutes: 40
       }
     }
-  });
+  };
+
+  var buildProvider = normalizeBuildProvider(buildConfig);
+  if (buildProvider) providerDefinitions[BUILD_PROVIDER_ID] = buildProvider;
+  var PROVIDERS = deepFreeze(providerDefinitions);
+  var PRIMARY_PROVIDER_ID = buildProvider ? BUILD_PROVIDER_ID : RAINVIEWER_ID;
 
   function deepFreeze(value) {
     if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
@@ -172,6 +178,112 @@
     } catch (error) {
       return '';
     }
+  }
+
+  function exactHttpsOrigin(value) {
+    try {
+      var parsed = new URL(value);
+      if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.hostname.indexOf('*') !== -1) return '';
+      return parsed.origin;
+    } catch (error) {
+      return '';
+    }
+  }
+
+  function configuredTileOrigin(value) {
+    try {
+      var parsed = new URL(value);
+      if (parsed.pathname !== '/' || parsed.search || parsed.hash) return '';
+      return exactHttpsOrigin(value);
+    } catch (error) {
+      return '';
+    }
+  }
+
+  function normalizeBuildProvider(config) {
+    if (!config || config.enabled !== true) return null;
+    if (config.providerId !== BUILD_PROVIDER_ID || config.protocol !== 'rainviewer-v2') {
+      throw new Error('Build radar provider identity or protocol is invalid.');
+    }
+    var attribution = config.attribution || {};
+    if (typeof attribution.label !== 'string' || !attribution.label.trim() || attribution.label.length > 80) {
+      throw new Error('Build radar provider label is invalid.');
+    }
+    var discoveryUrl;
+    var attributionUrl;
+    try {
+      discoveryUrl = new URL(config.discoveryUrl);
+      attributionUrl = new URL(attribution.url);
+    } catch (error) {
+      throw new Error('Build radar provider URLs must be valid HTTPS URLs.');
+    }
+    if (!exactHttpsOrigin(discoveryUrl.href) || discoveryUrl.username || discoveryUrl.password ||
+        discoveryUrl.search || discoveryUrl.hash) {
+      throw new Error('Build radar discovery URL must be credential-free HTTPS without query or fragment.');
+    }
+    if (!exactHttpsOrigin(attributionUrl.href) || attributionUrl.username || attributionUrl.password) {
+      throw new Error('Build radar attribution URL must be credential-free HTTPS.');
+    }
+    var allowedOrigins = Array.isArray(config.tileOrigins)
+      ? config.tileOrigins.map(configuredTileOrigin).filter(Boolean)
+      : [];
+    if (!allowedOrigins.length || allowedOrigins.length !== config.tileOrigins.length) {
+      throw new Error('Build radar provider requires explicit HTTPS tile origins.');
+    }
+    if (new Set(allowedOrigins).size !== allowedOrigins.length) {
+      throw new Error('Build radar provider tile origins must be unique.');
+    }
+    var capabilities = config.capabilities || {};
+    var freshness = capabilities.freshness || {};
+    var history = capabilities.history || {};
+    var maxNativeZoom = Number(capabilities.maxZoom);
+    var historyMinutes = Number(history.windowMinutes);
+    var staleMinutes = Number(freshness.staleAfterMinutes);
+    var failMinutes = Number(freshness.failAfterMinutes);
+    var updateMinutes = Math.max(1, Math.floor(staleMinutes / 2));
+    if (!Number.isInteger(maxNativeZoom) || maxNativeZoom < 1 || maxNativeZoom > 22 ||
+        typeof history.enabled !== 'boolean' || !Number.isFinite(historyMinutes) || historyMinutes < 0 ||
+        !Number.isFinite(staleMinutes) || staleMinutes < 1 ||
+        !Number.isFinite(failMinutes) || failMinutes <= staleMinutes) {
+      throw new Error('Build radar provider capability values are invalid.');
+    }
+    return {
+      id: BUILD_PROVIDER_ID,
+      label: attribution.label.trim(),
+      role: 'primary',
+      priority: 0,
+      discovery: {
+        kind: 'rainviewer-compatible-json-timeline',
+        url: discoveryUrl.href,
+        method: 'GET',
+        cors: true,
+        allowedTileOrigins: allowedOrigins
+      },
+      tile: {
+        kind: 'xyz',
+        template: '{host}{framePath}/256/{z}/{x}/{y}/2/1_1.png',
+        size: 256,
+        colorScheme: 2,
+        colorSchemeLabel: 'Universal Blue',
+        maxNativeZoom: maxNativeZoom,
+        crossOrigin: 'anonymous'
+      },
+      attribution: { text: attribution.label.trim(), url: attributionUrl.href, required: true },
+      coverage: { kind: 'not-advertised' },
+      history: {
+        kind: history.enabled ? 'past-only' : 'latest-only', windowMinutes: historyMinutes,
+        nominalStepMinutes: updateMinutes, supportsFuture: false
+      },
+      resolution: {
+        maxNativeZoom: maxNativeZoom,
+        label: 'Configured tile pyramid through zoom ' + maxNativeZoom
+      },
+      freshness: {
+        expectedUpdateMinutes: updateMinutes,
+        staleAfterMinutes: staleMinutes,
+        failAfterMinutes: failMinutes
+      }
+    };
   }
 
   function createRollingRequestBudget(options) {
@@ -215,9 +327,20 @@
   }
 
   function parseRainViewerDiscovery(payload, discoveredAt) {
+    return parseXyzDiscovery(RAINVIEWER_ID, payload, discoveredAt);
+  }
+
+  function parseXyzDiscovery(providerId, payload, discoveredAt) {
+    var provider = PROVIDERS[providerId];
+    if (!provider || provider.tile.kind !== 'xyz') throw new Error('Unknown XYZ radar provider: ' + providerId);
     if (!payload || typeof payload !== 'object') throw new TypeError('RainViewer discovery payload must be an object.');
-    var tileHost = trustedHttpsOrigin(payload.host, 'rainviewer.com');
-    if (!tileHost) throw new Error('RainViewer returned an untrusted tile host.');
+    var tileHost = providerId === RAINVIEWER_ID
+      ? trustedHttpsOrigin(payload.host, 'rainviewer.com')
+      : exactHttpsOrigin(payload.host);
+    var allowedOrigins = provider.discovery.allowedTileOrigins;
+    if (!tileHost || (allowedOrigins && allowedOrigins.indexOf(tileHost) === -1)) {
+      throw new Error(provider.label + ' returned an untrusted tile host.');
+    }
 
     var sourceFrames = payload.radar && Array.isArray(payload.radar.past) ? payload.radar.past : [];
     var byTime = Object.create(null);
@@ -226,8 +349,8 @@
       if (!/^\/v2\/radar\/[A-Za-z0-9_-]+$/.test(frame.path)) return;
       var timeMs = frame.time * 1000;
       byTime[timeMs] = {
-        id: RAINVIEWER_ID + ':' + frame.time,
-        providerId: RAINVIEWER_ID,
+        id: providerId + ':' + frame.time,
+        providerId: providerId,
         time: timeMs,
         path: frame.path,
         tileHost: tileHost,
@@ -238,14 +361,15 @@
 
     var frames = Object.keys(byTime).map(function (key) { return byTime[key]; });
     frames.sort(function (left, right) { return left.time - right.time; });
+    if (provider.history.kind === 'latest-only' && frames.length > 1) frames = [frames[frames.length - 1]];
     return {
-      providerId: RAINVIEWER_ID,
+      providerId: providerId,
       discoveredAt: epochMilliseconds(discoveredAt) || Date.now(),
       generatedAt: epochMilliseconds(payload.generated),
       tileHost: tileHost,
       frames: frames,
       latestFrame: frames.length ? frames[frames.length - 1] : null,
-      coverage: PROVIDERS.rainviewer.coverage
+      coverage: provider.coverage
     };
   }
 
@@ -254,16 +378,26 @@
   }
 
   function buildRainViewerTileUrl(frame, z, x, y, options) {
+    return buildXyzRadarTileUrl(frame, z, x, y, options);
+  }
+
+  function buildXyzRadarTileUrl(frame, z, x, y, options) {
     options = options || {};
-    if (!frame || frame.providerId !== RAINVIEWER_ID || typeof frame.path !== 'string') {
-      throw new TypeError('A normalized RainViewer frame is required.');
+    var provider = frame && PROVIDERS[frame.providerId];
+    if (!provider || provider.tile.kind !== 'xyz' || typeof frame.path !== 'string') {
+      throw new TypeError('A normalized XYZ radar frame is required.');
     }
     assertTileCoordinate('z', z);
     assertTileCoordinate('x', x);
     assertTileCoordinate('y', y);
-    if (z > PROVIDERS.rainviewer.tile.maxNativeZoom) throw new RangeError('RainViewer native zoom cannot exceed 7.');
-    var host = trustedHttpsOrigin(frame.tileHost, 'rainviewer.com');
-    if (!host) throw new Error('RainViewer frame has an untrusted tile host.');
+    if (z > provider.tile.maxNativeZoom) throw new RangeError(provider.label + ' native zoom cannot exceed ' + provider.tile.maxNativeZoom + '.');
+    var host = frame.providerId === RAINVIEWER_ID
+      ? trustedHttpsOrigin(frame.tileHost, 'rainviewer.com')
+      : exactHttpsOrigin(frame.tileHost);
+    var allowedOrigins = provider.discovery.allowedTileOrigins;
+    if (!host || (allowedOrigins && allowedOrigins.indexOf(host) === -1)) {
+      throw new Error(provider.label + ' frame has an untrusted tile host.');
+    }
     var size = options.size === 512 ? 512 : 256;
     var smooth = options.smooth === false ? 0 : 1;
     var snow = options.snow === false ? 0 : 1;
@@ -484,7 +618,7 @@
   function selectProvider(healthByProvider, options) {
     healthByProvider = healthByProvider || {};
     options = options || {};
-    var order = Array.isArray(options.order) ? options.order : [RAINVIEWER_ID, NOAA_ID];
+    var order = Array.isArray(options.order) ? options.order : [PRIMARY_PROVIDER_ID, NOAA_ID];
     var coverage = options.coverageByProvider || {};
     var candidates = [];
     order.forEach(function (providerId) {
@@ -501,7 +635,7 @@
       return {
         selectedProviderId: null,
         provider: null,
-        primaryProviderId: RAINVIEWER_ID,
+        primaryProviderId: PRIMARY_PROVIDER_ID,
         role: null,
         isFallback: false,
         state: anyCoverage ? RADAR_STATE.FAILURE : RADAR_STATE.NO_COVERAGE,
@@ -514,12 +648,12 @@
       return healthDelta || left.provider.priority - right.provider.priority;
     });
     var selected = candidates[0];
-    var fallback = selected.provider.id !== RAINVIEWER_ID;
-    var primaryHealth = healthByProvider[RAINVIEWER_ID];
+    var fallback = selected.provider.id !== PRIMARY_PROVIDER_ID;
+    var primaryHealth = healthByProvider[PRIMARY_PROVIDER_ID];
     return {
       selectedProviderId: selected.provider.id,
       provider: selected.provider,
-      primaryProviderId: RAINVIEWER_ID,
+      primaryProviderId: PRIMARY_PROVIDER_ID,
       role: fallback ? 'fallback' : 'primary',
       isFallback: fallback,
       state: selected.health.reason === 'stale-frame' ? RADAR_STATE.STALE : RADAR_STATE.AVAILABLE,
@@ -595,12 +729,15 @@
   }
 
   return deepFreeze({
-    providerIds: { RAINVIEWER: RAINVIEWER_ID, NOAA_MRMS: NOAA_ID },
+    providerIds: { RAINVIEWER: RAINVIEWER_ID, BUILD_RADAR: BUILD_PROVIDER_ID, NOAA_MRMS: NOAA_ID },
+    primaryProviderId: PRIMARY_PROVIDER_ID,
     healthStatus: HEALTH,
     radarState: RADAR_STATE,
     providers: PROVIDERS,
     parseRainViewerDiscovery: parseRainViewerDiscovery,
+    parseXyzDiscovery: parseXyzDiscovery,
     buildRainViewerTileUrl: buildRainViewerTileUrl,
+    buildXyzRadarTileUrl: buildXyzRadarTileUrl,
     buildRainViewerCoverageUrl: buildRainViewerCoverageUrl,
     createRollingRequestBudget: createRollingRequestBudget,
     parseNoaaDiscovery: parseNoaaDiscovery,

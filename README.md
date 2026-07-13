@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.91.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.92.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
 [![Cameras](https://img.shields.io/badge/cameras-36%2C592-cyan)]()
@@ -149,7 +149,7 @@ The pinned package/tarball/file/license inventory is `vendor/dependencies.json`.
 
 ## Data Sources
 
-- **Radar**: RainViewer primary with official NOAA/NWS MRMS fallback; the UI identifies the active source, age, resolution, coverage, and degradation reason
+- **Radar**: RainViewer primary with official NOAA/NWS MRMS fallback; distributors may package one strictly allowlisted RainViewer-v2-compatible primary instead. The UI identifies the active source, age, resolution, coverage, and degradation reason
 - **Hazard context**: NOAA nowCOAST 15-minute lightning density and NIFC WFIGS current wildfire perimeters, both optional and keyless
 - **Tropical context**: NOAA NHC forecast points, tracks, cones, and coastal watches/warnings from the official tropical weather summary ArcGIS service, optional and keyless
 - **Flood planning context**: NOAA WPC excessive-rainfall/significant-river outlooks plus strictly threshold-authorized USGS/NWPS gauge joins, optional and keyless; the UI explicitly distinguishes outlook guidance from warnings and all-clear claims
@@ -157,6 +157,19 @@ The pinned package/tarball/file/license inventory is `vendor/dependencies.json`.
 - **Cameras**: 30+ official state/local DOT sources (Caltrans, FL511, WSDOT, NYCDOT, IDOT, MDOT, CDOT, WV511, NMRoads, Tennessee SmartWay, Clarksville Traffic Cameras, etc.), OpenTrafficCamMap, NOAA/NWS, USGS, NRAO, NPS, MWRA, EarthCam, first-party IPCamLive destinations, LiveBeaches, and verified-live YouTube streams
 - **City discovery list**: U.S. Census Bureau 2025 Gazetteer places file, filtered to legal city records and written as `City, State`
 - **Weather**: National Weather Service (NWS) hourly forecast API
+
+## Custom Radar Distributions
+
+`config/radar-provider.json` is disabled in the official distribution. A distributor may configure exactly one credential-free HTTPS RainViewer-v2-compatible discovery endpoint, explicit tile origins, required attribution, native zoom, history, and freshness thresholds. The provider ID and protocol are fixed; query strings, fragments, credentials, wildcards, unknown fields, and insecure origins fail validation.
+
+After editing the configuration, regenerate the immutable local runtime module and synchronize only its exact origins into `connect-src`:
+
+```bash
+python scripts/build_radar_config.py --update-csp index.html
+python scripts/package_release.py --check
+```
+
+The packaged endpoint replaces RainViewer as the primary source and falls directly to NOAA/NWS MRMS when unhealthy. Runtime URL parameters and local storage cannot select or alter it. Disabling or changing the configuration with the same command removes the prior generated origins before adding the current allowlist.
 
 ## Refreshing Camera Data
 

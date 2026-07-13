@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.92.0 - 2026-07-12
+
+- Added an optional distribution-time RainViewer-v2-compatible radar endpoint with a fixed provider identity, explicit HTTPS discovery/tile allowlist, required attribution, declared zoom/history/freshness capabilities, generated immutable runtime configuration, and CSP synchronization. Unsafe or stale configuration blocks the release gate; no URL or local-state override exists.
+- The configured source uses the existing discovery, health, timeline, attribution, rendering, and tile-error contracts and falls independently to NOAA/NWS MRMS. Default RainViewer behavior is unchanged. Added generator/CSP/runtime/unit and real headless configured-provider fixtures. SW v65.
+
 ## v0.91.0 - 2026-07-12
 
 - Split camera ingestion behind an ordered typed provider registry and atomic `ProviderResult` contract. Shared MapIcons, DataTables/WKT, Iteris GeoJSON, and CARS GraphQL implementations now use injected runtime services in `scripts/providers/`, while facade functions preserve provider names, CLI substring/request ordering, transactional merge behavior, and test patch points.
