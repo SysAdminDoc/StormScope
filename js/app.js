@@ -2,7 +2,7 @@
   'use strict';
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.83.0';
+  var APP_VERSION = '0.84.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -3541,6 +3541,7 @@
   function registerServiceWorker() {
     var status = document.getElementById('cache-status');
     var clearButton = document.getElementById('clear-cache');
+    var keepButton = document.getElementById('keep-offline-data');
     var updateNotice = document.getElementById('update-notice');
     var applyUpdate = document.getElementById('apply-update');
 
@@ -3590,12 +3591,30 @@
       });
     }
 
-    function refreshUsage(registration) {
-      return requestWorker(registration, 'STORMSCOPE_GET_CACHE_USAGE').then(function (usage) {
-        status.classList.remove('error');
-        status.textContent = tr('cache.usage', { bytes: formatBytes(usage.bytes), count: localNumber(usage.entries || 0) });
-        clearButton.disabled = false;
-      });
+    async function refreshUsage(registration, outcome) {
+      var usage = await requestWorker(registration, 'STORMSCOPE_GET_CACHE_USAGE');
+      var storage = navigator.storage || null;
+      var estimate = storage && storage.estimate
+        ? await storage.estimate().catch(function () { return {}; })
+        : {};
+      var persisted = storage && storage.persisted
+        ? await storage.persisted().catch(function () { return false; })
+        : null;
+      var originUsage = Number(estimate.usage || usage.originUsage || 0);
+      var originQuota = Number(estimate.quota || usage.originQuota || 0);
+      var percent = originQuota > 0 ? Math.min(100, originUsage / originQuota * 100) : 0;
+      var durability = persisted === true ? tr('cache.persistent')
+        : persisted === false ? tr('cache.bestEffort') : tr('cache.persistenceUnsupported');
+      status.classList.remove('error');
+      status.textContent = tr('cache.usageDetailed', {
+        cacheBytes: formatBytes(usage.bytes), count: localNumber(usage.entries || 0),
+        usage: formatBytes(originUsage), quota: formatBytes(originQuota),
+        percent: StormScopeI18n.formatNumber(percent, { maximumFractionDigits: 1 }, appLocale),
+        durability: durability
+      }) + (outcome ? ' · ' + tr(outcome) : '');
+      keepButton.disabled = persisted === true || !storage || typeof storage.persist !== 'function';
+      clearButton.disabled = false;
+      return { persisted: persisted, usage: originUsage, quota: originQuota };
     }
 
     navigator.serviceWorker.addEventListener('message', function (event) {
@@ -3637,6 +3656,20 @@
       navigator.serviceWorker.register('sw.js').then(function (registration) {
         watchForUpdate(registration);
         return navigator.serviceWorker.ready.then(function () {
+          keepButton.addEventListener('click', function () {
+            if (!navigator.storage || typeof navigator.storage.persist !== 'function') {
+              keepButton.disabled = true;
+              status.textContent = tr('cache.persistenceUnsupported');
+              return;
+            }
+            keepButton.disabled = true;
+            status.textContent = tr('cache.persistenceRequesting');
+            navigator.storage.persist().then(function (granted) {
+              return refreshUsage(registration, granted ? 'cache.persistenceGranted' : 'cache.persistenceDenied');
+            }).catch(function () {
+              return refreshUsage(registration, 'cache.persistenceFailed');
+            });
+          });
           clearButton.addEventListener('click', function () {
             clearButton.disabled = true;
             status.classList.remove('error');

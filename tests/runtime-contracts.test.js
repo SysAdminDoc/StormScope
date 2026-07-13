@@ -112,7 +112,10 @@ test('static CSP removes inline script execution and mirrors trusted frame hosts
 
 test('cache diagnostics and recovery are reachable from the layers panel', () => {
   assert.match(html, /id="cache-status"[^>]*role="status"/);
+  assert.match(html, /id="keep-offline-data"/);
   assert.match(html, /id="clear-cache"/);
+  assert.match(app, /storage\.persisted/);
+  assert.match(app, /navigator\.storage\.persist\(\)/);
   assert.match(app, /STORMSCOPE_GET_CACHE_USAGE/);
   assert.match(app, /STORMSCOPE_CLEAR_CACHES/);
   assert.match(app, /STORMSCOPE_CACHE_ERROR/);

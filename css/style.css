@@ -632,6 +632,8 @@ button:focus-visible {
   cursor: pointer;
 }
 
+.cache-clear + .cache-clear { margin-top: 6px; }
+
 .cache-clear:hover:not(:disabled) {
   border-color: var(--accent);
   color: var(--accent);

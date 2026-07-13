@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.84.0 - 2026-07-12
+
+- Expanded offline cache diagnostics with origin storage usage, quota, percentage, and persistent versus best-effort durability. A user-triggered Keep offline data action handles granted, denied, failed, and unsupported persistence requests while the existing clear action still preserves the offline app shell. Added localized and rendered storage-path coverage. Service-worker cache bumped to v57.
+
 ## v0.83.0 - 2026-07-12
 
 - Added Automatic, Standard, and Low data modes. Automatic honors the browser Save-Data preference; Low starts radar manually, suppresses speculative frame preload, changes still-image refresh from 15 to 60 seconds, and preserves alerts and explicitly opened feeds.

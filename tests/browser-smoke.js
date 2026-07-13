@@ -46,7 +46,7 @@ async function exerciseLandscapeLayout(page, theme) {
   await page.locator('#radar-speed').selectOption('800');
   if (!await page.locator('#toggle-alerts').isChecked()) await page.locator('#toggle-alerts').check();
   await assertSurfaceWithinViewport(page, '#layers-panel', `${theme} layers`);
-  await assertControlsReachable(page, '#layers-panel', ['#toggle-radar', '#alert-severity', '#app-locale', '#clear-cache']);
+  await assertControlsReachable(page, '#layers-panel', ['#toggle-radar', '#alert-severity', '#app-locale', '#keep-offline-data', '#clear-cache']);
   assert.ok((await page.screenshot()).length > 1000);
   await layersToggle.click();
 
@@ -339,6 +339,19 @@ async function main() {
   try {
     const page = await context.newPage();
     page.baseURL = baseURL;
+    await page.addInitScript(() => {
+      let persistent = false;
+      window.__persistCalls = 0;
+      Object.defineProperty(navigator.storage, 'estimate', {
+        configurable: true, value: () => Promise.resolve({ usage: 25 * 1024 * 1024, quota: 100 * 1024 * 1024 })
+      });
+      Object.defineProperty(navigator.storage, 'persisted', {
+        configurable: true, value: () => Promise.resolve(persistent)
+      });
+      Object.defineProperty(navigator.storage, 'persist', {
+        configurable: true, value: () => { window.__persistCalls += 1; persistent = true; return Promise.resolve(true); }
+      });
+    });
     page.on('pageerror', (error) => errors.push(error.message));
     page.on('console', (message) => {
       if (message.type() !== 'error') return;
@@ -868,6 +881,13 @@ async function main() {
     await page.getByRole('button', { name: 'Toggle layers panel' }).click();
     const clearCache = page.getByRole('button', { name: 'Clear cached data' });
     await clearCache.waitFor({ state: 'visible' });
+    await page.locator('#cache-status').filter({ hasText: '25%' }).waitFor({ state: 'visible' });
+    assert.match(await page.locator('#cache-status').textContent(), /best effort/);
+    await page.getByRole('button', { name: 'Keep offline data' }).click();
+    await page.locator('#cache-status').filter({ hasText: 'offline data will be kept' }).waitFor({ state: 'visible' });
+    assert.match(await page.locator('#cache-status').textContent(), /persistent/);
+    assert.equal(await page.evaluate(() => window.__persistCalls), 1);
+    assert.equal(await page.getByRole('button', { name: 'Keep offline data' }).isDisabled(), true);
     await clearCache.click();
     await page.locator('#cache-status').filter({ hasText: 'Offline cache:' }).waitFor({ state: 'visible' });
     const cacheNames = await page.evaluate(() => caches.keys());
