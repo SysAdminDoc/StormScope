@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.83.0 - 2026-07-12
+
+- Added Automatic, Standard, and Low data modes. Automatic honors the browser Save-Data preference; Low starts radar manually, suppresses speculative frame preload, changes still-image refresh from 15 to 60 seconds, and preserves alerts and explicitly opened feeds.
+- Low-data startup now validates only the camera manifest instead of downloading all 49 shards. Search exposes an explicit catalog load action, shared camera links hash-verify only the matching durable-ID shard, and Standard resumes the complete aggregate-verified generation. Added unit and headless request-count coverage. Service-worker cache bumped to v56.
+
 ## v0.82.0 - 2026-07-12
 
 - Added a keyboard-accessible, user-triggered situation summary with localized map coordinates/zoom, radar source/coverage/age and Universal Blue light/moderate/heavy center echoes, active alert/warning counts, independently loaded wildfire perimeter counts/freshness, and the five globally nearest verified cameras.

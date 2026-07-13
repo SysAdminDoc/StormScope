@@ -126,6 +126,15 @@
       </select>
     </div>
     <div class="select-row">
+      <label for="data-mode">Data usage</label>
+      <select id="data-mode">
+        <option value="auto">Automatic</option>
+        <option value="standard">Standard</option>
+        <option value="low">Low data</option>
+      </select>
+    </div>
+    <div id="low-data-status" class="context-status" role="status" aria-live="polite">Standard data mode.</div>
+    <div class="select-row">
       <label for="radar-speed">Radar playback</label>
       <select id="radar-speed">
         <option value="0">Manual only</option>
@@ -196,6 +205,10 @@
     <div class="search-heading-row">
       <h2 id="search-heading">Find cameras</h2>
       <span id="search-progress" role="status" aria-live="polite">Loading camera index…</span>
+    </div>
+    <div id="camera-catalog-deferred" class="camera-catalog-deferred hidden">
+      <span id="camera-catalog-deferred-status" role="status" aria-live="polite"></span>
+      <button id="load-camera-catalog" type="button">Load camera catalog</button>
     </div>
     <label class="search-field" for="camera-query">Name, road, state, or county</label>
     <input id="camera-query" class="search-input" type="search" autocomplete="off" placeholder="Search 36,592 cameras">
@@ -316,6 +329,7 @@
   <script src="js/nws-alerts.js"></script>
   <script src="js/radar-providers.js"></script>
   <script src="js/i18n.js"></script>
+  <script src="js/data-mode.js"></script>
   <script src="js/camera-store.js"></script>
   <script src="js/saved-state.js"></script>
   <script src="js/scene-codec.js"></script>

@@ -892,6 +892,41 @@ async function main() {
     assert.ok(expectedDiagnosticError >= 0, 'the injected runtime failure must reach the page error channel');
     errors.splice(expectedDiagnosticError, 1);
 
+    const lowDataContext = await browser.newContext({ viewport: { width: 900, height: 700 } });
+    await lowDataContext.addInitScript(() => {
+      const connection = new EventTarget();
+      Object.defineProperty(connection, 'saveData', { value: true, configurable: true });
+      Object.defineProperty(navigator, 'connection', { value: connection, configurable: true });
+    });
+    const lowDataPage = await lowDataContext.newPage();
+    lowDataPage.baseURL = baseURL;
+    let lowDataShardRequests = 0;
+    lowDataPage.on('request', request => {
+      if (request.url().includes('/data/camera-shards/')) lowDataShardRequests += 1;
+    });
+    await addNetworkFixtures(lowDataPage);
+    await lowDataPage.goto(baseURL, { waitUntil: 'domcontentloaded' });
+    await lowDataPage.locator('#camera-count').filter({ hasText: '36,592 cameras available' }).waitFor({ state: 'visible' });
+    await lowDataPage.waitForFunction(() => /RainViewer|NOAA\/NWS MRMS/.test(document.querySelector('#radar-meta').textContent));
+    assert.deepEqual(await lowDataPage.evaluate(() => window._stormscope.getLowDataState()), {
+      preference: 'auto', enabled: true, source: 'save-data', imageRefreshMs: 60000, cameraCatalogDeferred: true
+    });
+    assert.equal(await lowDataPage.locator('#radar-speed').inputValue(), '0');
+    assert.equal((await lowDataPage.evaluate(() => window._stormscope.getRadarPreloadState())).status, 'suppressed-low-data');
+    assert.equal(lowDataShardRequests, 0, 'Save-Data startup must fetch only the camera manifest');
+    await lowDataPage.getByRole('button', { name: 'Find cameras' }).click();
+    await lowDataPage.getByRole('button', { name: 'Load camera catalog' }).click();
+    await lowDataPage.locator('#camera-count').filter({ hasText: '36,592 indexed' }).waitFor({ state: 'visible' });
+    assert.equal(lowDataShardRequests, 49);
+    await lowDataPage.getByRole('button', { name: 'Toggle layers panel' }).click();
+    await lowDataPage.locator('#data-mode').selectOption('standard');
+    await lowDataPage.reload({ waitUntil: 'domcontentloaded' });
+    await lowDataPage.locator('#camera-count').filter({ hasText: '36,592 indexed' }).waitFor({ state: 'visible' });
+    assert.deepEqual(await lowDataPage.evaluate(() => window._stormscope.getLowDataState()), {
+      preference: 'standard', enabled: false, source: 'standard', imageRefreshMs: 15000, cameraCatalogDeferred: false
+    });
+    await lowDataContext.close();
+
     const mobile = await context.newPage();
     mobile.baseURL = baseURL;
     await mobile.setViewportSize({ width: 390, height: 844 });

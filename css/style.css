@@ -655,6 +655,9 @@ button:focus-visible {
 .search-heading-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
 .search-heading-row h2 { font-size: 15px; }
 #search-progress { color: var(--text-dim); font-size: 11px; text-align: right; }
+.camera-catalog-deferred { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; margin-bottom: 10px; padding: 9px; border: 1px solid var(--accent); border-radius: 8px; color: var(--text-dim); font-size: 11px; }
+.camera-catalog-deferred button { min-height: 36px; padding: 6px 9px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-dark); color: var(--text); cursor: pointer; }
+.camera-catalog-deferred button:disabled { opacity: 0.45; cursor: not-allowed; }
 .search-field { display: block; margin-bottom: 5px; color: var(--text-dim); font-size: 12px; }
 .search-input, .search-filter-grid input, .search-filter-grid select { width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-dark); color: var(--text); font: inherit; }
 .search-filter-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }

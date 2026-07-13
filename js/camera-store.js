@@ -217,6 +217,7 @@
     this.onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
     this.sha256 = options.sha256 || defaultSha256;
     this._cameras = [];
+    this._index = null;
     this._controller = null;
     this._requestId = 0;
   }
@@ -291,7 +292,65 @@
       source: 'monolith', loaded: cameras.length, total: cameras.length,
       shardsLoaded: 0, shardsTotal: 0, complete: true, fallbackCause: cause || null
     });
-    return { cameras: this.getCameras(), source: 'monolith', index: null };
+    return { cameras: this.getCameras(), source: 'monolith', index: null, complete: true };
+  };
+
+  CameraStore.prototype._loadShards = async function (index, requestId, signal, options) {
+    var seenIds = new Set();
+    var healthTotals = {};
+    var providerTotals = {};
+    var verifiedTotal = 0;
+    var shardHashes = [];
+    var previousId = 0;
+    for (var shardIndex = 0; shardIndex < index.shards.length; shardIndex += 1) {
+      this._assertActive(requestId, signal);
+      var descriptor = index.shards[shardIndex];
+      var shardUrl = relativeUrl(this.indexUrl, descriptor.path);
+      var shardText = await this._fetchText(shardUrl, signal);
+      this._assertActive(requestId, signal);
+      var shardHash = await this.sha256(new TextEncoder().encode(shardText));
+      this._assertActive(requestId, signal);
+      if (shardHash !== descriptor.sha256) throw new Error('Camera shard hash mismatch: ' + descriptor.id);
+      var shard = JSON.parse(shardText);
+      if (!Array.isArray(shard) || shard.length !== descriptor.count) {
+        throw new Error('Camera shard is invalid: ' + descriptor.id);
+      }
+      shard.forEach(function (camera) {
+        if (!Number.isInteger(camera.id) || camera.id <= previousId || seenIds.has(camera.id)) {
+          throw new Error('Camera IDs are not strictly increasing: ' + camera.id);
+        }
+        previousId = camera.id;
+        seenIds.add(camera.id);
+        var health = String(camera.health || 'unknown');
+        var provider = String(camera.provider || 'unattributed');
+        healthTotals[health] = (healthTotals[health] || 0) + 1;
+        providerTotals[provider] = (providerTotals[provider] || 0) + 1;
+        if (camera.last_verified != null) verifiedTotal += 1;
+      });
+      if (shard[0].id !== descriptor.first_id || shard[shard.length - 1].id !== descriptor.last_id) {
+        throw new Error('Camera shard ID range mismatch: ' + descriptor.id);
+      }
+      shardHashes.push(hexBytes(shardHash));
+      this._cameras.push.apply(this._cameras, shard);
+      this._progress(options.onProgress, {
+        source: 'shards', loaded: this._cameras.length, total: index.total,
+        shardsLoaded: shardIndex + 1, shardsTotal: index.shards.length, complete: false
+      });
+    }
+    if (this._cameras.length !== index.total) throw new Error('Camera shard total does not match index');
+    var aggregateBytes = new Uint8Array(shardHashes.length * 32);
+    shardHashes.forEach(function (hash, position) { aggregateBytes.set(hash, position * 32); });
+    if (await this.sha256(aggregateBytes) !== index.dataset_sha256) throw new Error('Camera dataset hash mismatch');
+    if (!totalsEqual(healthTotals, index.health_totals) ||
+        !totalsEqual(providerTotals, index.provider_totals) || verifiedTotal !== index.verified_total) {
+      throw new Error('Camera verification summaries do not match the generation');
+    }
+    this._progress(options.onProgress, {
+      source: 'shards', loaded: this._cameras.length, total: index.total,
+      shardsLoaded: index.shards.length, shardsTotal: index.shards.length, complete: true
+    });
+    this._assertActive(requestId, signal);
+    return { cameras: this.getCameras(), source: 'shards', index: index, complete: true };
   };
 
   CameraStore.prototype.load = async function (options) {
@@ -306,67 +365,11 @@
       var index = await this._fetchJson(this.indexUrl, signal);
       this._assertActive(requestId, signal);
       this._validateIndex(index);
-      var seenIds = new Set();
-      var healthTotals = {};
-      var providerTotals = {};
-      var verifiedTotal = 0;
-      var shardHashes = [];
-      var previousId = 0;
-      for (var shardIndex = 0; shardIndex < index.shards.length; shardIndex += 1) {
-        this._assertActive(requestId, signal);
-        var descriptor = index.shards[shardIndex];
-        var shardUrl = relativeUrl(this.indexUrl, descriptor.path);
-        var shardText = await this._fetchText(shardUrl, signal);
-        this._assertActive(requestId, signal);
-        var shardBytes = new TextEncoder().encode(shardText);
-        var shardHash = await this.sha256(shardBytes);
-        this._assertActive(requestId, signal);
-        if (shardHash !== descriptor.sha256) {
-          throw new Error('Camera shard hash mismatch: ' + descriptor.id);
-        }
-        var shard = JSON.parse(shardText);
-        if (!Array.isArray(shard) || shard.length !== descriptor.count) {
-          throw new Error('Camera shard is invalid: ' + descriptor.id);
-        }
-        shard.forEach(function (camera) {
-          if (!Number.isInteger(camera.id) || camera.id <= previousId || seenIds.has(camera.id)) {
-            throw new Error('Camera IDs are not strictly increasing: ' + camera.id);
-          }
-          previousId = camera.id;
-          seenIds.add(camera.id);
-          var health = String(camera.health || 'unknown');
-          var provider = String(camera.provider || 'unattributed');
-          healthTotals[health] = (healthTotals[health] || 0) + 1;
-          providerTotals[provider] = (providerTotals[provider] || 0) + 1;
-          if (camera.last_verified != null) verifiedTotal += 1;
-        });
-        if (shard[0].id !== descriptor.first_id || shard[shard.length - 1].id !== descriptor.last_id) {
-          throw new Error('Camera shard ID range mismatch: ' + descriptor.id);
-        }
-        shardHashes.push(hexBytes(shardHash));
-        this._cameras.push.apply(this._cameras, shard);
-        this._progress(options.onProgress, {
-          source: 'shards', loaded: this._cameras.length, total: index.total,
-          shardsLoaded: shardIndex + 1, shardsTotal: index.shards.length, complete: false
-        });
+      this._index = index;
+      if (options.deferShards) {
+        return { cameras: [], source: 'index-only', index: index, complete: false };
       }
-      if (this._cameras.length !== index.total) throw new Error('Camera shard total does not match index');
-      var aggregateBytes = new Uint8Array(shardHashes.length * 32);
-      shardHashes.forEach(function (hash, position) { aggregateBytes.set(hash, position * 32); });
-      if (await this.sha256(aggregateBytes) !== index.dataset_sha256) {
-        throw new Error('Camera dataset hash mismatch');
-      }
-      if (!totalsEqual(healthTotals, index.health_totals) ||
-          !totalsEqual(providerTotals, index.provider_totals) ||
-          verifiedTotal !== index.verified_total) {
-        throw new Error('Camera verification summaries do not match the generation');
-      }
-      this._progress(options.onProgress, {
-        source: 'shards', loaded: this._cameras.length, total: index.total,
-        shardsLoaded: index.shards.length, shardsTotal: index.shards.length, complete: true
-      });
-      this._assertActive(requestId, signal);
-      return { cameras: this.getCameras(), source: 'shards', index: index };
+      return await this._loadShards(index, requestId, signal, options);
     } catch (error) {
       if (error && error.name === 'AbortError') throw error;
       this._assertActive(requestId, signal);
@@ -376,6 +379,49 @@
     } finally {
       if (requestId === this._requestId) this._controller = null;
     }
+  };
+
+  CameraStore.prototype.resume = async function (options) {
+    options = options || {};
+    if (!this._index) return this.load(options);
+    this.cancel();
+    var requestId = this._requestId;
+    var controller = new AbortController();
+    var signal = controller.signal;
+    this._controller = controller;
+    this._cameras = [];
+    try {
+      return await this._loadShards(this._index, requestId, signal, options);
+    } catch (error) {
+      if (error && error.name === 'AbortError') throw error;
+      this._assertActive(requestId, signal);
+      if (options.fallback === false) throw error;
+      this._cameras = [];
+      return this._loadMonolith(requestId, signal, options.onProgress, String(error && error.message || error));
+    } finally {
+      if (requestId === this._requestId) this._controller = null;
+    }
+  };
+
+  CameraStore.prototype.loadCameraById = async function (id) {
+    id = Number(id);
+    if (!Number.isInteger(id) || !this._index) return null;
+    var descriptor = this._index.shards.find(function (item) {
+      return id >= item.first_id && id <= item.last_id;
+    });
+    if (!descriptor) return null;
+    var controller = new AbortController();
+    var text = await this._fetchText(relativeUrl(this.indexUrl, descriptor.path), controller.signal);
+    var hash = await this.sha256(new TextEncoder().encode(text));
+    if (hash !== descriptor.sha256) throw new Error('Camera shard hash mismatch: ' + descriptor.id);
+    var shard = JSON.parse(text);
+    if (!Array.isArray(shard) || shard.length !== descriptor.count ||
+        shard[0].id !== descriptor.first_id || shard[shard.length - 1].id !== descriptor.last_id) {
+      throw new Error('Camera shard is invalid: ' + descriptor.id);
+    }
+    var camera = shard.find(function (item) { return item.id === id; }) || null;
+    if (camera && !this._cameras.some(function (item) { return item.id === id; })) this._cameras.push(camera);
+    return camera;
   };
 
   CameraStore.prototype.getCameras = function () {

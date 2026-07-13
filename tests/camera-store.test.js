@@ -108,6 +108,45 @@ test('loads bounded shards progressively and reports cumulative progress', async
   assert.deepEqual(progress.map(item => [item.loaded, item.complete]), [[2, false], [3, false], [3, true]]);
 });
 
+test('manifest-only load fetches no shards and resume verifies the complete generation', async () => {
+  const calls = [];
+  const fixture = generation([[camera(1), camera(2)], [camera(3)]]);
+  const payloads = {
+    'data/cameras.index.json': fixture.index,
+    ['data/' + fixture.index.shards[0].path]: fixture.texts[0],
+    ['data/' + fixture.index.shards[1].path]: fixture.texts[1]
+  };
+  const store = new cameraStore.CameraStore({ fetch: async url => {
+    calls.push(url);
+    return response(payloads[url]);
+  } });
+  const deferred = await store.load({ deferShards: true });
+  assert.equal(deferred.source, 'index-only');
+  assert.equal(deferred.complete, false);
+  assert.deepEqual(calls, ['data/cameras.index.json']);
+  const complete = await store.resume();
+  assert.equal(complete.complete, true);
+  assert.deepEqual(complete.cameras.map(item => item.id), [1, 2, 3]);
+});
+
+test('durable-ID lookup fetches and verifies exactly one matching shard', async () => {
+  const calls = [];
+  const fixture = generation([[camera(1), camera(2)], [camera(3)]]);
+  const payloads = {
+    'data/cameras.index.json': fixture.index,
+    ['data/' + fixture.index.shards[0].path]: fixture.texts[0],
+    ['data/' + fixture.index.shards[1].path]: fixture.texts[1]
+  };
+  const store = new cameraStore.CameraStore({ fetch: async url => {
+    calls.push(url);
+    return response(payloads[url]);
+  } });
+  await store.load({ deferShards: true });
+  assert.equal((await store.loadCameraById(3)).id, 3);
+  assert.deepEqual(calls, ['data/cameras.index.json', 'data/' + fixture.index.shards[1].path]);
+  assert.equal(await store.loadCameraById(99), null);
+});
+
 test('falls back to the monolith after a shard failure', async () => {
   const monolith = [camera(10), camera(11)];
   const fixture = generation([[camera(1)]]);
