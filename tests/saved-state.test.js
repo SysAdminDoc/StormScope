@@ -132,7 +132,7 @@ test('workflow profiles round-trip bounded settings while v2 views migrate uncha
     radar: { palette: 'colorblind', speed: 400 },
     alertSeverity: 'severe',
     cameraFilters: { query: 'I-95', state: 'Virginia', source: 'dot', type: 'image', sort: 'distance', healthy: true, favorites: false },
-    dataMode: 'low', weatherUnits: 'metric'
+    dataMode: 'low', weatherUnits: 'metric', outlookDay: 2
   });
   const store = SavedState.createStore(storeOptions(SavedState.memoryStorage()));
   store.saveView('Workflow', workflow, { id: 'workflow' });
@@ -145,6 +145,7 @@ test('workflow profiles round-trip bounded settings while v2 views migrate uncha
   }, { nowIso: new Date(NOW).toISOString() });
   assert.equal(migrated.version, 3);
   assert.deepEqual(migrated.views[0].snapshot, snapshot());
+  assert.throws(() => store.saveView('Bad outlook', snapshot({ outlookDay: 4 })), /outlook day/);
 });
 
 test('corrupt imports and future versions do not overwrite good state', () => {

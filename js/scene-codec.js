@@ -9,7 +9,7 @@
   var VERSION = 1;
   var PREFIX = VERSION + '.';
   var MAX_TOKEN_LENGTH = 2048;
-  var LAYERS = ['radar', 'cameras', 'coverage', 'alerts', 'lightning', 'wildfires', 'satellite', 'tropical'];
+  var LAYERS = ['radar', 'cameras', 'coverage', 'alerts', 'lightning', 'wildfires', 'satellite', 'tropical', 'wpcOutlooks', 'usgsGauges'];
   var MAX_LAYER_BITS = (1 << LAYERS.length) - 1;
   var PALETTES = ['standard', 'colorblind', 'contrast'];
   var SPEEDS = [0, 400, 800, 1600];
@@ -51,8 +51,8 @@
     var radar = objectValue(source.radar, 'scene radar');
     var filters = objectValue(source.cameraFilters, 'scene camera filters');
     var normalizedLayers = {};
-    LAYERS.forEach(function (name) {
-      if (name === 'tropical' && layers[name] == null) {
+    LAYERS.forEach(function (name, index) {
+      if (index >= 7 && layers[name] == null) {
         normalizedLayers[name] = false;
         return;
       }
@@ -66,6 +66,8 @@
     ));
     var speed = Number(radar.speed);
     if (SPEEDS.indexOf(speed) === -1) throw new TypeError('radar speed is unsupported');
+    var outlookDay = source.outlookDay == null ? 1 : finite(source.outlookDay, 'outlook day', 1, 3);
+    if (!Number.isInteger(outlookDay)) throw new TypeError('outlook day is invalid');
     return {
       map: {
         lat: Math.round(finite(map.lat, 'latitude', -90, 90) * 100000) / 100000,
@@ -88,7 +90,8 @@
         sort: choice(filters.sort, SORTS, 'camera sort'),
         healthy: Boolean(filters.healthy)
       },
-      activeCameraId: activeCameraId
+      activeCameraId: activeCameraId,
+      outlookDay: outlookDay
     };
   }
 
@@ -104,7 +107,8 @@
       a: SEVERITIES.indexOf(scene.alertSeverity),
       f: [scene.cameraFilters.query, scene.cameraFilters.state, SOURCES.indexOf(scene.cameraFilters.source),
         FEED_TYPES.indexOf(scene.cameraFilters.type), SORTS.indexOf(scene.cameraFilters.sort), scene.cameraFilters.healthy ? 1 : 0],
-      c: scene.activeCameraId
+      c: scene.activeCameraId,
+      o: scene.outlookDay
     };
   }
 
@@ -131,7 +135,8 @@
         query: source.f[0], state: source.f[1], source: SOURCES[source.f[2]], type: FEED_TYPES[source.f[3]],
         sort: SORTS[source.f[4]], healthy: Boolean(source.f[5])
       },
-      activeCameraId: source.c
+      activeCameraId: source.c,
+      outlookDay: source.o == null ? 1 : source.o
     });
   }
 

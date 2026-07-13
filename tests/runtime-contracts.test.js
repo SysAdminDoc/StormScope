@@ -253,6 +253,8 @@ test('official context layers are optional, attributed, and cannot obscure warni
   assert.match(html, /js\/context-layers\.js/);
   assert.match(html, /js\/tropical-cyclones\.js/);
   assert.match(serviceWorker, /\.\/js\/tropical-cyclones\.js/);
+  assert.match(html, /js\/flood-outlooks\.js/);
+  assert.match(serviceWorker, /\.\/js\/flood-outlooks\.js/);
   assert.match(html, /<input[^>]*type="checkbox"[^>]*id="toggle-lightning"[^>]*>/);
   assert.match(html, /<input[^>]*type="checkbox"[^>]*id="toggle-wildfires"[^>]*>/);
   assert.match(html, /id="lightning-status"[^>]*role="status"/);

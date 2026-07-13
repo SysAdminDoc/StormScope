@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.88.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.89.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
 [![Cameras](https://img.shields.io/badge/cameras-36%2C592-cyan)]()
@@ -25,6 +25,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 - **Local Favorites and Workflow Profiles** — Named schema-v3 profiles restore map, layers, radar presentation, alert threshold, camera filters, weather units, and data mode; three immutable presets and validated portable migration/import/export work without an account
 - **Shareable Map Scenes** — Copy or share a bounded versioned link containing the map, public layers, radar frame/presentation, alerts, camera filters, and active camera without exposing favorites or private local state
 - **NHC Tropical Cyclones** — Optional official advisory centers, forecast points/tracks/cones, and coastal watches/warnings with explicit partial/no-active states and nearby cameras
+- **WPC Flood Outlooks & Gauges** — Selected Day 1–3 excessive-rainfall and five-day significant-river outlooks remain independent; viewport gauges appear only after a USGS observation is joined to matching official NOAA NWPS flood thresholds
 - **Connection-Aware Data Usage** — Automatic mode honors Save-Data by pausing the camera corpus, radar animation/preload, and frequent still refreshes; Standard and Low overrides work in every browser, with explicit catalog and feed starts
 - **Installable PWA** — Stable installed identity, verified Severe Weather and Travel shortcuts, wide/narrow install screenshots, Chromium install prompting, and accurate Safari Add to Home Screen guidance
 - **Recoverable Offline Storage** — Cache diagnostics report cache bytes plus origin usage/quota, percentage, and persistence state; users can request durable offline storage or clear runtime data while preserving the app shell
@@ -139,6 +140,8 @@ The pinned package/tarball/file/license inventory is `vendor/dependencies.json`.
 - [RainViewer API](https://www.rainviewer.com/api.html) — Free weather radar tiles (no key)
 - [NOAA/NWS MRMS](https://mapservices.weather.noaa.gov/) — Official fallback radar imagery and history (no key)
 - [NOAA National Hurricane Center GIS](https://www.nhc.noaa.gov/gis/) — Official tropical forecast points, tracks, cones, and watches/warnings (no key)
+- [NOAA Weather Prediction Center](https://www.wpc.ncep.noaa.gov/qpf/excessive_rainfall_outlook_ero.php) — Official excessive-rainfall and significant-river-flood outlooks (no key)
+- [USGS Water Data](https://api.waterdata.usgs.gov/) + [NOAA NWPS](https://water.noaa.gov/about/api) — Current gauge observations displayed only with matching official flood thresholds (no key)
 - [NWS API](https://www.weather.gov/documentation/services-web-api) — Free hourly weather data (no key)
 - [HLS.js 1.6.16](https://github.com/video-dev/hls.js/) (Apache-2.0) — HLS video stream playback
 - Camera data from 30+ official state/local DOT sources + [OpenTrafficCamMap](https://github.com/AidanWelch/OpenTrafficCamMap) (MIT) + NOAA/NWS + USGS + NRAO + NPS + MWRA + EarthCam + IPCamLive + LiveBeaches + verified-live YouTube streams
@@ -148,6 +151,7 @@ The pinned package/tarball/file/license inventory is `vendor/dependencies.json`.
 - **Radar**: RainViewer primary with official NOAA/NWS MRMS fallback; the UI identifies the active source, age, resolution, coverage, and degradation reason
 - **Hazard context**: NOAA nowCOAST 15-minute lightning density and NIFC WFIGS current wildfire perimeters, both optional and keyless
 - **Tropical context**: NOAA NHC forecast points, tracks, cones, and coastal watches/warnings from the official tropical weather summary ArcGIS service, optional and keyless
+- **Flood planning context**: NOAA WPC excessive-rainfall/significant-river outlooks plus strictly threshold-authorized USGS/NWPS gauge joins, optional and keyless; the UI explicitly distinguishes outlook guidance from warnings and all-clear claims
 - **Cameras**: 30+ official state/local DOT sources (Caltrans, FL511, WSDOT, NYCDOT, IDOT, MDOT, CDOT, WV511, NMRoads, Tennessee SmartWay, Clarksville Traffic Cameras, etc.), OpenTrafficCamMap, NOAA/NWS, USGS, NRAO, NPS, MWRA, EarthCam, first-party IPCamLive destinations, LiveBeaches, and verified-live YouTube streams
 - **City discovery list**: U.S. Census Bureau 2025 Gazetteer places file, filtered to legal city records and written as `City, State`
 - **Weather**: National Weather Service (NWS) hourly forecast API

@@ -9,12 +9,13 @@ function scene(overrides = {}) {
     map: { lat: 39.123456, lon: -98.654321, zoom: 7 },
     layers: {
       radar: true, cameras: true, coverage: false, alerts: true,
-      lightning: false, wildfires: true, satellite: false, tropical: true
+      lightning: false, wildfires: true, satellite: false, tropical: true, wpcOutlooks: true, usgsGauges: false
     },
     radar: { opacity: 0.72, palette: 'colorblind', speed: 400, frameTime: 1783796400000 },
     alertSeverity: 'severe',
     cameraFilters: { query: 'río', state: 'New Mexico', source: 'dot', type: 'image', sort: 'distance', healthy: true },
-    activeCameraId: 31415
+    activeCameraId: 31415,
+    outlookDay: 2
   }, overrides);
 }
 
@@ -26,12 +27,13 @@ test('versioned scene token round-trips every documented public field', () => {
     map: { lat: 39.12346, lon: -98.65432, zoom: 7 },
     layers: {
       radar: true, cameras: true, coverage: false, alerts: true,
-      lightning: false, wildfires: true, satellite: false, tropical: true
+      lightning: false, wildfires: true, satellite: false, tropical: true, wpcOutlooks: true, usgsGauges: false
     },
     radar: { opacity: 0.72, palette: 'colorblind', speed: 400, frameTime: 1783796400000 },
     alertSeverity: 'severe',
     cameraFilters: { query: 'río', state: 'New Mexico', source: 'dot', type: 'image', sort: 'distance', healthy: true },
-    activeCameraId: '31415'
+    activeCameraId: '31415',
+    outlookDay: 2
   });
   assert.deepEqual(codec.fromHash('#' + codec.toHash(scene())), codec.decode(token));
 });
@@ -43,7 +45,7 @@ test('favorites, saved views, locale, theme, and unknown private fields are neve
   assert.doesNotMatch(serialized, /favorite|savedViews|locale|theme|secret/);
 });
 
-test('decodes pre-tropical scene tokens with the appended layer disabled', () => {
+test('decodes legacy scene tokens with appended layers disabled and Day 1 selected', () => {
   const legacyPayload = {
     v: 1,
     m: [39.12346, -98.65432, 7],
@@ -57,7 +59,10 @@ test('decodes pre-tropical scene tokens with the appended layer disabled', () =>
   const decoded = codec.decode(token);
   assert.equal(decoded.layers.satellite, false);
   assert.equal(decoded.layers.tropical, false);
+  assert.equal(decoded.layers.wpcOutlooks, false);
+  assert.equal(decoded.layers.usgsGauges, false);
   assert.equal(decoded.layers.wildfires, true);
+  assert.equal(decoded.outlookDay, 1);
 });
 
 test('invalid, oversized, future, and old scene URLs fail closed', () => {
@@ -69,7 +74,7 @@ test('invalid, oversized, future, and old scene URLs fail closed', () => {
   assert.throws(() => codec.encode(scene({ radar: { opacity: 1, palette: 'animated', speed: 800, frameTime: null } })), /palette/);
   assert.throws(() => codec.encode(scene({ radar: { opacity: 1, palette: 'standard', speed: 123, frameTime: null } })), /speed/);
   const excessiveLayerBits = Buffer.from(JSON.stringify({
-    v: 1, m: [0, 0, 1], l: 256, r: [50, 0, 0, null], a: 0, f: ['', '', 0, 0, 0, 0], c: null
+    v: 1, m: [0, 0, 1], l: 1024, r: [50, 0, 0, null], a: 0, f: ['', '', 0, 0, 0, 0], c: null
   }), 'utf8').toString('base64url');
   assert.throws(() => codec.decode('1.' + excessiveLayerBits), /shape/);
   assert.equal(codec.fromHash('#unrelated=value'), null);

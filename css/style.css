@@ -511,10 +511,16 @@ button:focus-visible {
 .context-statuses a { color: var(--accent); text-decoration: none; }
 .context-statuses .error { color: var(--danger); }
 .context-statuses .stale { color: #ffd166; }
-.satellite-swatch, .tropical-swatch, .lightning-swatch, .wildfire-swatch { width: 9px; height: 9px; border-radius: 2px; }
+.context-layer-option { margin: -2px 0 2px 24px; }
+.context-source-links { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 3px 6px; }
+.context-limitation { grid-column: 2 / 4; margin: -1px 0 2px; color: var(--text-dim); font-size: 10px; line-height: 1.35; }
+.satellite-swatch, .tropical-swatch, .wpc-outlook-swatch, .usgs-gauge-swatch, .lightning-swatch, .wildfire-swatch { width: 9px; height: 9px; border-radius: 2px; }
 .satellite-swatch { background: linear-gradient(135deg, #2a9d8f, #e9c46a); }
 .tropical-swatch { position: relative; box-sizing: border-box; width: 10px; height: 10px; border: 2px dashed #f4a261; border-radius: 50%; background: transparent; }
 .tropical-swatch::after { position: absolute; inset: 2px; border-radius: 50%; background: #ff2d55; content: ''; }
+.wpc-outlook-swatch { box-sizing: border-box; border: 2px dashed #f4d35e; border-radius: 1px; transform: rotate(45deg); background: transparent; }
+.usgs-gauge-swatch { position: relative; box-sizing: border-box; border: 2px solid #4cc9f0; border-radius: 50%; background: transparent; }
+.usgs-gauge-swatch::after { position: absolute; top: 3px; left: 0; width: 100%; border-top: 1px solid currentColor; color: #4cc9f0; content: ''; }
 .lightning-swatch { background: linear-gradient(135deg, #00e5ff, #ff2d55); }
 .wildfire-swatch { border: 1px solid #ff6b35; background: rgba(255, 107, 53, 0.2); }
 .tropical-storm-list { grid-column: 2 / 4; display: grid; gap: 4px; margin: 1px 0 0; padding: 0; list-style: none; }

@@ -153,6 +153,13 @@
       if (['us', 'metric'].indexOf(units) === -1) throw new TypeError('view weather units are invalid');
       snapshot.weatherUnits = units;
     }
+    if (source.outlookDay != null) {
+      var outlookDay = finiteNumber(source.outlookDay, 'view outlook day');
+      if (!Number.isInteger(outlookDay) || outlookDay < 1 || outlookDay > 3) {
+        throw new TypeError('view outlook day is invalid');
+      }
+      snapshot.outlookDay = outlookDay;
+    }
     return snapshot;
   }
 

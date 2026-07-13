@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.89.0 - 2026-07-12
+
+- Added optional official WPC Day 1–3 excessive-rainfall and five-day significant-river-flood outlooks with independent paginated feeds, exact issue/valid periods, category/pattern styling, source links, explicit planning limitations, and last-good partial recovery.
+- Added viewport-bounded flood gauges that render only when a current USGS stage observation safely joins to the same NOAA NWPS station, matching stage units, and finite official action/minor/moderate/major thresholds. Added profile/scene Day selection, lifecycle refresh, CSP, diagnostics, EN/ES UI, unit/live-query/rendered coverage, and SW v62.
+
 ## v0.88.0 - 2026-07-12
 
 - Added a default-off official NOAA NHC tropical-cyclone layer using the CORS-enabled forecast point, track, cone, and coastal watch/warning GeoJSON services. Advisory mismatches fail closed, feed states distinguish ready/partial/no-active/unavailable, and total failures retain the last good layer.
