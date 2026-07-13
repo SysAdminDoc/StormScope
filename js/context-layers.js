@@ -1,4 +1,4 @@
-/* Keyless official lightning and wildfire context-provider contracts. */
+/* Keyless official satellite, lightning, and wildfire context-provider contracts. */
 'use strict';
 
 (function (root, factory) {
@@ -9,7 +9,14 @@
   var LIGHTNING_CAPABILITIES = 'https://nowcoast.noaa.gov/geoserver/observations/lightning_detection/ows?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetCapabilities';
   var LIGHTNING_WMS = 'https://nowcoast.noaa.gov/geoserver/observations/lightning_detection/ows';
   var WILDFIRE_LAYER = 'https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0';
+  var GOES_IMAGE_SERVER = 'https://satellitemaps.nesdis.noaa.gov/arcgis/rest/services/MERGEDGC_Last_24hr/ImageServer';
   var providers = Object.freeze({
+    satellite: Object.freeze({
+      id: 'satellite', label: 'NOAA NESDIS merged GOES GeoColor', defaultVisible: false,
+      imageServerUrl: GOES_IMAGE_SERVER, refreshMs: 10 * 60 * 1000, staleMs: 35 * 60 * 1000,
+      coverage: '76.5°S–76.5°N, merged GOES East and West',
+      attribution: Object.freeze({ text: 'NOAA NESDIS GeoColor', url: 'https://www.nesdis.noaa.gov/imagery/interactive-maps' })
+    }),
     lightning: Object.freeze({
       id: 'lightning', label: 'NOAA nowCOAST lightning density', defaultVisible: false,
       capabilitiesUrl: LIGHTNING_CAPABILITIES, wmsUrl: LIGHTNING_WMS,
@@ -50,6 +57,47 @@
     while (longitude < -180) longitude += 360;
     while (longitude > 180) longitude -= 360;
     return longitude;
+  }
+
+  function parseGoesMetadata(payload) {
+    var extent = payload && payload.timeInfo && payload.timeInfo.timeExtent;
+    if (!Array.isArray(extent) || !Number.isFinite(Number(extent[1]))) {
+      throw new TypeError('NOAA GOES metadata has no latest frame time');
+    }
+    return { latestTime: Number(extent[1]), coverage: providers.satellite.coverage };
+  }
+
+  function goesRequest(west, south, east, north, latestTime, viewport) {
+    var width = Math.max(320, Math.min(1200, Math.round(Number(viewport && viewport.width) || 1024)));
+    var height = Math.max(240, Math.min(900, Math.round(Number(viewport && viewport.height) || 768)));
+    var parameters = new URLSearchParams({
+      f: 'image', bbox: [west, south, east, north].join(','), bboxSR: '4326', imageSR: '4326',
+      size: width + ',' + height, format: 'png32', transparent: 'true',
+      interpolation: 'RSP_BilinearInterpolation', time: String(latestTime)
+    });
+    return {
+      bounds: [[south, west], [north, east]],
+      url: providers.satellite.imageServerUrl + '/exportImage?' + parameters.toString()
+    };
+  }
+
+  function buildGoesExportRequests(bounds, latestTime, viewport) {
+    if (!bounds || !Number.isFinite(Number(latestTime))) throw new TypeError('GOES bounds and frame time are required');
+    var south = Math.max(-76.49, Number(bounds.south));
+    var north = Math.min(76.45, Number(bounds.north));
+    var rawWest = Number(bounds.west);
+    var rawEast = Number(bounds.east);
+    if (![south, north, rawWest, rawEast].every(Number.isFinite) || south >= north) {
+      throw new TypeError('GOES map bounds are invalid or outside coverage');
+    }
+    if (rawEast - rawWest >= 360) return [goesRequest(-180, south, 180, north, latestTime, viewport)];
+    var west = normalizeLongitude(rawWest);
+    var east = normalizeLongitude(rawEast);
+    if (east >= west && rawEast <= 180 && rawWest >= -180) {
+      return [goesRequest(west, south, east, north, latestTime, viewport)];
+    }
+    return [goesRequest(west, south, 180, north, latestTime, viewport),
+      goesRequest(-180, south, east, north, latestTime, viewport)];
   }
 
   function envelopeUrl(west, south, east, north, offset, pageSize) {
@@ -163,6 +211,8 @@
 
   return Object.freeze({
     providers: providers,
+    parseGoesMetadata: parseGoesMetadata,
+    buildGoesExportRequests: buildGoesExportRequests,
     parseLightningCapabilities: parseLightningCapabilities,
     buildWildfireQueries: buildWildfireQueries,
     fetchWildfirePages: fetchWildfirePages,

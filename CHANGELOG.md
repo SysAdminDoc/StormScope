@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.87.0 - 2026-07-12
+
+- Added an optional, default-off NOAA NESDIS merged GOES East/West GeoColor layer from the official time-enabled 24-hour image service. Metadata supplies the authoritative latest frame; image exports are clamped to viewport pixels and 76.5° satellite coverage and split safely across the antimeridian.
+- Satellite freshness, coverage, attribution, loading/error states, visibility lifecycle, map-move refresh, saved profiles, and scene links are explicit. A dedicated z315 pane keeps imagery below lightning/radar, warnings, and cameras; failures remain independent. Added unit and rendered provider coverage. Service-worker cache bumped to v60.
+
 ## v0.86.0 - 2026-07-12
 
 - Upgraded named views to schema-v3 workflow profiles covering map/layers/opacity, radar palette/preferred speed, alert threshold, all camera filters, weather units, and Auto/Standard/Low data preference. Existing v2 views migrate without resetting fields they never stored; automatic last-view persistence remains map-only; theme, locale, and favorite IDs are never overwritten.

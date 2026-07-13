@@ -511,7 +511,8 @@ button:focus-visible {
 .context-statuses a { color: var(--accent); text-decoration: none; }
 .context-statuses .error { color: var(--danger); }
 .context-statuses .stale { color: #ffd166; }
-.lightning-swatch, .wildfire-swatch { width: 9px; height: 9px; border-radius: 2px; }
+.satellite-swatch, .lightning-swatch, .wildfire-swatch { width: 9px; height: 9px; border-radius: 2px; }
+.satellite-swatch { background: linear-gradient(135deg, #2a9d8f, #e9c46a); }
 .lightning-swatch { background: linear-gradient(135deg, #00e5ff, #ff2d55); }
 .wildfire-swatch { border: 1px solid #ff6b35; background: rgba(255, 107, 53, 0.2); }
 .context-popup { color: #1d1d25; font: 12px/1.45 system-ui, sans-serif; }

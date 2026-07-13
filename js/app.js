@@ -2,7 +2,7 @@
   'use strict';
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.86.0';
+  var APP_VERSION = '0.87.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -100,6 +100,13 @@
   var monitorSelection = new StormScopeMultiCamera.Selection({ minimum: 2, maximum: 4 });
   var monitorRegistry = null;
   var monitorObserver = null;
+  var satelliteLayer = null;
+  var satelliteAbort = null;
+  var satelliteRefreshTimer = null;
+  var satelliteMoveTimer = null;
+  var satelliteLatestTime = null;
+  var satelliteStatusState = 'off';
+  var satelliteAttributionAdded = false;
   var lightningLayer = null;
   var lightningAbort = null;
   var lightningRefreshTimer = null;
@@ -128,19 +135,19 @@
   var WORKFLOW_PRESETS = Object.freeze({
     severe: {
       center: { lat: 39.5, lon: -98.5 }, zoom: 5,
-      layers: { radar: true, cameras: true, coverage: true, alerts: true, lightning: true, wildfires: false },
+      layers: { radar: true, cameras: true, coverage: true, alerts: true, satellite: false, lightning: true, wildfires: false },
       opacity: { radar: 0.7 }, radar: { palette: 'colorblind', speed: 800 }, alertSeverity: 'severe',
       cameraFilters: { query: '', state: '', source: '', type: '', sort: 'distance', healthy: true, favorites: false }, dataMode: 'auto'
     },
     wildfire: {
       center: { lat: 39, lon: -112 }, zoom: 5,
-      layers: { radar: false, cameras: true, coverage: false, alerts: true, lightning: false, wildfires: true },
+      layers: { radar: false, cameras: true, coverage: false, alerts: true, satellite: true, lightning: false, wildfires: true },
       opacity: { radar: 0.55 }, radar: { palette: 'standard', speed: 0 }, alertSeverity: 'moderate',
       cameraFilters: { query: '', state: '', source: '', type: '', sort: 'distance', healthy: true, favorites: false }, dataMode: 'auto'
     },
     travel: {
       center: { lat: 38.5, lon: -96 }, zoom: 5,
-      layers: { radar: true, cameras: true, coverage: false, alerts: true, lightning: false, wildfires: false },
+      layers: { radar: true, cameras: true, coverage: false, alerts: true, satellite: false, lightning: false, wildfires: false },
       opacity: { radar: 0.55 }, radar: { palette: 'colorblind', speed: 0 }, alertSeverity: 'moderate',
       cameraFilters: { query: '', state: '', source: '', type: '', sort: 'distance', healthy: true, favorites: false }, dataMode: 'auto'
     }
@@ -238,6 +245,9 @@
     map.createPane('contextRasterPane');
     map.getPane('contextRasterPane').style.zIndex = '325';
     map.getPane('contextRasterPane').style.pointerEvents = 'none';
+    map.createPane('satellitePane');
+    map.getPane('satellitePane').style.zIndex = '315';
+    map.getPane('satellitePane').style.pointerEvents = 'none';
     map.createPane('contextVectorPane');
     map.getPane('contextVectorPane').style.zIndex = '390';
 
@@ -737,6 +747,101 @@
     setContextStatusElement('lightning-status', tr('context.lightningStatus', {
       freshness: tr('context.' + freshness.state), time: contextTimestamp(lightningLatestTime)
     }), freshness.state);
+  }
+
+  function renderSatelliteStatus() {
+    if (satelliteStatusState === 'off') {
+      setContextStatusElement('satellite-status', tr('context.satelliteOff'), 'off');
+      return;
+    }
+    if (satelliteStatusState === 'loading') {
+      setContextStatusElement('satellite-status', tr('context.loading'), 'loading');
+      return;
+    }
+    if (satelliteStatusState === 'error') {
+      setContextStatusElement('satellite-status', tr(satelliteLayer ? 'context.refreshFailed' : 'context.unavailable'), 'error');
+      return;
+    }
+    var frameFreshness = StormScopeContextLayers.freshness(
+      satelliteLatestTime, StormScopeContextLayers.providers.satellite.staleMs
+    );
+    setContextStatusElement('satellite-status', tr('context.satelliteStatus', {
+      freshness: tr('context.' + frameFreshness.state), time: contextTimestamp(satelliteLatestTime)
+    }), frameFreshness.state);
+  }
+
+  function scheduleSatelliteRefresh() {
+    clearTimeout(satelliteRefreshTimer);
+    if (!document.getElementById('toggle-satellite').checked) return;
+    satelliteRefreshTimer = setTimeout(refreshSatellite, StormScopeContextLayers.providers.satellite.refreshMs);
+  }
+
+  async function refreshSatellite() {
+    if (!document.getElementById('toggle-satellite').checked || document.hidden) return;
+    if (satelliteAbort) satelliteAbort.abort();
+    satelliteAbort = new AbortController();
+    var signal = satelliteAbort.signal;
+    var pendingOverlays = [];
+    satelliteStatusState = 'loading';
+    renderSatelliteStatus();
+    try {
+      var provider = StormScopeContextLayers.providers.satellite;
+      var metadataResponse = await fetch(provider.imageServerUrl + '?f=pjson', { cache: 'no-store', signal: signal });
+      if (!metadataResponse.ok) throw new Error('HTTP ' + metadataResponse.status);
+      var metadata = StormScopeContextLayers.parseGoesMetadata(await metadataResponse.json());
+      var bounds = map.getBounds();
+      var requests = StormScopeContextLayers.buildGoesExportRequests({
+        west: bounds.getWest(), south: bounds.getSouth(), east: bounds.getEast(), north: bounds.getNorth()
+      }, metadata.latestTime, map.getSize());
+      var overlays = requests.map(function (request) {
+        return L.imageOverlay(request.url, request.bounds, {
+          opacity: 0.55, pane: 'satellitePane', crossOrigin: 'anonymous', interactive: false
+        });
+      });
+      pendingOverlays = overlays;
+      var nextLayer = L.layerGroup(overlays);
+      await Promise.all(overlays.map(function (overlay) {
+        return new Promise(function (resolve, reject) {
+          overlay.once('load', resolve);
+          overlay.once('error', function () { reject(new Error('NOAA GOES image failed')); });
+          overlay.addTo(map);
+        });
+      }));
+      if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+      if (satelliteLayer) map.removeLayer(satelliteLayer);
+      satelliteLayer = nextLayer;
+      nextLayer.addTo(map);
+      pendingOverlays = [];
+      satelliteLatestTime = metadata.latestTime;
+      satelliteStatusState = 'ready';
+      if (!satelliteAttributionAdded) {
+        map.attributionControl.addAttribution('<a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>');
+        satelliteAttributionAdded = true;
+      }
+      renderSatelliteStatus();
+    } catch (error) {
+      pendingOverlays.forEach(function (overlay) { if (map.hasLayer(overlay)) map.removeLayer(overlay); });
+      if (error.name === 'AbortError') return;
+      satelliteStatusState = 'error';
+      renderSatelliteStatus();
+    } finally {
+      scheduleSatelliteRefresh();
+    }
+  }
+
+  function disableSatellite() {
+    if (satelliteAbort) satelliteAbort.abort();
+    clearTimeout(satelliteRefreshTimer);
+    clearTimeout(satelliteMoveTimer);
+    if (satelliteLayer) map.removeLayer(satelliteLayer);
+    satelliteLayer = null;
+    if (satelliteAttributionAdded) {
+      var provider = StormScopeContextLayers.providers.satellite;
+      map.attributionControl.removeAttribution('<a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>');
+      satelliteAttributionAdded = false;
+    }
+    satelliteStatusState = 'off';
+    renderSatelliteStatus();
   }
 
   function renderWildfireStatus() {
@@ -1667,6 +1772,7 @@
         cameras: document.getElementById('toggle-cameras').checked,
         coverage: document.getElementById('toggle-coverage').checked,
         alerts: document.getElementById('toggle-alerts').checked,
+        satellite: document.getElementById('toggle-satellite').checked,
         lightning: document.getElementById('toggle-lightning').checked,
         wildfires: document.getElementById('toggle-wildfires').checked
       },
@@ -1787,6 +1893,11 @@
       document.getElementById('toggle-lightning').checked = layers.lightning;
       if (layers.lightning) refreshLightning();
       else disableLightning();
+    }
+    if (typeof layers.satellite === 'boolean') {
+      document.getElementById('toggle-satellite').checked = layers.satellite;
+      if (layers.satellite) refreshSatellite();
+      else disableSatellite();
     }
     if (typeof layers.wildfires === 'boolean') {
       document.getElementById('toggle-wildfires').checked = layers.wildfires;
@@ -3404,6 +3515,12 @@
       scheduleLastViewSave();
     });
 
+    document.getElementById('toggle-satellite').addEventListener('change', function () {
+      if (this.checked) refreshSatellite();
+      else disableSatellite();
+      scheduleLastViewSave();
+    });
+
     document.getElementById('toggle-wildfires').addEventListener('change', function () {
       if (this.checked) refreshWildfires();
       else disableWildfires();
@@ -3445,6 +3562,7 @@
       scheduleSearchRender();
       renderAlerts();
       renderLightningStatus();
+      renderSatelliteStatus();
       renderWildfireStatus();
       if (activeCamera) {
         updateModalCameraHealth(activeCamera);
@@ -3623,6 +3741,10 @@
       if (document.getElementById('toggle-wildfires').checked) {
         clearTimeout(wildfireMoveTimer);
         wildfireMoveTimer = setTimeout(refreshWildfires, 700);
+      }
+      if (document.getElementById('toggle-satellite').checked) {
+        clearTimeout(satelliteMoveTimer);
+        satelliteMoveTimer = setTimeout(refreshSatellite, 900);
       }
       if (document.getElementById('camera-sort').value === 'distance') scheduleSearchRender();
       scheduleLastViewSave();
@@ -3845,9 +3967,12 @@
         }
         if (alertAbort) alertAbort.abort();
         if (lightningAbort) lightningAbort.abort();
+        if (satelliteAbort) satelliteAbort.abort();
         if (wildfireAbort) wildfireAbort.abort();
         clearTimeout(alertRefreshTimer);
         clearTimeout(lightningRefreshTimer);
+        clearTimeout(satelliteRefreshTimer);
+        clearTimeout(satelliteMoveTimer);
         clearTimeout(wildfireRefreshTimer);
         return;
       }
@@ -3862,6 +3987,7 @@
       }
       fetchNwsAlerts();
       if (document.getElementById('toggle-lightning').checked) refreshLightning();
+      if (document.getElementById('toggle-satellite').checked) refreshSatellite();
       if (document.getElementById('toggle-wildfires').checked) refreshWildfires();
     });
 
@@ -3869,6 +3995,7 @@
       updateConnectionState();
       initRadar();
       if (document.getElementById('toggle-lightning').checked) refreshLightning();
+      if (document.getElementById('toggle-satellite').checked) refreshSatellite();
       if (document.getElementById('toggle-wildfires').checked) refreshWildfires();
     });
     window.addEventListener('offline', updateConnectionState);
@@ -3878,6 +4005,8 @@
       clearTimeout(alertRefreshTimer);
       clearTimeout(alertMoveTimer);
       clearTimeout(lightningRefreshTimer);
+      clearTimeout(satelliteRefreshTimer);
+      clearTimeout(satelliteMoveTimer);
       clearTimeout(wildfireRefreshTimer);
       clearTimeout(wildfireMoveTimer);
       setRadarPlaying(false);
@@ -3885,6 +4014,7 @@
       if (weatherAbort) weatherAbort.abort();
       if (alertAbort) alertAbort.abort();
       if (lightningAbort) lightningAbort.abort();
+      if (satelliteAbort) satelliteAbort.abort();
       if (wildfireAbort) wildfireAbort.abort();
       if (summaryWildfireAbort) summaryWildfireAbort.abort();
       if (cameraStore) cameraStore.cancel();
@@ -4054,9 +4184,11 @@
     },
     getContextState: function () {
       return {
-        lightning: Boolean(lightningLayer), wildfires: Boolean(wildfireLayer),
+        satellite: Boolean(satelliteLayer), lightning: Boolean(lightningLayer), wildfires: Boolean(wildfireLayer),
+        satelliteStatus: satelliteStatusState,
         lightningStatus: lightningStatusState, wildfireStatus: wildfireStatusState,
         rasterZ: map.getPane('contextRasterPane').style.zIndex,
+        satelliteZ: map.getPane('satellitePane').style.zIndex,
         vectorZ: map.getPane('contextVectorPane').style.zIndex,
         warningZ: map.getPane('overlayPane').style.zIndex || '400',
         cameraZ: map.getPane('markerPane').style.zIndex || '600'

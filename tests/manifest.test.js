@@ -33,7 +33,7 @@ test('manifest shortcuts are bounded valid public scenes with existing icons', (
     return sceneCodec.fromHash(url.hash);
   });
   assert.deepEqual(scenes[0].layers, {
-    radar: true, cameras: true, coverage: false, alerts: true, lightning: false, wildfires: false
+    radar: true, cameras: true, coverage: false, alerts: true, lightning: false, wildfires: false, satellite: false
   });
   assert.equal(scenes[0].alertSeverity, 'severe');
   assert.equal(scenes[0].cameraFilters.healthy, true);

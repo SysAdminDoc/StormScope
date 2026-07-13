@@ -147,6 +147,16 @@ async function addNetworkFixtures(page, metrics, options) {
       });
       return;
     }
+    if (url.startsWith('https://satellitemaps.nesdis.noaa.gov/arcgis/rest/services/MERGEDGC_Last_24hr/ImageServer/exportImage')) {
+      await route.fulfill({ contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: pixel });
+      return;
+    }
+    if (url.startsWith('https://satellitemaps.nesdis.noaa.gov/arcgis/rest/services/MERGEDGC_Last_24hr/ImageServer')) {
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+        timeInfo: { timeExtent: [Date.now() - 3600000, Date.now() - 600000] }
+      }) });
+      return;
+    }
     if (url.startsWith('https://nowcoast.noaa.gov/geoserver/observations/lightning_detection/ows') &&
         url.includes('GetCapabilities')) {
       const latest = new Date(Date.now() - 5 * 60000).toISOString();
@@ -424,12 +434,15 @@ async function main() {
     const scrubber = page.locator('#radar-scrubber');
     assert.ok(Number(await scrubber.getAttribute('max')) > 0, 'radar timeline should expose multiple frames');
     assert.deepEqual(await page.evaluate(() => window._stormscope.getContextState()), {
-      lightning: false, wildfires: false, lightningStatus: 'off', wildfireStatus: 'off',
+      satellite: false, lightning: false, wildfires: false, satelliteStatus: 'off',
+      lightningStatus: 'off', wildfireStatus: 'off', satelliteZ: '315',
       rasterZ: '325', vectorZ: '390', warningZ: '400', cameraZ: '600'
     });
     await page.getByRole('button', { name: 'Toggle layers panel' }).click();
+    await page.locator('#toggle-satellite').check();
     await page.locator('#toggle-lightning').check();
     await page.locator('#toggle-wildfires').check();
+    await page.locator('#satellite-status').filter({ hasText: 'GOES GeoColor' }).waitFor({ state: 'visible' });
     await page.locator('#lightning-status').filter({ hasText: '15 min density' }).waitFor({ state: 'visible' });
     await page.locator('#wildfire-status').filter({ hasText: '2 wildfire perimeters' }).waitFor({ state: 'visible' });
     const popupOpened = await page.evaluate(() => {
@@ -456,9 +469,11 @@ async function main() {
     assert.match(await hostilePopup.locator('.incident-camera-status').textContent(), /nearby camera/);
     assert.ok(await hostilePopup.locator('.incident-camera-map').count() > 0);
     assert.deepEqual(await page.evaluate(() => window._stormscope.getContextState()), {
-      lightning: true, wildfires: true, lightningStatus: 'ready', wildfireStatus: 'ready',
+      satellite: true, lightning: true, wildfires: true, satelliteStatus: 'ready',
+      lightningStatus: 'ready', wildfireStatus: 'ready', satelliteZ: '315',
       rasterZ: '325', vectorZ: '390', warningZ: '400', cameraZ: '600'
     });
+    await page.locator('#toggle-satellite').uncheck();
     await page.locator('#toggle-lightning').uncheck();
     await page.locator('#toggle-wildfires').uncheck();
     await page.locator('#radar-speed').selectOption('0');
@@ -494,7 +509,8 @@ async function main() {
     await page.locator('#lightning-status').filter({ hasText: 'Official data unavailable' }).waitFor({ state: 'visible' });
     await page.locator('#wildfire-status').filter({ hasText: '2 wildfire perimeters' }).waitFor({ state: 'visible' });
     assert.deepEqual(await page.evaluate(() => window._stormscope.getContextState()), {
-      lightning: false, wildfires: true, lightningStatus: 'error', wildfireStatus: 'ready',
+      satellite: false, lightning: false, wildfires: true, satelliteStatus: 'off',
+      lightningStatus: 'error', wildfireStatus: 'ready', satelliteZ: '315',
       rasterZ: '325', vectorZ: '390', warningZ: '400', cameraZ: '600'
     });
     await page.locator('#toggle-lightning').uncheck();
@@ -858,7 +874,7 @@ async function main() {
     });
     const sharedScene = {
       map: { lat: 39.75, lon: -98.25, zoom: 6 },
-      layers: { radar: true, cameras: true, coverage: false, alerts: true, lightning: false, wildfires: false },
+      layers: { radar: true, cameras: true, coverage: false, alerts: true, lightning: false, wildfires: false, satellite: false },
       radar: { opacity: 0.48, palette: 'contrast', speed: 400, frameTime: sceneFixture.frameTime },
       alertSeverity: 'severe',
       cameraFilters: {

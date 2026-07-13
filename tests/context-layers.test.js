@@ -4,7 +4,27 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const context = require('../js/context-layers.js');
 
+test('GOES metadata and export requests are time and viewport bounded', () => {
+  const metadata = context.parseGoesMetadata({ timeInfo: { timeExtent: [1000, 2000] } });
+  assert.equal(metadata.latestTime, 2000);
+  const requests = context.buildGoesExportRequests(
+    { west: -125, south: 25, east: -66, north: 50 }, metadata.latestTime, { width: 1400, height: 1000 }
+  );
+  const url = new URL(requests[0].url);
+  assert.equal(requests.length, 1);
+  assert.equal(url.hostname, 'satellitemaps.nesdis.noaa.gov');
+  assert.equal(url.searchParams.get('bbox'), '-125,25,-66,50');
+  assert.equal(url.searchParams.get('size'), '1200,900');
+  assert.equal(url.searchParams.get('time'), '2000');
+  assert.deepEqual(requests[0].bounds, [[25, -125], [50, -66]]);
+  assert.equal(context.buildGoesExportRequests(
+    { west: 170, south: -20, east: 190, north: 20 }, 2000, { width: 600, height: 400 }
+  ).length, 2);
+  assert.throws(() => context.parseGoesMetadata({}), /frame time/);
+});
+
 test('official context providers are keyless, attributed, and off by default', () => {
+  assert.equal(context.providers.satellite.defaultVisible, false);
   assert.equal(context.providers.lightning.defaultVisible, false);
   assert.equal(context.providers.wildfires.defaultVisible, false);
   assert.equal(new URL(context.providers.lightning.wmsUrl).hostname, 'nowcoast.noaa.gov');

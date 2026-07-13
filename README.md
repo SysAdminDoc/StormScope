@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.86.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.87.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
 [![Cameras](https://img.shields.io/badge/cameras-36%2C592-cyan)]()
@@ -18,6 +18,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 - **Incident Camera Context** — Alert and wildfire details rank up to eight non-offline cameras inside or within 50 km of the mapped boundary by durable verification evidence, distance, and bearing, with map/open actions and an atomic playable 2–4 camera monitor
 - **Accessible Situation Summary** — A keyboard-triggered semantic panel reports localized map position/zoom, center radar coverage/age/echo intensity, warning and independently loaded wildfire counts, and the globally nearest verified cameras; alerts and cameras open without moving the map
 - **Optional Hazard Context** — Keyless NOAA lightning density and complete paginated, viewport-bounded NIFC wildfire perimeters start off, show freshness and attribution, fail independently, retain the last complete snapshot, and stay below warnings and cameras
+- **Official GOES Satellite Context** — Optional NOAA NESDIS merged GeoColor imagery uses the latest authoritative frame, bounded viewport exports, explicit coverage/freshness/attribution, and an independent pane below radar, warnings, and cameras
 - **36,592 Indexed Cameras** — 13,071 verified healthy, 1 degraded, and 23,520 not yet verified across traffic, FAA, NOAA/NWS, USGS, NRAO, park, university, provider, and webcam sources
 - **Fast Camera Discovery** — Progressive state shards make the map interactive before the full corpus loads; accessible search, health/source/type filters, health-first name/distance sorting, and a virtualized result list stay synchronized with the map without reclustering on scroll; Arrow/Page/Home/End navigation crosses unrendered slices
 - **Visible Feed Provenance** — Every camera viewer distinguishes provider frame time, StormScope verification, expiring device-local playback evidence, provider/source, feed type, cadence, and degraded reason without relying on hover text

@@ -7,7 +7,7 @@ const codec = require('../js/scene-codec.js');
 function scene(overrides = {}) {
   return Object.assign({
     map: { lat: 39.123456, lon: -98.654321, zoom: 7 },
-    layers: { radar: true, cameras: true, coverage: false, alerts: true, lightning: false, wildfires: true },
+    layers: { radar: true, cameras: true, coverage: false, alerts: true, lightning: false, wildfires: true, satellite: false },
     radar: { opacity: 0.72, palette: 'colorblind', speed: 400, frameTime: 1783796400000 },
     alertSeverity: 'severe',
     cameraFilters: { query: 'río', state: 'New Mexico', source: 'dot', type: 'image', sort: 'distance', healthy: true },
@@ -21,7 +21,7 @@ test('versioned scene token round-trips every documented public field', () => {
   assert.ok(token.length < 512);
   assert.deepEqual(codec.decode(token), {
     map: { lat: 39.12346, lon: -98.65432, zoom: 7 },
-    layers: { radar: true, cameras: true, coverage: false, alerts: true, lightning: false, wildfires: true },
+    layers: { radar: true, cameras: true, coverage: false, alerts: true, lightning: false, wildfires: true, satellite: false },
     radar: { opacity: 0.72, palette: 'colorblind', speed: 400, frameTime: 1783796400000 },
     alertSeverity: 'severe',
     cameraFilters: { query: 'río', state: 'New Mexico', source: 'dot', type: 'image', sort: 'distance', healthy: true },
