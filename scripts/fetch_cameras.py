@@ -22,7 +22,6 @@ import urllib.error
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from dataclasses import dataclass
 from typing import Callable
 from zoneinfo import ZoneInfo
 
@@ -57,6 +56,33 @@ except ModuleNotFoundError:  # pragma: no cover - package import during tests
         validate_camera_data,
     )
 
+try:
+    from providers import FunctionProviderAdapter, ProviderRegistry, ProviderResult, ProviderRuntime
+    from providers.geospatial import IterisConfig, collect_iteris_geojson
+    from providers.traveler import (
+        CarsGraphqlConfig,
+        DataTablesConfig,
+        MapIconsConfig,
+        NewEnglandDataTablesConfig,
+        collect_cars_graphql,
+        collect_datatables,
+        collect_mapicons,
+        collect_new_england_datatables,
+    )
+except ModuleNotFoundError:  # pragma: no cover - package import during tests
+    from scripts.providers import FunctionProviderAdapter, ProviderRegistry, ProviderResult, ProviderRuntime
+    from scripts.providers.geospatial import IterisConfig, collect_iteris_geojson
+    from scripts.providers.traveler import (
+        CarsGraphqlConfig,
+        DataTablesConfig,
+        MapIconsConfig,
+        NewEnglandDataTablesConfig,
+        collect_cars_graphql,
+        collect_datatables,
+        collect_mapicons,
+        collect_new_england_datatables,
+    )
+
 sys.stdout.reconfigure(encoding='utf-8')
 ctx = ssl.create_default_context()
 
@@ -75,15 +101,16 @@ class IncompleteProviderError(RuntimeError):
     """Raised when a multi-request provider returns only a partial snapshot."""
 
 
-@dataclass(frozen=True)
-class ProviderResult:
-    name: str
-    cameras: list[dict]
-    error: str = ''
-
-    @property
-    def succeeded(self):
-        return not self.error and bool(self.cameras)
+def provider_runtime() -> ProviderRuntime:
+    """Resolve patchable ingestion services at call time for provider families."""
+    return ProviderRuntime(
+        fetch_json=fetch_json,
+        post_json=post_json,
+        http_bytes=_http_bytes,
+        add_camera=add_camera,
+        detect_type=detect_type,
+        log=print,
+    )
 
 
 def next_id():
@@ -408,135 +435,23 @@ def fetch_caltrans():
 
 # ── 511 Platform (FL, LA, PA, WI, and others) ──
 def fetch_511_mapicons(base_url, state_name):
-    try:
-        url = f'{base_url}/map/mapIcons/Cameras'
-        data = fetch_json(url)
-        items = data.get('item2', data) if isinstance(data, dict) else data
-        if not isinstance(items, list):
-            return 0
-        count = 0
-        for item in items:
-            loc = item.get('location', [0, 0])
-            if not isinstance(loc, list) or len(loc) < 2:
-                continue
-            lat, lon = loc[0], loc[1]
-            item_id = item.get('itemId', '')
-            name = item.get('title', '') or f'{state_name} Camera {item_id}'
-            img_url = f'{base_url}/map/Cctv/{item_id}'
-            add_camera(name, lat, lon, img_url, 'image', state_name, '', '', 'dot')
-            count += 1
-        return count
-    except Exception as e:
-        print(f'  {state_name} 511: {e}')
-        return 0
+    return collect_mapicons(provider_runtime(), MapIconsConfig(base_url, state_name))
 
 
 # ── New England 511 (ME/NH/VT) — DataTables feed with correct per-state labels ──
 def fetch_newengland511():
-    base = 'https://www.newengland511.org'
-    all_rows = []
-    start = 0
-    while True:
-        raw = _http_bytes(
-            base + '/List/GetData/Cameras',
-            headers={'Accept': 'application/json',
-                     'Content-Type': 'application/x-www-form-urlencoded',
-                     'X-Requested-With': 'XMLHttpRequest',
-                     'Referer': base + '/cctv', 'Origin': base},
-            data=f'draw=1&start={start}&length=100&search[value]='.encode('ascii'),
-            method='POST', timeout=30)
-        payload = json.loads(raw)
-        rows = payload.get('data', [])
-        all_rows.extend(rows)
-        total = payload.get('recordsTotal', 0)
-        start += 100
-        if not rows or start >= total:
-            break
-    count = 0
-    for row in all_rows:
-        state_name = row.get('state', '') or ''
-        if state_name not in {'Maine', 'New Hampshire', 'Vermont'}:
-            continue
-        images = row.get('images') or []
-        image_id = None
-        for img in images:
-            if not img.get('disabled') and not img.get('blocked') and img.get('imageUrl'):
-                image_id = img['imageUrl']
-                break
-        if not image_id:
-            continue
-        img_url = base + image_id if image_id.startswith('/') else image_id
-        wkt = ''
-        try:
-            wkt = row.get('latLng', {}).get('geography', {}).get('wellKnownText', '')
-        except (AttributeError, TypeError):
-            continue
-        match = re.search(r'POINT\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*\)', wkt)
-        if not match:
-            continue
-        lon, lat = float(match.group(1)), float(match.group(2))
-        name = row.get('location', '') or row.get('roadway', '') or f'{state_name} Camera'
-        add_camera(name, lat, lon, img_url, 'image', state_name,
-                   row.get('county', '') or '', row.get('direction', '') or '', 'dot',
-                   base + '/cctv', 10)
-        count += 1
-    return count
+    return collect_new_england_datatables(
+        provider_runtime(),
+        NewEnglandDataTablesConfig(),
+    )
 
 
 # ── 511 DataTables (Georgia, Florida detail) ──
 def fetch_511_datatables(base_url, state_name, referer=None):
-    try:
-        url = f'{base_url}/List/GetData/Cameras'
-        hdrs = {}
-        if referer:
-            hdrs['Referer'] = referer
-            hdrs['Origin'] = base_url
-        all_rows = []
-        start = 0
-        page_size = 500
-        while True:
-            body = {'draw': start // page_size + 1, 'start': start, 'length': page_size}
-            data = post_json(url, body, hdrs)
-            rows = data.get('data', [])
-            if not rows:
-                break
-            all_rows.extend(rows)
-            total = data.get('recordsTotal', 0)
-            start += len(rows)
-            if start >= total:
-                break
-        count = 0
-        for row in all_rows:
-            wkt = ''
-            try:
-                wkt = row.get('latLng', {}).get('geography', {}).get('wellKnownText', '')
-            except (AttributeError, TypeError):
-                continue
-            m = re.search(r'POINT\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*\)', wkt)
-            if not m:
-                continue
-            lon, lat = float(m.group(1)), float(m.group(2))
-            name = row.get('location', '') or row.get('roadway', '') or f'{state_name} Camera'
-            images = row.get('images', [])
-            img_url = ''
-            for img in images:
-                if not img.get('blocked'):
-                    raw_url = img.get('imageUrl', '')
-                    if raw_url:
-                        if raw_url.startswith('/'):
-                            img_url = base_url + raw_url
-                        else:
-                            img_url = raw_url
-                        break
-            if not img_url:
-                continue
-            add_camera(name, lat, lon, img_url, detect_type(img_url),
-                       state_name, '', '', 'dot')
-            count += 1
-        return count
-    except Exception as e:
-        print(f'  {state_name} DataTables: {e}')
-        return 0
+    return collect_datatables(
+        provider_runtime(),
+        DataTablesConfig(base_url, state_name, referer),
+    )
 
 
 # ── NYC DOT ──
@@ -719,7 +634,7 @@ def fetch_txdot():
 def fetch_nps():
     try:
         url = 'https://developer.nps.gov/api/v1/webcams?api_key=DEMO_KEY&limit=500'
-        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.90.0'})
+        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.91.0'})
         count = 0
         for cam in data.get('data', []):
             if str(cam.get('status') or '').lower() == 'inactive':
@@ -849,7 +764,7 @@ def _current_jpeg_snapshot(
     request = urllib.request.Request(
         url,
         headers={
-            'User-Agent': 'StormScope/0.90.0',
+            'User-Agent': 'StormScope/0.91.0',
             'Accept': 'image/jpeg,image/*,*/*',
             'Cache-Control': 'no-cache',
         },
@@ -2088,35 +2003,10 @@ def fetch_utah():
 
 # ── Iteris CDN GeoJSON (SC, MT, SD) ──
 def fetch_iteris_geojson(state_code, state_name):
-    try:
-        url = f'https://{state_code.lower()}.cdn.iteris-atis.com/geojson/icons/metadata/icons.cameras.geojson'
-        data = fetch_json(url, timeout=20)
-        count = 0
-        for feat in data.get('features', []):
-            geom = feat.get('geometry', {})
-            coords = geom.get('coordinates', [0, 0])
-            props = feat.get('properties', {})
-            desc = props.get('description', '')
-            cam_list = props.get('cameras', [])
-            if cam_list:
-                for c in cam_list:
-                    name = c.get('description', '') or c.get('name', '') or desc
-                    img_url = c.get('image', '') or c.get('https_url', '') or c.get('image_url', '')
-                    if not img_url:
-                        continue
-                    add_camera(name, coords[1], coords[0], img_url, detect_type(img_url),
-                               state_name, '', c.get('direction', ''), 'dot')
-                    count += 1
-            else:
-                img_url = props.get('image', '') or props.get('url', '')
-                if img_url:
-                    add_camera(desc or f'{state_name} Camera', coords[1], coords[0],
-                               img_url, detect_type(img_url), state_name, '', '', 'dot')
-                    count += 1
-        return count
-    except Exception as e:
-        print(f'  {state_name} Iteris: {e}')
-        return 0
+    return collect_iteris_geojson(
+        provider_runtime(),
+        IterisConfig(state_code, state_name),
+    )
 
 
 # ── SkyVDN HLS (SC SCDOT 511) — Iteris geojson metadata + verified live streams ──
@@ -5439,7 +5329,7 @@ def fetch_faa_weathercams_north_dakota():
     headers = {
         'User-Agent': (
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-            'AppleWebKit/537.36 Chrome/130.0 StormScope/0.90.0'
+            'AppleWebKit/537.36 Chrome/130.0 StormScope/0.91.0'
         ),
         'Accept': 'application/json, image/*, */*',
         'Referer': state_page,
@@ -6785,54 +6675,11 @@ def fetch_nd_dot():
         return 0
 
 
-# ── CARS / OneNetwork 511 GraphQL (Kansas, Nebraska) ──
-CARS_MAP_QUERY = (
-    'query MapFeatures($input: MapFeaturesArgs!){mapFeaturesQuery(input:$input)'
-    '{mapFeatures{__typename uri title features{id geometry properties type}'
-    ' ... on Camera{active views(limit:3){uri category ... on CameraView{url}}}}'
-    ' error{message type}}}'
-)
-
-
 def fetch_cars_graphql(base_url, state_name, bbox, source_page):
-    try:
-        body = json.dumps({
-            'query': CARS_MAP_QUERY,
-            'variables': {'input': {**bbox, 'zoom': 11, 'layerSlugs': ['normalCameras']}},
-        }).encode('utf-8')
-        payload = json.loads(_http_bytes(
-            base_url + '/api/graphql',
-            headers={'Accept': 'application/json', 'Content-Type': 'application/json',
-                     'Origin': base_url, 'Referer': base_url + '/'},
-            data=body, method='POST', timeout=40))
-        result = (payload.get('data') or {}).get('mapFeaturesQuery') or {}
-        feats = result.get('mapFeatures') or []
-        count = 0
-        seen = set()
-        for marker in feats:
-            if marker.get('__typename') != 'Camera' or not marker.get('active'):
-                continue
-            uri = marker.get('uri')
-            if uri in seen:
-                continue
-            views = marker.get('views') or []
-            img_url = str(views[0].get('url')) if views and views[0] else ''
-            img_url = img_url.split('?', 1)[0]
-            if not img_url.startswith('https://'):
-                continue
-            geom = ((marker.get('features') or [{}])[0].get('geometry') or {})
-            coords = geom.get('coordinates') or [0, 0]
-            if not isinstance(coords, list) or len(coords) < 2:
-                continue
-            seen.add(uri)
-            name = str(marker.get('title', '') or f'{state_name} Camera').strip()
-            add_camera(name, coords[1], coords[0], img_url, 'image', state_name,
-                       '', '', 'dot', source_page, 60)
-            count += 1
-        return count
-    except Exception as e:
-        print(f'  {state_name} CARS GraphQL: {e}')
-        return 0
+    return collect_cars_graphql(
+        provider_runtime(),
+        CarsGraphqlConfig(base_url, state_name, bbox, source_page),
+    )
 
 
 # ── Mississippi (MDOT Traffic) — ASP.NET PageMethod + per-site stream bubble ──
@@ -7012,6 +6859,52 @@ def provider_fetchers() -> list[tuple[str, Callable[[], int]]]:
     return providers
 
 
+EXPLICIT_PROVIDER_FAMILIES = {
+    "Florida (FL511)": "traveler-mapicons",
+    "Louisiana (LA511)": "traveler-mapicons",
+    "Pennsylvania (PA511)": "traveler-mapicons",
+    "Wisconsin (WI511)": "traveler-mapicons",
+    "Nevada (NV511)": "traveler-mapicons",
+    "Connecticut (CT511)": "traveler-mapicons",
+    "Idaho (ID511)": "traveler-mapicons",
+    "North Carolina (DriveNC)": "traveler-mapicons",
+    "New England 511 (ME/NH/VT)": "traveler-datatables",
+    "Georgia DOT (DataTables)": "traveler-datatables",
+    "Montana (Iteris)": "geospatial-iteris",
+    "South Dakota (Iteris)": "geospatial-iteris",
+    "South Carolina (SkyVDN)": "geospatial-stream",
+    "Kansas (KanDrive)": "traveler-cars-graphql",
+    "Nebraska (511 Nebraska)": "traveler-cars-graphql",
+}
+
+
+def provider_family(name: str, collector: Callable[[], int]) -> str:
+    """Return the explicit protocol family, then classify one-off adapters."""
+    if name in EXPLICIT_PROVIDER_FAMILIES:
+        return EXPLICIT_PROVIDER_FAMILIES[name]
+    function_name = getattr(collector, '__name__', '').casefold()
+    provider_name = name.casefold()
+    if 'baseline' in provider_name:
+        return 'baseline-file'
+    if '511_mapicons' in function_name or 'cars_graphql' in function_name:
+        return 'traveler-api'
+    if 'iteris_geojson' in function_name or 'arcgis' in function_name:
+        return 'geospatial-api'
+    if 'verified' in function_name or 'nps' in provider_name or 'usgs' in provider_name:
+        return 'verified-curated'
+    if any(token in provider_name for token in ('ipcamlive', 'angelcam', 'hazcams', 'weathercams')):
+        return 'hosted-camera'
+    return 'first-party-feed'
+
+
+def provider_adapters(fetchers=None) -> ProviderRegistry:
+    fetchers = provider_fetchers() if fetchers is None else fetchers
+    return ProviderRegistry([
+        FunctionProviderAdapter(name, provider_family(name, collector), collector)
+        for name, collector in fetchers
+    ])
+
+
 def merge_provider_results(
         existing: list[dict],
         results: list[ProviderResult],
@@ -7143,27 +7036,11 @@ def main(argv=None):
         print(f'Restored schema v{summary.schema_version} dataset with {summary.total} cameras')
         return 0
 
-    selected_fetchers = provider_fetchers()
-    if args.provider:
-        available_fetchers = selected_fetchers
-        selected_fetchers = []
-        missing = []
-        for requested_name in args.provider:
-            matches = [
-                item for item in available_fetchers
-                if requested_name.casefold() in item[0].casefold()
-            ]
-            if len(matches) == 1:
-                if matches[0] not in selected_fetchers:
-                    selected_fetchers.append(matches[0])
-            else:
-                missing.append(requested_name.casefold())
-        if missing:
-            raise ValueError(f"unknown or ambiguous provider(s): {', '.join(sorted(missing))}")
+    selected_adapters = provider_adapters().select(args.provider)
 
     print('StormScope Camera Data Fetcher')
     print('=' * 50)
-    results = [run_fetcher(name, fetcher) for name, fetcher in selected_fetchers]
+    results = [adapter.fetch(run_fetcher) for adapter in selected_adapters]
     if not any(result.succeeded for result in results):
         raise RuntimeError('all providers failed; dataset was not changed')
 

@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.90.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.91.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
 [![Cameras](https://img.shields.io/badge/cameras-36%2C592-cyan)]()
@@ -166,7 +166,7 @@ Run the data fetcher to pull fresh camera data from all state DOT APIs:
 python scripts/fetch_cameras.py
 ```
 
-This queries 30+ live sources and transactionally merges DOT/NPS results into `data/cameras.json`. Provider failures retain their last-known-good rows, curated sources are preserved, schema and coverage gates run before replacement, and the previous valid dataset is saved as `data/cameras.json.bak`. Use `--provider Oklahoma`, `--provider Delaware`, `--provider "West Virginia"`, or `--provider "Puerto Rico"` for a bounded provider-only refresh; HLS feeds must advance across two media-playlist probes, while ACT images must expose current provider timestamps and advancing frames. Restore the rollback copy with:
+This queries 30+ live sources and transactionally merges DOT/NPS results into `data/cameras.json`. Ordered typed adapters in `scripts/providers/` isolate shared MapIcons, DataTables/WKT, Iteris GeoJSON, and CARS GraphQL protocols behind an injected runtime; one-off collectors retain the same adapter/result boundary. Provider failures retain their last-known-good rows, curated sources are preserved, schema and coverage gates run before replacement, and the previous valid dataset is saved as `data/cameras.json.bak`. Use `--provider Oklahoma`, `--provider Delaware`, `--provider "West Virginia"`, or `--provider "Puerto Rico"` for a bounded provider-only refresh; selection remains case-insensitive and unambiguous. HLS feeds must advance across two media-playlist probes, while ACT images must expose current provider timestamps and advancing frames. Restore the rollback copy with:
 
 ```bash
 python scripts/fetch_cameras.py --rollback

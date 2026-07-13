@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.91.0 - 2026-07-12
+
+- Split camera ingestion behind an ordered typed provider registry and atomic `ProviderResult` contract. Shared MapIcons, DataTables/WKT, Iteris GeoJSON, and CARS GraphQL implementations now use injected runtime services in `scripts/providers/`, while facade functions preserve provider names, CLI substring/request ordering, transactional merge behavior, and test patch points.
+- Added focused adapter selection, protocol fixture, error containment, exact-row, pagination, deduplication, and compatibility tests. The committed camera monolith, index, and all shards remain byte-identical. SW v64.
+
 ## v0.90.0 - 2026-07-12
 
 - Added client-only GeoJSON and GPX overlays with atomic validation for type/MIME/5 MiB size, 2,000 features, 100,000 positions, supported geometry/ring structure, coordinate/elevation ranges, scalar properties, unsafe keys, XML entities, and bounded GPX waypoints/routes/track segments.
