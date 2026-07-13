@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.85.0 - 2026-07-12
+
+- Stabilized PWA identity with the prior implicit start URL, added tested Severe Weather and Travel scene shortcuts, and supplied exact wide/narrow dark-theme install screenshots with a reproducible headless capture command.
+- Added capability-gated Chromium installation, installed-state handling, Safari/iPadOS Add to Home Screen guidance, localized prompt states, and prompt failure recovery. Fixed camera-count overlap with radar controls and added manifest/install/browser tests. Service-worker cache bumped to v58 and now precaches install screenshots.
+
 ## v0.84.0 - 2026-07-12
 
 - Expanded offline cache diagnostics with origin storage usage, quota, percentage, and persistent versus best-effort durability. A user-triggered Keep offline data action handles granted, denied, failed, and unsupported persistence requests while the existing clear action still preserves the offline app shell. Added localized and rendered storage-path coverage. Service-worker cache bumped to v57.

@@ -2,7 +2,7 @@
   'use strict';
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.84.0';
+  var APP_VERSION = '0.85.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -83,6 +83,7 @@
   var radarWasPlaying = false;
   var feedPausedForVisibility = false;
   var reloadForUpdate = false;
+  var refreshInstallDiscovery = function () {};
   var weatherUnits = 'us';
   var alertsVisible = true;
   var activeAlerts = [];
@@ -3360,6 +3361,7 @@
       updateRadarScrubber();
       applyRadarPalette();
       updateLowDataUi();
+      refreshInstallDiscovery();
       if (radarFrames.length) updateRadarTimeDisplay();
       if (cameraDataTimestamp) updateDataFreshness();
       refreshCameraLoadLabels();
@@ -3689,6 +3691,48 @@
     });
   }
 
+  function initInstallDiscovery() {
+    var status = document.getElementById('install-status');
+    var button = document.getElementById('install-app');
+    var installPrompt = null;
+    var installed = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+    var ios = (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) && !window.MSStream;
+
+    function render() {
+      button.classList.toggle('hidden', !installPrompt || installed);
+      if (installed) status.textContent = tr('install.installed');
+      else if (installPrompt) status.textContent = tr('install.ready');
+      else status.textContent = tr(ios ? 'install.ios' : 'install.menu');
+    }
+
+    window.addEventListener('beforeinstallprompt', function (event) {
+      event.preventDefault();
+      installPrompt = event;
+      render();
+    });
+    window.addEventListener('appinstalled', function () {
+      installed = true;
+      installPrompt = null;
+      render();
+    });
+    button.addEventListener('click', async function () {
+      if (!installPrompt) return;
+      var prompt = installPrompt;
+      installPrompt = null;
+      button.classList.add('hidden');
+      try {
+        await prompt.prompt();
+        var choice = await prompt.userChoice;
+        status.textContent = tr(choice && choice.outcome === 'accepted' ? 'install.accepted' : 'install.dismissed');
+      } catch (error) {
+        status.textContent = tr('install.menu');
+      }
+    });
+    refreshInstallDiscovery = render;
+    render();
+  }
+
   function initLifecycle() {
     updateConnectionState();
     radarRefreshTimer = setInterval(function () {
@@ -3887,6 +3931,7 @@
     if (startupSharedScene) applySharedScene(startupSharedScene);
     else if (startupSceneError) setSavedStateStatus(tr('views.sceneInvalid'), true);
     bindUI();
+    initInstallDiscovery();
     updateMonitorSelectionUi();
     initRadar();
     loadCameras();

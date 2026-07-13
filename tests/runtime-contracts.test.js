@@ -141,6 +141,15 @@ test('PWA update and page lifecycle work are explicit and recoverable', () => {
   assert.match(i18n.catalogs.en['camera.paused'], /Feed paused/);
 });
 
+test('install discovery is capability-gated with iOS guidance', () => {
+  assert.match(html, /id="install-status"[^>]*role="status"/);
+  assert.match(html, /id="install-app"/);
+  assert.match(app, /beforeinstallprompt/);
+  assert.match(app, /appinstalled/);
+  assert.match(app, /maxTouchPoints > 1/);
+  assert.match(app, /install\.ios/);
+});
+
 test('deterministic runtime status copy never exposes raw localization bypasses', () => {
   assert.doesNotMatch(app, /\.degradationReason\.replace\(/);
   assert.doesNotMatch(app, /Offline cache (?:is not active yet|did not respond)/);

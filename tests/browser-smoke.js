@@ -128,8 +128,9 @@ function serveStatic(request, response) {
   });
 }
 
-async function addNetworkFixtures(page, metrics) {
+async function addNetworkFixtures(page, metrics, options) {
   metrics = metrics || { rainViewerRequests: 0 };
+  options = options || {};
   await page.route('**/*', async (route) => {
     const url = route.request().url();
     if (url === 'https://api.rainviewer.com/public/weather-maps.json') {
@@ -210,7 +211,11 @@ async function addNetworkFixtures(page, metrics) {
     }
     if (url.includes('tilecache.rainviewer.com') || url.includes('basemaps.cartocdn.com')) {
       if (url.includes('tilecache.rainviewer.com')) metrics.rainViewerRequests += 1;
-      await route.fulfill({ contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: pixel });
+      if (url.includes('basemaps.cartocdn.com') && options.realBasemap) return route.continue();
+      const tile = url.includes('tilecache.rainviewer.com') && options.transparentRadar
+        ? Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGBgAAAABQABpfZFQAAAAABJRU5ErkJggg==', 'base64')
+        : pixel;
+      await route.fulfill({ contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: tile });
       return;
     }
     if (url.startsWith('https://api.weather.gov/alerts/active')) {
@@ -881,6 +886,23 @@ async function main() {
     await page.getByRole('button', { name: 'Toggle layers panel' }).click();
     const clearCache = page.getByRole('button', { name: 'Clear cached data' });
     await clearCache.waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#install-app').isHidden(), true);
+    assert.equal(await page.evaluate(() => {
+      window.__installPromptCalls = 0;
+      const event = new Event('beforeinstallprompt', { cancelable: true });
+      Object.defineProperties(event, {
+        prompt: { value: () => { window.__installPromptCalls += 1; return Promise.resolve(); } },
+        userChoice: { value: Promise.resolve({ outcome: 'accepted' }) }
+      });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    }), true);
+    await page.getByRole('button', { name: 'Install StormScope' }).click();
+    await page.locator('#install-status').filter({ hasText: 'Installation started.' }).waitFor({ state: 'visible' });
+    assert.equal(await page.evaluate(() => window.__installPromptCalls), 1);
+    await page.evaluate(() => window.dispatchEvent(new Event('appinstalled')));
+    await page.locator('#install-status').filter({ hasText: 'StormScope is installed.' }).waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#install-app').isHidden(), true);
     await page.locator('#cache-status').filter({ hasText: '25%' }).waitFor({ state: 'visible' });
     assert.match(await page.locator('#cache-status').textContent(), /best effort/);
     await page.getByRole('button', { name: 'Keep offline data' }).click();
@@ -946,6 +968,25 @@ async function main() {
       preference: 'standard', enabled: false, source: 'standard', imageRefreshMs: 15000, cameraCatalogDeferred: false
     });
     await lowDataContext.close();
+
+    const iosContext = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 Version/17.0 Safari/605.1.15'
+    });
+    await iosContext.addInitScript(() => {
+      Object.defineProperty(navigator, 'platform', { configurable: true, value: 'MacIntel' });
+      Object.defineProperty(navigator, 'maxTouchPoints', { configurable: true, value: 5 });
+    });
+    const iosPage = await iosContext.newPage();
+    iosPage.baseURL = baseURL;
+    await addNetworkFixtures(iosPage);
+    await iosPage.goto(baseURL, { waitUntil: 'domcontentloaded' });
+    await iosPage.getByRole('heading', { name: 'StormScope' }).waitFor({ state: 'visible' });
+    await iosPage.getByRole('button', { name: 'Toggle layers panel' }).click();
+    await iosPage.locator('#install-status').filter({ hasText: 'In Safari, use Share, then Add to Home Screen.' })
+      .waitFor({ state: 'visible' });
+    assert.equal(await iosPage.locator('#install-app').isHidden(), true);
+    await iosContext.close();
 
     const mobile = await context.newPage();
     mobile.baseURL = baseURL;
