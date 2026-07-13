@@ -29,8 +29,8 @@ test('exports the same frozen API as a browser global and CommonJS module', () =
   context.globalThis = context;
   vm.createContext(context);
   vm.runInContext(source, context, { filename: 'saved-state.js' });
-  assert.equal(context.StormScopeSavedState.VERSION, 2);
-  assert.equal(SavedState.VERSION, 2);
+  assert.equal(context.StormScopeSavedState.VERSION, 3);
+  assert.equal(SavedState.VERSION, 3);
   assert.equal(Object.isFrozen(SavedState), true);
 });
 
@@ -97,7 +97,7 @@ test('exports and imports validated JSON without network or account state', () =
   sourceStore.saveView('Plains', snapshot(), { id: 'plains' });
   sourceStore.setLastView(snapshot({ zoom: 5 }));
   const exported = sourceStore.exportJson();
-  assert.equal(JSON.parse(exported).version, 2);
+  assert.equal(JSON.parse(exported).version, 3);
 
   const targetStorage = SavedState.memoryStorage();
   const targetStore = SavedState.createStore(storeOptions(targetStorage));
@@ -117,7 +117,7 @@ test('migrates v1 and unversioned payloads safely', () => {
     lastView: { center: { latitude: 35, longitude: -80 }, zoom: 8, layers: { radar: false } }
   };
   const migrated = SavedState.migratePayload(v1, { nowIso: '2026-07-11T20:00:00.000Z' });
-  assert.equal(migrated.version, 2);
+  assert.equal(migrated.version, 3);
   assert.deepEqual(migrated.favorites, ['1', 'youtube:test']);
   assert.equal(migrated.views[0].id, 'migrated-1');
   assert.deepEqual(migrated.views[0].snapshot.layers, { cameras: false, radar: true });
@@ -125,6 +125,26 @@ test('migrates v1 and unversioned payloads safely', () => {
 
   const older = SavedState.migratePayload({ favorites: { '9': true, '10': false }, views: [] });
   assert.deepEqual(older.favorites, ['9']);
+});
+
+test('workflow profiles round-trip bounded settings while v2 views migrate unchanged', () => {
+  const workflow = snapshot({
+    radar: { palette: 'colorblind', speed: 400 },
+    alertSeverity: 'severe',
+    cameraFilters: { query: 'I-95', state: 'Virginia', source: 'dot', type: 'image', sort: 'distance', healthy: true, favorites: false },
+    dataMode: 'low', weatherUnits: 'metric'
+  });
+  const store = SavedState.createStore(storeOptions(SavedState.memoryStorage()));
+  store.saveView('Workflow', workflow, { id: 'workflow' });
+  assert.deepEqual(store.getView('workflow').snapshot, workflow);
+
+  const migrated = SavedState.migratePayload({
+    schema: SavedState.SCHEMA, version: 2, favorites: [],
+    views: [{ id: 'old', name: 'Old view', snapshot: snapshot(), createdAt: new Date(NOW).toISOString() }],
+    lastView: null
+  }, { nowIso: new Date(NOW).toISOString() });
+  assert.equal(migrated.version, 3);
+  assert.deepEqual(migrated.views[0].snapshot, snapshot());
 });
 
 test('corrupt imports and future versions do not overwrite good state', () => {
@@ -178,6 +198,7 @@ test('rejects unsafe view payloads before persistence', () => {
   assert.throws(() => store.saveView('Bad zoom', snapshot({ zoom: 25 })), /zoom/);
   assert.throws(() => store.saveView('Bad opacity', snapshot({ opacity: { radar: 2 } })), /opacity/);
   assert.throws(() => store.saveView('Bad layer', snapshot({ layers: { ['__proto__']: true } })), /layer|object/);
+  assert.throws(() => store.saveView('Bad workflow', snapshot({ dataMode: 'unlimited' })), /data mode/);
   assert.deepEqual(store.getState().views, []);
   assert.equal(storage.getItem(SavedState.DEFAULT_KEY), null);
 });

@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.85.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.86.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
 [![Cameras](https://img.shields.io/badge/cameras-36%2C592-cyan)]()
@@ -21,7 +21,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 - **36,592 Indexed Cameras** — 13,071 verified healthy, 1 degraded, and 23,520 not yet verified across traffic, FAA, NOAA/NWS, USGS, NRAO, park, university, provider, and webcam sources
 - **Fast Camera Discovery** — Progressive state shards make the map interactive before the full corpus loads; accessible search, health/source/type filters, health-first name/distance sorting, and a virtualized result list stay synchronized with the map without reclustering on scroll; Arrow/Page/Home/End navigation crosses unrendered slices
 - **Visible Feed Provenance** — Every camera viewer distinguishes provider frame time, StormScope verification, expiring device-local playback evidence, provider/source, feed type, cadence, and degraded reason without relying on hover text
-- **Local Favorites and Views** — Favorite cameras, restore the last map/layer/opacity state, save named views, and validate portable JSON imports/exports without an account
+- **Local Favorites and Workflow Profiles** — Named schema-v3 profiles restore map, layers, radar presentation, alert threshold, camera filters, weather units, and data mode; three immutable presets and validated portable migration/import/export work without an account
 - **Shareable Map Scenes** — Copy or share a bounded versioned link containing the map, public layers, radar frame/presentation, alerts, camera filters, and active camera without exposing favorites or private local state
 - **Connection-Aware Data Usage** — Automatic mode honors Save-Data by pausing the camera corpus, radar animation/preload, and frequent still refreshes; Standard and Low overrides work in every browser, with explicit catalog and feed starts
 - **Installable PWA** — Stable installed identity, verified Severe Weather and Travel shortcuts, wide/narrow install screenshots, Chromium install prompting, and accurate Safari Add to Home Screen guidance

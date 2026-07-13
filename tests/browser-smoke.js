@@ -695,9 +695,15 @@ async function main() {
 
     const firstFavorite = visibleResults.first().locator('.favorite-result');
     await firstFavorite.click();
-    await page.locator('#camera-favorites').check();
+    await page.locator('#camera-favorites').evaluate(element => {
+      element.checked = true;
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+    });
     await page.locator('#camera-results-status').filter({ hasText: '1 result shown on map' }).waitFor({ state: 'visible' });
-    await page.locator('#camera-favorites').uncheck();
+    await page.locator('#camera-favorites').evaluate(element => {
+      element.checked = false;
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+    });
     await visibleResults.nth(0).locator('.monitor-result').click();
     await visibleResults.nth(1).locator('.monitor-result').click();
     await page.locator('#monitor-selection-status').filter({ hasText: '2 of 4 selected' }).waitFor({ state: 'visible' });
@@ -785,10 +791,65 @@ async function main() {
     await page.getByRole('button', { name: 'Find cameras' }).click();
 
     await page.getByRole('button', { name: 'Toggle layers panel' }).click();
+    assert.equal(await page.locator('#saved-views optgroup[label="Workflow presets"] option').count(), 3);
+    await page.locator('#radar-palette').selectOption('contrast');
+    await page.locator('#radar-speed').selectOption('400');
+    await page.locator('#alert-severity').selectOption('severe');
+    await page.locator('#data-mode').selectOption('low');
+    await page.locator('#weather-units').selectOption('metric');
+    await page.locator('#camera-favorites').evaluate(element => {
+      element.checked = true;
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+    });
     await page.locator('#view-name').fill('Smoke view');
     await page.getByRole('button', { name: 'Save', exact: true }).click();
     await page.locator('#saved-state-status').filter({ hasText: 'View saved locally.' }).waitFor({ state: 'visible' });
     assert.equal(await page.locator('#saved-views option', { hasText: 'Smoke view' }).count(), 1);
+    await page.locator('#data-mode').selectOption('standard');
+    await page.locator('#radar-palette').selectOption('standard');
+    await page.locator('#radar-speed').selectOption('800');
+    await page.locator('#alert-severity').selectOption('all');
+    await page.locator('#weather-units').selectOption('us');
+    await page.locator('#camera-favorites').evaluate(element => {
+      element.checked = false;
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await page.locator('#saved-views').selectOption({ label: 'Smoke view' });
+    await page.getByRole('button', { name: 'Load', exact: true }).click();
+    assert.equal(await page.locator('#data-mode').inputValue(), 'low');
+    assert.equal(await page.locator('#radar-palette').inputValue(), 'contrast');
+    assert.equal(await page.locator('#radar-speed').inputValue(), '0');
+    assert.equal(await page.locator('#alert-severity').inputValue(), 'severe');
+    assert.equal(await page.locator('#weather-units').inputValue(), 'metric');
+    assert.equal(await page.locator('#camera-favorites').isChecked(), true);
+    await page.locator('#data-mode').selectOption('standard');
+    assert.equal(await page.locator('#radar-speed').inputValue(), '400');
+    await page.locator('#data-mode').selectOption('auto');
+    await page.locator('#weather-units').selectOption('us');
+    await page.locator('#camera-favorites').evaluate(element => {
+      element.checked = false;
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    const presetMap = await page.evaluate(() => {
+      const map = window._stormscope.getMap();
+      return { center: map.getCenter(), zoom: map.getZoom() };
+    });
+    await page.locator('#saved-views').selectOption('preset:severe');
+    assert.equal(await page.getByRole('button', { name: 'Delete', exact: true }).isDisabled(), true);
+    await page.getByRole('button', { name: 'Load', exact: true }).click();
+    assert.equal(await page.locator('#radar-palette').inputValue(), 'colorblind');
+    assert.equal(await page.locator('#alert-severity').inputValue(), 'severe');
+    assert.equal(await page.locator('#toggle-coverage').isChecked(), true);
+    assert.equal(await page.locator('#toggle-lightning').isChecked(), true);
+    assert.deepEqual(await page.evaluate(() => {
+      const map = window._stormscope.getMap();
+      return { center: map.getCenter(), zoom: map.getZoom() };
+    }), presetMap);
+    await page.locator('#toggle-lightning').uncheck();
+    await page.locator('#toggle-coverage').evaluate(element => {
+      element.checked = false;
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+    });
     await page.getByRole('button', { name: 'Toggle layers panel' }).click();
 
     const sceneFixture = await page.evaluate(() => {

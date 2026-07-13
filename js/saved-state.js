@@ -10,7 +10,7 @@
   if (root) root.StormScopeSavedState = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
   var SCHEMA = 'stormscope-saved-state';
-  var VERSION = 2;
+  var VERSION = 3;
   var DEFAULT_KEY = 'stormscope.saved-state';
   var MAX_FAVORITES = 10000;
   var MAX_VIEWS = 200;
@@ -104,6 +104,58 @@
     return result;
   }
 
+  function boundedString(value, label, maximum) {
+    if (typeof value !== 'string' || value.length > maximum || /[\u0000-\u001f]/.test(value)) {
+      throw new TypeError(label + ' is invalid');
+    }
+    return value;
+  }
+
+  function normalizeWorkflow(source, snapshot) {
+    if (source.radar != null) {
+      var radar = objectValue(source.radar, 'view radar');
+      var palette = boundedString(radar.palette, 'view radar palette', 20);
+      var speed = finiteNumber(radar.speed, 'view radar speed');
+      if (['standard', 'colorblind', 'contrast'].indexOf(palette) === -1) throw new TypeError('view radar palette is invalid');
+      if ([0, 400, 800, 1600].indexOf(speed) === -1) throw new TypeError('view radar speed is invalid');
+      snapshot.radar = { palette: palette, speed: speed };
+    }
+    if (source.alertSeverity != null) {
+      var severity = boundedString(source.alertSeverity, 'view alert severity', 12);
+      if (['all', 'minor', 'moderate', 'severe', 'extreme'].indexOf(severity) === -1) {
+        throw new TypeError('view alert severity is invalid');
+      }
+      snapshot.alertSeverity = severity;
+    }
+    if (source.cameraFilters != null) {
+      var filters = objectValue(source.cameraFilters, 'view camera filters');
+      var sort = boundedString(filters.sort, 'view camera sort', 12);
+      if (['name', 'distance'].indexOf(sort) === -1) throw new TypeError('view camera sort is invalid');
+      if (typeof filters.healthy !== 'boolean') throw new TypeError('view camera healthy filter must be boolean');
+      if (typeof filters.favorites !== 'boolean') throw new TypeError('view camera favorites filter must be boolean');
+      snapshot.cameraFilters = {
+        query: boundedString(filters.query, 'view camera query', 160),
+        state: boundedString(filters.state, 'view camera state', 80),
+        source: boundedString(filters.source, 'view camera source', 40),
+        type: boundedString(filters.type, 'view camera type', 20),
+        sort: sort,
+        healthy: filters.healthy,
+        favorites: filters.favorites
+      };
+    }
+    if (source.dataMode != null) {
+      var dataMode = boundedString(source.dataMode, 'view data mode', 12);
+      if (['auto', 'standard', 'low'].indexOf(dataMode) === -1) throw new TypeError('view data mode is invalid');
+      snapshot.dataMode = dataMode;
+    }
+    if (source.weatherUnits != null) {
+      var units = boundedString(source.weatherUnits, 'view weather units', 12);
+      if (['us', 'metric'].indexOf(units) === -1) throw new TypeError('view weather units are invalid');
+      snapshot.weatherUnits = units;
+    }
+    return snapshot;
+  }
+
   function legacyLayers(source) {
     var layers = source.layers && typeof source.layers === 'object' ? source.layers : {};
     var result = Object.create(null);
@@ -129,12 +181,12 @@
     var center = normalizeCenter(source.center || map.center, map);
     var zoom = finiteNumber(own(source, 'zoom') ? source.zoom : map.zoom, 'zoom');
     if (zoom < 0 || zoom > 24) throw new RangeError('zoom must be between 0 and 24');
-    return {
+    return normalizeWorkflow(source, {
       center: center,
       zoom: zoom,
       layers: normalizeBooleanMap(legacyLayers(source), 'view layers'),
       opacity: normalizeOpacityMap(legacyOpacity(source))
-    };
+    });
   }
 
   function normalizeName(value) {

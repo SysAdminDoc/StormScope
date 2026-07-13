@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.86.0 - 2026-07-12
+
+- Upgraded named views to schema-v3 workflow profiles covering map/layers/opacity, radar palette/preferred speed, alert threshold, all camera filters, weather units, and Auto/Standard/Low data preference. Existing v2 views migrate without resetting fields they never stored; automatic last-view persistence remains map-only; theme, locale, and favorite IDs are never overwritten.
+- Added immutable Severe Weather, Wildfire Watch, and Travel Cameras presets that preserve map position and weather units. Added validation, migration, export/import, low-data speed restoration, preset immutability, and rendered round-trip coverage. Service-worker cache bumped to v59.
+
 ## v0.85.0 - 2026-07-12
 
 - Stabilized PWA identity with the prior implicit start URL, added tested Severe Weather and Travel scene shortcuts, and supplied exact wide/narrow dark-theme install screenshots with a reproducible headless capture command.

@@ -2,7 +2,7 @@
   'use strict';
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.85.0';
+  var APP_VERSION = '0.86.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -125,6 +125,26 @@
   var dataPolicy = StormScopeDataMode.resolve('auto', navigator.connection);
   var lowDataMode = dataPolicy.lowData;
   var lowDataSource = dataPolicy.source;
+  var WORKFLOW_PRESETS = Object.freeze({
+    severe: {
+      center: { lat: 39.5, lon: -98.5 }, zoom: 5,
+      layers: { radar: true, cameras: true, coverage: true, alerts: true, lightning: true, wildfires: false },
+      opacity: { radar: 0.7 }, radar: { palette: 'colorblind', speed: 800 }, alertSeverity: 'severe',
+      cameraFilters: { query: '', state: '', source: '', type: '', sort: 'distance', healthy: true, favorites: false }, dataMode: 'auto'
+    },
+    wildfire: {
+      center: { lat: 39, lon: -112 }, zoom: 5,
+      layers: { radar: false, cameras: true, coverage: false, alerts: true, lightning: false, wildfires: true },
+      opacity: { radar: 0.55 }, radar: { palette: 'standard', speed: 0 }, alertSeverity: 'moderate',
+      cameraFilters: { query: '', state: '', source: '', type: '', sort: 'distance', healthy: true, favorites: false }, dataMode: 'auto'
+    },
+    travel: {
+      center: { lat: 38.5, lon: -96 }, zoom: 5,
+      layers: { radar: true, cameras: true, coverage: false, alerts: true, lightning: false, wildfires: false },
+      opacity: { radar: 0.55 }, radar: { palette: 'colorblind', speed: 0 }, alertSeverity: 'moderate',
+      cameraFilters: { query: '', state: '', source: '', type: '', sort: 'distance', healthy: true, favorites: false }, dataMode: 'auto'
+    }
+  });
 
   function tr(key, variables) {
     return StormScopeI18n.t(key, variables, appLocale);
@@ -1637,9 +1657,9 @@
     button.textContent = tr(favorite ? 'camera.favorited' : 'camera.favorite');
   }
 
-  function captureViewSnapshot() {
+  function captureViewSnapshot(includeWorkflow) {
     var center = map.getCenter();
-    return {
+    var snapshot = {
       center: { lat: center.lat, lon: center.lng },
       zoom: map.getZoom(),
       layers: {
@@ -1652,6 +1672,19 @@
       },
       opacity: { radar: radarOpacity }
     };
+    if (includeWorkflow) {
+      var filters = cameraSearchFilters();
+      snapshot.radar = { palette: radarPalette, speed: preferredRadarAnimationSpeed };
+      snapshot.alertSeverity = document.getElementById('alert-severity').value;
+      snapshot.cameraFilters = {
+        query: filters.query, state: filters.state, source: filters.source, type: filters.type,
+        sort: document.getElementById('camera-sort').value, healthy: filters.healthy,
+        favorites: document.getElementById('camera-favorites').checked
+      };
+      snapshot.dataMode = dataModePreference;
+      snapshot.weatherUnits = weatherUnits;
+    }
+    return snapshot;
   }
 
   function captureSharedScene() {
@@ -1765,6 +1798,38 @@
       document.getElementById('radar-opacity').value = String(Math.round(radarOpacity * 100));
       if (radarLayer) radarLayer.setOpacity(radarOpacity);
     }
+    if (snapshot.dataMode) applyDataMode(snapshot.dataMode, true);
+    if (snapshot.radar) {
+      radarPalette = snapshot.radar.palette;
+      preferredRadarAnimationSpeed = snapshot.radar.speed;
+      radarAnimationSpeed = lowDataMode ? 0 : preferredRadarAnimationSpeed;
+      document.getElementById('radar-palette').value = radarPalette;
+      document.getElementById('radar-speed').value = String(radarAnimationSpeed);
+      applyRadarPalette();
+      try {
+        localStorage.setItem('stormscope-radar-palette', radarPalette);
+        localStorage.setItem('stormscope-radar-speed', String(preferredRadarAnimationSpeed));
+      } catch (error) { /* optional */ }
+    }
+    if (snapshot.alertSeverity) {
+      document.getElementById('alert-severity').value = snapshot.alertSeverity;
+      renderAlerts();
+    }
+    if (snapshot.cameraFilters) {
+      document.getElementById('camera-query').value = snapshot.cameraFilters.query;
+      document.getElementById('camera-state').value = snapshot.cameraFilters.state;
+      document.getElementById('camera-source').value = snapshot.cameraFilters.source;
+      document.getElementById('camera-type').value = snapshot.cameraFilters.type;
+      document.getElementById('camera-sort').value = snapshot.cameraFilters.sort;
+      document.getElementById('camera-healthy').checked = snapshot.cameraFilters.healthy;
+      document.getElementById('camera-favorites').checked = snapshot.cameraFilters.favorites;
+    }
+    if (snapshot.weatherUnits) {
+      weatherUnits = snapshot.weatherUnits;
+      document.getElementById('weather-units').value = weatherUnits;
+      try { localStorage.setItem('stormscope-weather-units', weatherUnits); } catch (error) { /* optional */ }
+      if (activeCamera) fetchWeather(activeCamera.lat, activeCamera.lon, activeCamera);
+    }
   }
 
   function setSavedStateStatus(message, error) {
@@ -1780,6 +1845,15 @@
     placeholder.value = '';
     placeholder.textContent = tr('views.choose');
     select.appendChild(placeholder);
+    var presets = document.createElement('optgroup');
+    presets.label = tr('views.presets');
+    Object.keys(WORKFLOW_PRESETS).forEach(function (key) {
+      var option = document.createElement('option');
+      option.value = 'preset:' + key;
+      option.textContent = tr('views.preset.' + key);
+      presets.appendChild(option);
+    });
+    select.appendChild(presets);
     savedStore.listViews().forEach(function (view) {
       var option = document.createElement('option');
       option.value = view.id;
@@ -1789,7 +1863,7 @@
     select.value = selectedId || '';
     var hasSelection = Boolean(select.value);
     document.getElementById('load-view').disabled = !hasSelection;
-    document.getElementById('delete-view').disabled = !hasSelection;
+    document.getElementById('delete-view').disabled = !hasSelection || select.value.indexOf('preset:') === 0;
   }
 
   function scheduleLastViewSave() {
@@ -3436,13 +3510,14 @@
     document.getElementById('saved-views').addEventListener('change', function () {
       var hasSelection = Boolean(this.value);
       document.getElementById('load-view').disabled = !hasSelection;
-      document.getElementById('delete-view').disabled = !hasSelection;
-      if (hasSelection) document.getElementById('view-name').value = savedStore.getView(this.value).name;
+      var preset = this.value.indexOf('preset:') === 0;
+      document.getElementById('delete-view').disabled = !hasSelection || preset;
+      if (hasSelection && !preset) document.getElementById('view-name').value = savedStore.getView(this.value).name;
     });
     document.getElementById('save-view').addEventListener('click', function () {
       try {
         var nameInput = document.getElementById('view-name');
-        var state = savedStore.saveView(nameInput.value, captureViewSnapshot());
+        var state = savedStore.saveView(nameInput.value, captureViewSnapshot(true));
         var normalizedName = nameInput.value.trim().toLowerCase();
         var saved = state.views.find(function (view) { return view.name.toLowerCase() === normalizedName; });
         refreshSavedViews(saved && saved.id);
@@ -3452,7 +3527,21 @@
       }
     });
     document.getElementById('load-view').addEventListener('click', function () {
-      var view = savedStore.getView(document.getElementById('saved-views').value);
+      var selected = document.getElementById('saved-views').value;
+      if (selected.indexOf('preset:') === 0) {
+        var presetKey = selected.slice(7);
+        var center = map.getCenter();
+        var preset = JSON.parse(JSON.stringify(WORKFLOW_PRESETS[presetKey]));
+        preset.center = { lat: center.lat, lon: center.lng };
+        preset.zoom = map.getZoom();
+        preset.weatherUnits = weatherUnits;
+        applyViewSnapshot(preset);
+        scheduleSearchRender();
+        scheduleLastViewSave();
+        setSavedStateStatus(tr('views.loaded', { name: tr('views.preset.' + presetKey) }));
+        return;
+      }
+      var view = savedStore.getView(selected);
       if (!view) return;
       applyViewSnapshot(view.snapshot);
       scheduleSearchRender();
