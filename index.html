@@ -198,6 +198,27 @@
       <div><i class="lightning-swatch" aria-hidden="true"></i><span id="lightning-status" role="status" aria-live="polite">Lightning off</span><a href="https://nowcoast.noaa.gov/" target="_blank" rel="noopener noreferrer">NOAA</a></div>
       <div><i class="wildfire-swatch" aria-hidden="true"></i><span id="wildfire-status" role="status" aria-live="polite">Wildfires off</span><a href="https://www.arcgis.com/home/item.html?id=d1c32af3212341869b3c810f1a215824" target="_blank" rel="noopener noreferrer">NIFC</a></div>
     </div>
+    <section class="local-overlays-panel" aria-labelledby="local-overlays-heading">
+      <div class="local-overlays-heading-row">
+        <h4 id="local-overlays-heading">Local overlays</h4>
+        <button id="import-local-overlay" type="button">Import file</button>
+        <input id="local-overlay-file" class="visually-hidden" type="file" accept=".geojson,.json,.gpx,application/geo+json,application/json,application/gpx+xml" aria-label="Choose a GeoJSON or GPX overlay file">
+      </div>
+      <p class="local-overlay-privacy">Files stay on this device and are not uploaded. Imports are not saved across reloads unless you choose Keep locally.</p>
+      <div class="local-overlay-legend" aria-label="Local overlay map legend">
+        <span><i class="local-overlay-swatch point" aria-hidden="true"></i>Points</span>
+        <span><i class="local-overlay-swatch line" aria-hidden="true"></i>Lines</span>
+        <span><i class="local-overlay-swatch area" aria-hidden="true"></i>Areas</span>
+      </div>
+      <ul id="local-overlay-list" class="local-overlay-list" aria-label="Imported local overlays">
+        <li class="local-overlay-empty">No local overlays imported.</li>
+      </ul>
+      <div class="local-overlay-bulk-actions">
+        <button id="export-local-overlays" type="button" disabled>Export all</button>
+        <button id="clear-local-overlays" type="button" disabled>Clear all</button>
+      </div>
+      <div id="local-overlay-status" class="local-overlay-status" role="status" aria-live="polite"></div>
+    </section>
     <div class="cache-panel">
       <div id="cache-status" class="cache-status" role="status" aria-live="polite">Checking offline cache…</div>
       <button id="keep-offline-data" class="cache-clear" type="button" disabled>Keep offline data</button>
@@ -370,6 +391,7 @@
   <script src="js/context-layers.js"></script>
   <script src="js/tropical-cyclones.js"></script>
   <script src="js/flood-outlooks.js"></script>
+  <script src="js/local-overlays.js"></script>
   <script src="js/diagnostics.js"></script>
   <script src="js/spatial-query.js"></script>
   <script src="js/app.js"></script>

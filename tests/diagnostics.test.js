@@ -28,10 +28,11 @@ test('diagnostic report contains operational summaries but no local saved state'
   store.capture(new Error('safe failure'), 'boot');
   const report = store.report({
     appVersion: '1.2.3', corpusGeneration: '2026-07-12T00:00:00Z',
-    providers: { radar: 'noaa-mrms' }, cache: { entries: 4 }
+    providers: { radar: 'noaa-mrms' }, cache: { entries: 4 }, localOverlays: { count: 2, bytes: 4096 }
   });
   assert.equal(report.app_version, '1.2.3');
   assert.equal(report.errors.length, 1);
+  assert.deepEqual(report.local_overlays, { count: 2, bytes: 4096 });
   assert.equal(Object.hasOwn(report, 'favorites'), false);
   assert.equal(Object.hasOwn(report, 'savedViews'), false);
 });

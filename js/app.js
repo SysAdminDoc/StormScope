@@ -2,7 +2,7 @@
   'use strict';
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.89.0';
+  var APP_VERSION = '0.90.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -129,6 +129,9 @@
   var usgsGaugeStatusState = 'off';
   var usgsGaugeCount = 0;
   var usgsGaugeAttributionAdded = false;
+  var localOverlayRecords = [];
+  var localOverlayDatabase = null;
+  var LOCAL_OVERLAY_DB = 'stormscope-local-overlays';
   var lightningLayer = null;
   var lightningAbort = null;
   var lightningRefreshTimer = null;
@@ -272,6 +275,8 @@
     map.getPane('satellitePane').style.pointerEvents = 'none';
     map.createPane('contextVectorPane');
     map.getPane('contextVectorPane').style.zIndex = '390';
+    map.createPane('localOverlayPane');
+    map.getPane('localOverlayPane').style.zIndex = '380';
     map.createPane('tropicalPane');
     map.getPane('tropicalPane').style.zIndex = '395';
 
@@ -1319,6 +1324,7 @@
         usgsGaugeAttributionAdded = true;
       }
       renderGaugeStatus();
+      renderLocalOverlayList();
     } catch (error) {
       if (error.name === 'AbortError') return;
       usgsGaugeStatusState = 'error';
@@ -1342,6 +1348,240 @@
     }
     usgsGaugeStatusState = 'off';
     renderGaugeStatus();
+  }
+
+  function overlayStoredRecord(record) {
+    return {
+      schema: record.schema, version: record.version, id: record.id, name: record.name,
+      sourceFormat: record.sourceFormat, createdAt: record.createdAt, updatedAt: new Date().toISOString(),
+      visible: record.visible, style: record.style, featureCount: record.featureCount,
+      coordinateCount: record.coordinateCount, data: record.data
+    };
+  }
+
+  function overlayTransaction(mode, operation) {
+    if (!localOverlayDatabase) return Promise.reject(new Error('storage unavailable'));
+    return new Promise(function (resolve, reject) {
+      var transaction = localOverlayDatabase.transaction('overlays', mode);
+      var request = operation(transaction.objectStore('overlays'));
+      var result;
+      request.onsuccess = function () { result = request.result; };
+      request.onerror = function () { reject(request.error || new Error('storage failed')); };
+      transaction.onabort = function () { reject(transaction.error || new Error('storage aborted')); };
+      transaction.oncomplete = function () { resolve(result); };
+    });
+  }
+
+  function openLocalOverlayDatabase() {
+    if (!window.indexedDB) return Promise.resolve([]);
+    return new Promise(function (resolve, reject) {
+      var request = indexedDB.open(LOCAL_OVERLAY_DB, 1);
+      request.onupgradeneeded = function () {
+        if (!request.result.objectStoreNames.contains('overlays')) request.result.createObjectStore('overlays', { keyPath: 'id' });
+      };
+      request.onerror = function () { reject(request.error || new Error('storage unavailable')); };
+      request.onsuccess = function () {
+        localOverlayDatabase = request.result;
+        overlayTransaction('readonly', function (store) { return store.getAll(); }).then(resolve, reject);
+      };
+    });
+  }
+
+  function setLocalOverlayStatus(key, variables, error) {
+    var status = document.getElementById('local-overlay-status');
+    status.textContent = tr(key, variables);
+    status.classList.toggle('error', Boolean(error));
+  }
+
+  function localOverlayPopup(feature) {
+    var container = document.createElement('div');
+    container.className = 'context-popup local-overlay-popup';
+    var title = document.createElement('strong');
+    title.textContent = feature.properties.name || feature.id || tr('overlays.heading');
+    container.appendChild(title);
+    var entries = Object.keys(feature.properties || {}).slice(0, 12);
+    if (entries.length) {
+      var details = document.createElement('dl');
+      entries.forEach(function (key) {
+        var term = document.createElement('dt');
+        var value = document.createElement('dd');
+        term.textContent = key;
+        value.textContent = feature.properties[key] == null ? '—' : String(feature.properties[key]);
+        details.appendChild(term);
+        details.appendChild(value);
+      });
+      container.appendChild(details);
+    }
+    appendNearbyCameraSection(container, feature.geometry, tr('incident.camerasNearOverlay'));
+    return container;
+  }
+
+  function drawLocalOverlay(record) {
+    if (record.layer) map.removeLayer(record.layer);
+    record.layer = null;
+    if (!record.visible) return;
+    record.layer = L.geoJSON(record.data, {
+      pane: 'localOverlayPane',
+      style: function (feature) { return StormScopeLocalOverlays.style(record, feature.geometry.type); },
+      pointToLayer: function (feature, latlng) {
+        var style = StormScopeLocalOverlays.style(record, feature.geometry.type);
+        return L.circleMarker(latlng, { pane: 'localOverlayPane', radius: 6, color: '#f8f9fa', weight: 2,
+          fillColor: style.color, fillOpacity: 0.9 });
+      },
+      onEachFeature: function (feature, layer) {
+        layer.bindPopup(function () { return localOverlayPopup(feature); }, { autoPan: false, maxWidth: 390, maxHeight: 420 });
+      }
+    }).addTo(map);
+  }
+
+  function downloadLocalOverlay(filename, text, mime) {
+    var blob = new Blob([text], { type: mime });
+    var href = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = href;
+    link.download = filename;
+    link.click();
+    setTimeout(function () { URL.revokeObjectURL(href); }, 0);
+  }
+
+  function overlayFeatureCount(record) {
+    return tr(record.featureCount === 1 ? 'overlays.featureCountOne' : 'overlays.featureCountMany', {
+      count: localNumber(record.featureCount)
+    });
+  }
+
+  function zoomLocalOverlay(record) {
+    var bounds = StormScopeLocalOverlays.geometryBounds(record.data);
+    if (bounds.west === bounds.east && bounds.south === bounds.north) {
+      map.setView([bounds.south, bounds.west], Math.min(12, Math.max(map.getZoom(), 8)));
+    } else map.fitBounds([[bounds.south, bounds.west], [bounds.north, bounds.east]], { padding: [30, 30], maxZoom: 12 });
+  }
+
+  function renderLocalOverlayList() {
+    var list = document.getElementById('local-overlay-list');
+    list.replaceChildren();
+    if (!localOverlayRecords.length) {
+      var empty = document.createElement('li');
+      empty.className = 'local-overlay-empty';
+      empty.textContent = tr('overlays.empty');
+      list.appendChild(empty);
+    }
+    localOverlayRecords.forEach(function (record) {
+      var item = document.createElement('li');
+      item.className = 'local-overlay-item';
+      var visibility = document.createElement('input');
+      visibility.type = 'checkbox';
+      visibility.className = 'local-overlay-visibility';
+      visibility.checked = record.visible;
+      visibility.setAttribute('aria-label', tr(record.visible ? 'overlays.hide' : 'overlays.show', { name: record.name }));
+      visibility.addEventListener('change', function () {
+        record.visible = this.checked;
+        drawLocalOverlay(record);
+        if (record.persisted) overlayTransaction('readwrite', function (store) { return store.put(overlayStoredRecord(record)); }).catch(function () {
+          setLocalOverlayStatus('overlays.error.storage', null, true);
+        });
+        renderLocalOverlayList();
+      });
+      var name = document.createElement('strong');
+      name.className = 'local-overlay-name';
+      name.textContent = record.name;
+      var meta = document.createElement('span');
+      meta.className = 'local-overlay-meta';
+      meta.textContent = tr('overlays.meta', {
+        type: tr('overlays.type.' + record.sourceFormat), count: overlayFeatureCount(record)
+      });
+      var actions = document.createElement('div');
+      actions.className = 'local-overlay-actions';
+      function action(label, handler) {
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = label;
+        button.addEventListener('click', handler);
+        actions.appendChild(button);
+      }
+      action(tr('overlays.zoom'), function () { zoomLocalOverlay(record); });
+      action(tr('overlays.export'), function () {
+        try {
+          downloadLocalOverlay('stormscope-' + record.id + '.geojson', StormScopeLocalOverlays.exportOverlay(record), 'application/geo+json');
+          setLocalOverlayStatus('overlays.exported', { name: record.name });
+        } catch (error) { setLocalOverlayStatus('overlays.error.export', null, true); }
+      });
+      action(tr(record.persisted ? 'overlays.stopKeeping' : 'overlays.keep'), function () {
+        var operation = record.persisted
+          ? overlayTransaction('readwrite', function (store) { return store.delete(record.id); })
+          : overlayTransaction('readwrite', function (store) { return store.put(overlayStoredRecord(record)); });
+        operation.then(function () {
+          record.persisted = !record.persisted;
+          setLocalOverlayStatus(record.persisted ? 'overlays.kept' : 'overlays.notKept', { name: record.name });
+          renderLocalOverlayList();
+        }).catch(function () { setLocalOverlayStatus('overlays.error.storage', null, true); });
+      });
+      action(tr('overlays.remove'), function () {
+        if (record.layer) map.removeLayer(record.layer);
+        localOverlayRecords = localOverlayRecords.filter(function (itemRecord) { return itemRecord !== record; });
+        var removal = record.persisted ? overlayTransaction('readwrite', function (store) { return store.delete(record.id); }) : Promise.resolve();
+        removal.catch(function () { setLocalOverlayStatus('overlays.error.storage', null, true); });
+        setLocalOverlayStatus('overlays.removed', { name: record.name });
+        renderLocalOverlayList();
+      });
+      item.appendChild(visibility);
+      item.appendChild(name);
+      item.appendChild(meta);
+      item.appendChild(actions);
+      list.appendChild(item);
+    });
+    document.getElementById('export-local-overlays').disabled = !localOverlayRecords.length;
+    document.getElementById('clear-local-overlays').disabled = !localOverlayRecords.length;
+  }
+
+  function importLocalOverlay(file) {
+    if (!file) return;
+    setLocalOverlayStatus('overlays.reading');
+    if (localOverlayRecords.length >= StormScopeLocalOverlays.MAX_OVERLAYS) {
+      setLocalOverlayStatus('overlays.error.limit', null, true);
+      return;
+    }
+    if (file.size > StormScopeLocalOverlays.MAX_FILE_BYTES) {
+      setLocalOverlayStatus('overlays.error.size', null, true);
+      return;
+    }
+    file.text().then(function (text) {
+      var record = StormScopeLocalOverlays.createRecord(file, text);
+      var existing = localOverlayRecords.find(function (item) { return item.id === record.id; });
+      if (!existing) {
+        record.persisted = false;
+        record.layer = null;
+        localOverlayRecords.push(record);
+        drawLocalOverlay(record);
+      }
+      renderLocalOverlayList();
+      setLocalOverlayStatus('overlays.imported', {
+        name: record.name, count: overlayFeatureCount(record)
+      });
+    }).catch(function (error) {
+      var message = String(error && error.message || '');
+      var key = /size/.test(message) ? 'overlays.error.size'
+        : /type|MIME/.test(message) ? 'overlays.error.type'
+          : /limit/.test(message) ? 'overlays.error.limit' : 'overlays.error.invalid';
+      setLocalOverlayStatus(key, null, true);
+    });
+  }
+
+  function initLocalOverlays() {
+    renderLocalOverlayList();
+    openLocalOverlayDatabase().then(function (records) {
+      records.forEach(function (value) {
+        if (localOverlayRecords.length >= StormScopeLocalOverlays.MAX_OVERLAYS) return;
+        try {
+          var record = StormScopeLocalOverlays.validateRecord(value);
+          record.persisted = true;
+          record.layer = null;
+          localOverlayRecords.push(record);
+          drawLocalOverlay(record);
+        } catch (error) { /* invalid records fail closed */ }
+      });
+      renderLocalOverlayList();
+    }).catch(function () { localOverlayDatabase = null; });
   }
 
   function wildfirePopup(feature) {
@@ -4186,6 +4426,30 @@
       };
       reader.readAsText(file);
     });
+    document.getElementById('import-local-overlay').addEventListener('click', function () {
+      document.getElementById('local-overlay-file').click();
+    });
+    document.getElementById('local-overlay-file').addEventListener('change', function () {
+      var file = this.files && this.files[0];
+      this.value = '';
+      importLocalOverlay(file);
+    });
+    document.getElementById('export-local-overlays').addEventListener('click', function () {
+      try {
+        downloadLocalOverlay('stormscope-local-overlays.json',
+          StormScopeLocalOverlays.exportBundle(localOverlayRecords), 'application/json');
+        setLocalOverlayStatus('overlays.exportedAll');
+      } catch (error) { setLocalOverlayStatus('overlays.error.export', null, true); }
+    });
+    document.getElementById('clear-local-overlays').addEventListener('click', function () {
+      localOverlayRecords.forEach(function (record) { if (record.layer) map.removeLayer(record.layer); });
+      localOverlayRecords = [];
+      var clear = localOverlayDatabase
+        ? overlayTransaction('readwrite', function (store) { return store.clear(); }) : Promise.resolve();
+      clear.catch(function () { setLocalOverlayStatus('overlays.error.storage', null, true); });
+      renderLocalOverlayList();
+      setLocalOverlayStatus('overlays.cleared');
+    });
     document.getElementById('copy-scene').addEventListener('click', function () { copyCurrentScene(); });
     document.getElementById('share-scene').addEventListener('click', function () { shareCurrentScene(); });
 
@@ -4519,6 +4783,7 @@
       if (summaryWildfireAbort) summaryWildfireAbort.abort();
       if (cameraStore) cameraStore.cancel();
       if (monitorRegistry) monitorRegistry.destroyAll();
+      if (localOverlayDatabase) localOverlayDatabase.close();
       clearTimeout(saveLastViewTimer);
       destroyActiveFeed(document.getElementById('modal-feed'));
     });
@@ -4558,6 +4823,10 @@
         tropical: { status: tropicalStatusState, count: tropicalStorms.length },
         wpcOutlooks: { status: wpcStatusState, count: wpcOutlookCount, day: wpcOutlookDay },
         usgsGauges: { status: usgsGaugeStatusState, count: usgsGaugeCount }
+      },
+      localOverlays: {
+        count: localOverlayRecords.length,
+        bytes: localOverlayRecords.reduce(function (sum, record) { return sum + JSON.stringify(record.data).length; }, 0)
       },
       cache: await cacheDiagnosticSummary()
     });
@@ -4650,6 +4919,7 @@
     initRadarPreferences();
     startupSharedScene = readStartupSharedScene();
     initSavedState({ restoreLastView: !startupSharedScene });
+    initLocalOverlays();
     if (startupSharedScene) applySharedScene(startupSharedScene);
     else if (startupSceneError) setSavedStateStatus(tr('views.sceneInvalid'), true);
     bindUI();
@@ -4695,9 +4965,11 @@
         tropicalStatus: tropicalStatusState, tropicalCount: tropicalStorms.length,
         wpcStatus: wpcStatusState, wpcCount: wpcOutlookCount, wpcDay: wpcOutlookDay,
         gaugeStatus: usgsGaugeStatusState, gaugeCount: usgsGaugeCount,
+        localOverlays: localOverlayRecords.length,
         rasterZ: map.getPane('contextRasterPane').style.zIndex,
         satelliteZ: map.getPane('satellitePane').style.zIndex,
         vectorZ: map.getPane('contextVectorPane').style.zIndex,
+        localOverlayZ: map.getPane('localOverlayPane').style.zIndex,
         tropicalZ: map.getPane('tropicalPane').style.zIndex,
         warningZ: map.getPane('overlayPane').style.zIndex || '400',
         cameraZ: map.getPane('markerPane').style.zIndex || '600'

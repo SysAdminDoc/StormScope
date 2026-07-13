@@ -500,9 +500,71 @@ async function main() {
       satellite: false, lightning: false, wildfires: false, tropical: false, wpcOutlooks: false, usgsGauges: false, satelliteStatus: 'off',
       lightningStatus: 'off', wildfireStatus: 'off', tropicalStatus: 'off', tropicalCount: 0,
       wpcStatus: 'off', wpcCount: 0, wpcDay: 1, gaugeStatus: 'off', gaugeCount: 0, satelliteZ: '315',
-      rasterZ: '325', vectorZ: '390', tropicalZ: '395', warningZ: '400', cameraZ: '600'
+      localOverlays: 0, rasterZ: '325', vectorZ: '390', localOverlayZ: '380', tropicalZ: '395', warningZ: '400', cameraZ: '600'
     });
     await page.getByRole('button', { name: 'Toggle layers panel' }).click();
+    const hostileOverlay = JSON.stringify({ type: 'FeatureCollection', features: [{ type: 'Feature',
+      properties: { name: '<img src=x onerror=window.__overlayInjected=true>', href: 'https://attacker.example/beacon' },
+      geometry: { type: 'Polygon', coordinates: [[[-101, 37], [-99, 37], [-99, 39], [-101, 37]]] }
+    }] });
+    await page.locator('#local-overlay-file').setInputFiles({
+      name: 'incident-plan.geojson', mimeType: 'application/geo+json', buffer: Buffer.from(hostileOverlay)
+    });
+    await page.locator('#local-overlay-status').filter({ hasText: 'Imported “incident-plan” with 1 feature' }).waitFor({ state: 'visible' });
+    assert.equal(await page.locator('.local-overlay-item').count(), 1);
+    assert.deepEqual(await page.evaluate(() => {
+      const state = window._stormscope.getContextState();
+      return { count: state.localOverlays, z: state.localOverlayZ };
+    }), { count: 1, z: '380' });
+    const localPopupOpened = await page.evaluate(() => {
+      window.__overlayInjected = false;
+      let opened = false;
+      window._stormscope.getMap().eachLayer(layer => {
+        if (opened || typeof layer.getLayers !== 'function') return;
+        const child = layer.getLayers().find(item => item.feature && item.feature.properties &&
+          String(item.feature.properties.name).startsWith('<img'));
+        if (child) { child.openPopup(); opened = true; }
+      });
+      return opened;
+    });
+    assert.equal(localPopupOpened, true);
+    const localPopup = page.locator('.leaflet-popup-content').filter({ hasText: '<img src=x' });
+    await localPopup.waitFor({ state: 'visible' });
+    assert.equal(await localPopup.locator('img').count(), 0);
+    assert.equal(await localPopup.locator('a[href*="attacker.example"]').count(), 0);
+    assert.equal(await page.evaluate(() => window.__overlayInjected), false);
+    await page.locator('.local-overlay-actions').getByRole('button', { name: 'Keep locally' }).click();
+    await page.locator('#local-overlay-status').filter({ hasText: 'will be kept locally' }).waitFor({ state: 'visible' });
+    const persistedOverlayPage = await context.newPage();
+    persistedOverlayPage.baseURL = baseURL;
+    await addNetworkFixtures(persistedOverlayPage);
+    await waitForApp(persistedOverlayPage);
+    await persistedOverlayPage.getByRole('button', { name: 'Toggle layers panel' }).click();
+    await persistedOverlayPage.locator('.local-overlay-item').filter({ hasText: 'incident-plan' }).waitFor({ state: 'visible' });
+    assert.equal((await persistedOverlayPage.evaluate(() => window._stormscope.getContextState())).localOverlays, 1);
+    await persistedOverlayPage.close();
+
+    const gpx = '<?xml version="1.0"?><gpx version="1.1"><wpt lat="38.5" lon="-90.5"><name>Checkpoint</name></wpt>' +
+      '<trk><name>Route</name><trkseg><trkpt lat="38" lon="-91"></trkpt><trkpt lat="39" lon="-90"></trkpt></trkseg></trk></gpx>';
+    await page.locator('#local-overlay-file').setInputFiles({
+      name: 'route.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(gpx)
+    });
+    await page.locator('#local-overlay-status').filter({ hasText: 'Imported “route” with 2 features' }).waitFor({ state: 'visible' });
+    assert.equal(await page.locator('.local-overlay-item').count(), 2);
+    assert.doesNotMatch(JSON.stringify(await page.evaluate(() => window._stormscope.captureSharedScene())),
+      /incident-plan|route|localOverlay/i, 'shared scenes must exclude private local overlay data and IDs');
+    const malformed = JSON.stringify({ type: 'Point', coordinates: [999, 0] });
+    await page.locator('#local-overlay-file').setInputFiles({
+      name: 'bad.geojson', mimeType: 'application/geo+json', buffer: Buffer.from(malformed)
+    });
+    await page.locator('#local-overlay-status').filter({ hasText: 'Import rejected' }).waitFor({ state: 'visible' });
+    assert.equal(await page.locator('.local-overlay-item').count(), 2, 'rejected import must preserve prior overlays');
+    const overlayDownload = page.waitForEvent('download');
+    await page.locator('#export-local-overlays').click();
+    assert.equal((await overlayDownload).suggestedFilename(), 'stormscope-local-overlays.json');
+    await page.locator('#clear-local-overlays').click();
+    await page.locator('#local-overlay-status').filter({ hasText: 'Removed all local overlays' }).waitFor({ state: 'visible' });
+    assert.equal(await page.locator('.local-overlay-item').count(), 0);
     await page.locator('#toggle-satellite').check();
     await page.locator('#toggle-lightning').check();
     await page.locator('#toggle-wildfires').check();
@@ -542,7 +604,7 @@ async function main() {
       satellite: true, lightning: true, wildfires: true, tropical: true, wpcOutlooks: true, usgsGauges: true, satelliteStatus: 'ready',
       lightningStatus: 'ready', wildfireStatus: 'ready', tropicalStatus: 'ready', tropicalCount: 1,
       wpcStatus: 'ready', wpcCount: 2, wpcDay: 1, gaugeStatus: 'ready', gaugeCount: 1, satelliteZ: '315',
-      rasterZ: '325', vectorZ: '390', tropicalZ: '395', warningZ: '400', cameraZ: '600'
+      localOverlays: 0, rasterZ: '325', vectorZ: '390', localOverlayZ: '380', tropicalZ: '395', warningZ: '400', cameraZ: '600'
     });
     const tropicalPopupOpened = await page.evaluate(() => {
       let opened = false;
@@ -663,7 +725,7 @@ async function main() {
       satellite: false, lightning: false, wildfires: true, tropical: false, wpcOutlooks: false, usgsGauges: false, satelliteStatus: 'off',
       lightningStatus: 'error', wildfireStatus: 'ready', tropicalStatus: 'off', tropicalCount: 0,
       wpcStatus: 'off', wpcCount: 0, wpcDay: 2, gaugeStatus: 'off', gaugeCount: 0, satelliteZ: '315',
-      rasterZ: '325', vectorZ: '390', tropicalZ: '395', warningZ: '400', cameraZ: '600'
+      localOverlays: 0, rasterZ: '325', vectorZ: '390', localOverlayZ: '380', tropicalZ: '395', warningZ: '400', cameraZ: '600'
     });
     await page.locator('#toggle-lightning').uncheck();
     await page.locator('#toggle-wildfires').uncheck();

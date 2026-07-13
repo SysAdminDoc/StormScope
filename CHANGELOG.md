@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.90.0 - 2026-07-12
+
+- Added client-only GeoJSON and GPX overlays with atomic validation for type/MIME/5 MiB size, 2,000 features, 100,000 positions, supported geometry/ring structure, coordinate/elevation ranges, scalar properties, unsafe keys, XML entities, and bounded GPX waypoints/routes/track segments.
+- Imports use fixed app-owned styling in a z380 pane, safe text-only popups, per-feature nearby cameras, visibility/zoom/export/remove controls, canonical single/bundle export, and session-only defaults. Explicit Keep locally uses a separate versioned IndexedDB store; scenes and diagnostics exclude names, IDs, properties, and geometry. Added EN/ES, persistence/reload, hostile-content, GPX, rejection, export, mobile, and offline-shell coverage. SW v63.
+
 ## v0.89.0 - 2026-07-12
 
 - Added optional official WPC Day 1–3 excessive-rainfall and five-day significant-river-flood outlooks with independent paginated feeds, exact issue/valid periods, category/pattern styling, source links, explicit planning limitations, and last-good partial recovery.

@@ -62,6 +62,10 @@
         app_version: String(context.appVersion || 'unknown'),
         corpus_generation: context.corpusGeneration || null,
         providers: context.providers || {},
+        local_overlays: {
+          count: Math.max(0, Math.floor(Number(context.localOverlays && context.localOverlays.count) || 0)),
+          bytes: Math.max(0, Math.floor(Number(context.localOverlays && context.localOverlays.bytes) || 0))
+        },
         cache: context.cache || null,
         errors: errors.slice()
       };
