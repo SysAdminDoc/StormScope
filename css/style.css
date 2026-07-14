@@ -716,6 +716,28 @@ button:focus-visible {
   filter: contrast(1.65) saturate(1.35) brightness(1.05);
 }
 
+.wake-lock-panel {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.wake-lock-panel h4 {
+  margin: 0 0 2px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.wake-lock-status {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.wake-lock-status[data-state="active"] { color: var(--success); }
+.wake-lock-status[data-state="unavailable"] { color: var(--danger); }
+
 .cache-panel {
   margin-top: 12px;
   padding-top: 12px;

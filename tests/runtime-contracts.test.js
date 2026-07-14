@@ -13,6 +13,7 @@ const cameraRecordSource = fs.readFileSync(path.join(root, 'js', 'camera-record.
 const cameraFeedSource = fs.readFileSync(path.join(root, 'js', 'camera-feed.js'), 'utf8');
 const serviceWorker = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const spatialQuery = fs.readFileSync(path.join(root, 'js', 'spatial-query.js'), 'utf8');
+const wakeLockSource = fs.readFileSync(path.join(root, 'js', 'wake-lock.js'), 'utf8');
 const cameraData = JSON.parse(fs.readFileSync(path.join(root, 'data', 'cameras.json'), 'utf8'));
 const i18n = require('../js/i18n.js');
 const cameraRecord = require('../js/camera-record.js');
@@ -200,6 +201,19 @@ test('incident camera proximity loads before the app and remains available offli
   assert.match(spatialQuery, /function queryCameras/);
   assert.match(app, /appendNearbyCameraSection/);
   assert.match(app, /StormScopeSpatialQuery\.monitorCandidates/);
+});
+
+test('screen wake lock is opt-in, lifecycle-owned, and available offline', () => {
+  const wakePosition = html.indexOf('js/wake-lock.js');
+  const appPosition = html.indexOf('js/app.js');
+  assert.ok(wakePosition >= 0 && appPosition > wakePosition);
+  assert.match(serviceWorker, /\.\/js\/wake-lock\.js/);
+  assert.match(html, /id="wake-lock-monitoring"/);
+  assert.doesNotMatch(html, /id="wake-lock-monitoring"[^>]*checked/);
+  assert.match(wakeLockSource, /userInitiated/);
+  assert.match(wakeLockSource, /visibilitychange/);
+  assert.match(wakeLockSource, /lock\.addEventListener\('release'/);
+  assert.match(app, /syncWakeLockMonitoring/);
 });
 
 test('accessible situation summary is user-triggered and exposes non-map navigation', () => {

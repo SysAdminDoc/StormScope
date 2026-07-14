@@ -18,7 +18,7 @@
   })();
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.118.0';
+  var APP_VERSION = '0.119.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -107,6 +107,7 @@
   var comparisonMetricsTimer = null;
   var comparisonSatelliteTime = null;
   var comparisonRadarWasPlaying = false;
+  var wakeLockController = null;
   var satelliteLayer = null;
   var satelliteAbort = null;
   var satelliteRefreshTimer = null;
@@ -2528,6 +2529,37 @@
         stepRadar(1);
       }, radarAnimationSpeed);
     }
+    syncWakeLockMonitoring();
+  }
+
+  function monitoringSessionActive() {
+    var monitorModal = document.getElementById('monitor-modal');
+    return Boolean(radarPlaying || activeCamera || mapComparison && mapComparison.isOpen() ||
+      monitorModal && !monitorModal.classList.contains('hidden'));
+  }
+
+  function renderWakeLockState(snapshot) {
+    var checkbox = document.getElementById('wake-lock-monitoring');
+    var status = document.getElementById('wake-lock-status');
+    if (!checkbox || !status) return;
+    checkbox.disabled = !snapshot.supported;
+    checkbox.checked = snapshot.enabled;
+    status.dataset.state = snapshot.state;
+    status.textContent = tr('wake.' + snapshot.state);
+  }
+
+  function syncWakeLockMonitoring() {
+    if (wakeLockController) wakeLockController.setActive(monitoringSessionActive());
+  }
+
+  function initWakeLock() {
+    wakeLockController = StormScopeWakeLock.create({
+      navigator: navigator,
+      document: document,
+      onChange: renderWakeLockState
+    });
+    renderWakeLockState(wakeLockController.snapshot());
+    teardownResources.push(wakeLockController);
   }
 
   // ── Camera Layer ──
@@ -3621,6 +3653,7 @@
     setModalBackgroundInert(true, modal);
     document.getElementById('modal-close').focus();
     document.addEventListener('keydown', trapFocus);
+    syncWakeLockMonitoring();
 
     loadCameraFeed(cam, feedEl);
     fetchWeather(cam.lat, cam.lon, cam);
@@ -3683,6 +3716,7 @@
     document.getElementById('camera-modal').classList.add('hidden');
     setModalBackgroundInert(false, document.getElementById('camera-modal'));
     feedEl.replaceChildren();
+    syncWakeLockMonitoring();
 
     if (priorFocusEl && priorFocusEl.focus) {
       priorFocusEl.focus();
@@ -4009,6 +4043,7 @@
         document.addEventListener('keydown', trapFocus);
         comparisonMetricsTimer = setInterval(updateComparisonBudgetStatus, 500);
         updateComparisonBudgetStatus();
+        syncWakeLockMonitoring();
       },
       onClose: function () {
         clearInterval(comparisonMetricsTimer);
@@ -4017,6 +4052,7 @@
         document.removeEventListener('keydown', trapFocus);
         document.getElementById('comparison-budget-status').textContent = '';
         resumeOperationalWorkAfterComparison();
+        syncWakeLockMonitoring();
       }
     });
     return mapComparison;
@@ -4085,6 +4121,7 @@
     setModalBackgroundInert(true, modal);
     document.addEventListener('keydown', trapFocus);
     document.getElementById('monitor-close').focus();
+    syncWakeLockMonitoring();
   }
 
   function closeMonitor(restoreFocus) {
@@ -4108,6 +4145,7 @@
         if (target && target.focus) target.focus();
       }
       priorFocusEl = null;
+      syncWakeLockMonitoring();
     }
   }
 
@@ -4992,6 +5030,9 @@
   }
 
   function bindUI() {
+    document.getElementById('wake-lock-monitoring').addEventListener('change', function () {
+      wakeLockController.setEnabled(this.checked, true);
+    });
     document.getElementById('btn-locate').addEventListener('click', locateMe);
     document.getElementById('place-query').addEventListener('input', schedulePlaceSearch);
     document.getElementById('place-query').addEventListener('keydown', function (event) {
@@ -5176,6 +5217,7 @@
       if (radarFrames.length) updateRadarTimeDisplay();
       if (cameraDataTimestamp) updateDataFreshness();
       refreshCameraLoadLabels();
+      if (wakeLockController) renderWakeLockState(wakeLockController.snapshot());
       renderCameraSourceHealth();
       refreshCameraMarkerLabels();
       refreshSavedViews(document.getElementById('saved-views').value);
@@ -5915,6 +5957,7 @@
     initMap();
     initWeatherUnits();
     initLowDataMode();
+    initWakeLock();
     initRadarPreferences();
     startupSharedScene = readStartupSharedScene();
     initSavedState({ restoreLastView: !startupSharedScene });
@@ -5941,6 +5984,7 @@
     getCameraLoadMetrics: function () { return Object.assign({}, cameraLoadMetrics); },
     getCameraResults: function () { return currentCameraResults.slice(); },
     getSearchRenderMetrics: function () { return Object.assign({}, searchRenderMetrics); },
+    getWakeLockState: function () { return wakeLockController ? wakeLockController.snapshot() : null; },
     captureSharedScene: captureSharedScene,
     getSharedSceneUrl: sharedSceneUrl,
     getActiveCameraId: function () { return activeCamera ? String(activeCamera.id) : null; },

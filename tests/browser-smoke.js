@@ -1665,6 +1665,68 @@ async function main() {
     assert.equal(await invalidScenePage.locator('#fatal-recovery').isHidden(), true);
     await invalidScenePage.close();
 
+    const wakePage = await context.newPage();
+    wakePage.baseURL = baseURL;
+    await wakePage.addInitScript(() => {
+      window.__wakeLockRequests = 0;
+      window.__wakeLockReleases = 0;
+      window.__wakeVisibility = 'visible';
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get() { return window.__wakeVisibility; }
+      });
+      Object.defineProperty(navigator, 'wakeLock', {
+        configurable: true,
+        value: {
+          request(type) {
+            if (type !== 'screen') return Promise.reject(new Error('unexpected lock type'));
+            window.__wakeLockRequests += 1;
+            const listeners = new Map();
+            let released = false;
+            return Promise.resolve({
+              addEventListener(name, listener) { listeners.set(name, listener); },
+              release() {
+                if (released) return Promise.resolve();
+                released = true;
+                window.__wakeLockReleases += 1;
+                if (listeners.has('release')) listeners.get('release')();
+                return Promise.resolve();
+              }
+            });
+          }
+        }
+      });
+    });
+    await addNetworkFixtures(wakePage);
+    await waitForApp(wakePage);
+    if (await wakePage.locator('#radar-play').getAttribute('aria-pressed') === 'true') {
+      await wakePage.locator('#radar-play').click();
+    }
+    await wakePage.getByRole('button', { name: 'Toggle layers panel' }).click();
+    await wakePage.locator('#wake-lock-monitoring').check();
+    await wakePage.waitForFunction(() => window._stormscope.getWakeLockState().state === 'ready');
+    assert.equal(await wakePage.evaluate(() => window.__wakeLockRequests), 0, 'opt-in alone must not request a lock');
+    await wakePage.locator('#open-comparison').click();
+    await wakePage.locator('#comparison-modal').waitFor({ state: 'visible' });
+    await wakePage.waitForFunction(() => window._stormscope.getWakeLockState().state === 'active');
+    assert.equal(await wakePage.evaluate(() => window.__wakeLockRequests), 1);
+    await wakePage.evaluate(() => {
+      window.__wakeVisibility = 'hidden';
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await wakePage.waitForFunction(() => window._stormscope.getWakeLockState().state === 'suspended');
+    assert.equal(await wakePage.evaluate(() => window.__wakeLockReleases), 1);
+    await wakePage.evaluate(() => {
+      window.__wakeVisibility = 'visible';
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await wakePage.waitForFunction(() => window._stormscope.getWakeLockState().state === 'active');
+    assert.equal(await wakePage.evaluate(() => window.__wakeLockRequests), 2);
+    await wakePage.getByRole('button', { name: 'Close map comparison' }).click();
+    await wakePage.waitForFunction(() => window._stormscope.getWakeLockState().state === 'ready');
+    assert.equal(await wakePage.evaluate(() => window.__wakeLockReleases), 2);
+    await wakePage.close();
+
     const navigationPreloadState = await page.evaluate(async () => {
       const registration = await navigator.serviceWorker.ready;
       return registration.navigationPreload ? registration.navigationPreload.getState() : null;

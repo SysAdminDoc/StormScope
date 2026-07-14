@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.119.0 - 2026-07-14
+
+- Added an opt-in Screen Wake Lock for active radar, camera, multi-camera, and comparison monitoring with visibility release/reacquire, revocation, rejection, and unsupported-browser handling. SW v92.
+
 ## v0.118.0 - 2026-07-14
 
 - Diagnostic exports now include bounded privacy-safe startup, camera-load, data-mode, service-worker/navigation-preload, and dropped-entry evidence without URLs, coordinates, searches, or identifiers. SW v91.
