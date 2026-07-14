@@ -33,12 +33,76 @@ async function assertControlsReachable(page, containerSelector, selectors) {
       element.focus();
       element.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       const rect = element.getBoundingClientRect();
-      const container = element.closest(containerSelector).getBoundingClientRect();
+      const containerElement = document.querySelector(containerSelector);
+      if (!containerElement) return false;
+      const container = containerElement.getBoundingClientRect();
       return document.activeElement === element && rect.bottom > Math.max(0, container.top) &&
         rect.top < Math.min(window.innerHeight, container.bottom) && rect.right > 0 && rect.left < window.innerWidth;
     }, containerSelector);
     assert.equal(reachable, true, `${selector} must be keyboard reachable in ${containerSelector}`);
   }
+}
+
+async function assertEveryControlReachable(page, containerSelector, label) {
+  const result = await page.locator(containerSelector).evaluate((container) => {
+    const controls = [...container.querySelectorAll('button, input, select, a[href], [tabindex="0"]')];
+    const failures = [];
+    let checked = 0;
+    controls.forEach((element, index) => {
+      const style = getComputedStyle(element);
+      const initialRect = element.getBoundingClientRect();
+      if (element.disabled || style.display === 'none' || style.visibility === 'hidden' ||
+          initialRect.width === 0 || initialRect.height === 0) return;
+      checked += 1;
+      element.focus();
+      element.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      const rect = element.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      const reachable = document.activeElement === element && rect.width > 0 && rect.height > 0 &&
+        rect.bottom > Math.max(0, containerRect.top) && rect.top < Math.min(window.innerHeight, containerRect.bottom) &&
+        rect.right > 0 && rect.left < window.innerWidth;
+      if (!reachable) failures.push({ index, id: element.id, tag: element.tagName });
+    });
+    return { checked, failures };
+  });
+  assert.ok(result.checked > 0, `${label} must expose at least one enabled control`);
+  assert.deepEqual(result.failures, [], `${label} controls must all be keyboard reachable`);
+}
+
+async function assertOnlyTopLevelSurface(page, expected, label) {
+  const selectors = ['#alerts-panel', '#layers-panel', '#search-panel', '#situation-panel'];
+  const visible = [];
+  for (const selector of selectors) {
+    if (await page.locator(selector).isVisible()) visible.push(selector);
+  }
+  assert.deepEqual(visible, [expected], `${label} must expose exactly one top-level map surface`);
+  assert.equal(await page.locator('html').evaluate((element) => element.scrollWidth > element.clientWidth), false,
+    `${label} must not create horizontal scrolling`);
+  await assertSurfaceWithinViewport(page, expected, label);
+  await assertEveryControlReachable(page, expected, label);
+}
+
+async function exerciseNarrowPanelState(page, options) {
+  const label = `${options.width}px ${options.locale} ${options.theme} ${options.offline ? 'offline' : 'online'}`;
+  await page.context().setOffline(options.offline);
+  await page.waitForFunction((offline) => document.querySelector('#connection-state').classList.contains('offline') === offline,
+    options.offline);
+
+  if (await page.locator('#btn-layers').getAttribute('aria-expanded') !== 'true') {
+    await page.locator('#btn-layers').click();
+  }
+  const alternateLocale = options.locale === 'en' ? 'es' : 'en';
+  await page.locator('#app-locale').selectOption(alternateLocale);
+  await page.locator('#app-locale').selectOption(options.locale);
+  await page.locator('#app-theme').selectOption(options.theme);
+  await assertOnlyTopLevelSurface(page, '#layers-panel', `${label} layers after alert re-render`);
+
+  await page.locator('#btn-search').click();
+  await assertOnlyTopLevelSurface(page, '#search-panel', `${label} search`);
+  await page.locator('#btn-summary').click();
+  await assertOnlyTopLevelSurface(page, '#situation-panel', `${label} situation summary`);
+  await page.locator('#close-summary').click();
+  await assertOnlyTopLevelSurface(page, '#alerts-panel', `${label} alerts restored`);
 }
 
 async function exerciseLandscapeLayout(page, theme) {
@@ -510,7 +574,8 @@ async function addNetworkFixtures(page, metrics, options) {
 
 async function waitForApp(page, requireRadar = true) {
   await page.goto(page.baseURL, { waitUntil: 'domcontentloaded' });
-  await page.locator('#camera-count').filter({ hasText: '36,592 indexed' }).waitFor({ state: 'visible' });
+  await page.locator('#camera-count').filter({ hasText: /36[,.]592 (?:indexed|indexadas)/ })
+    .waitFor({ state: 'visible' });
   if (requireRadar) {
     await page.waitForFunction(() => /RainViewer|NOAA\/NWS MRMS/.test(document.querySelector('#radar-meta').textContent));
   }
@@ -992,15 +1057,20 @@ async function main() {
     );
     assert.match(await page.locator('#radar-frame-position').textContent(), /^Fotograma /);
     assert.match(await page.locator('#radar-time').textContent(), /hace|ahora mismo/);
-    await page.locator('#alerts-status').filter({ hasText: '1 alerta' }).waitFor({ state: 'visible' });
+    await page.locator('#alerts-status').filter({ hasText: '1 alerta' }).waitFor({ state: 'attached' });
+    assert.equal(await page.locator('#alerts-panel').isHidden(), true,
+      'alert re-render must not obscure the open layers panel');
     assert.equal(
       (await page.locator('.alerts-provider-note').textContent()).trim(),
       'Texto del proveedor NWS (puede permanecer en inglés)'
     );
+    await page.locator('#btn-layers').click();
+    await page.locator('#alerts-status').filter({ hasText: '1 alerta' }).waitFor({ state: 'visible' });
     await page.getByRole('button', { name: /Severe Thunderstorm Warning/ }).click();
     await page.locator('#alert-detail').waitFor({ state: 'visible' });
     assert.match(await page.locator('#alert-detail').textContent(), /Severa • Inmediata • Observada/);
     await page.locator('#alert-detail .alert-detail-dismiss').click();
+    await page.locator('#btn-layers').click();
     await page.locator('#app-locale').selectOption('en');
     assert.equal(await page.locator('html').getAttribute('lang'), 'en');
     await page.getByRole('button', { name: 'Toggle layers panel' }).click();
@@ -1601,6 +1671,28 @@ async function main() {
       .waitFor({ state: 'visible' });
     assert.equal(await iosPage.locator('#install-app').isHidden(), true);
     await iosContext.close();
+
+    const narrowContext = await browser.newContext({
+      viewport: { width: 390, height: 568 },
+      serviceWorkers: 'block'
+    });
+    for (const width of [320, 360, 390]) {
+      const narrow = await narrowContext.newPage();
+      narrow.baseURL = baseURL;
+      await narrow.setViewportSize({ width, height: 568 });
+      await addNetworkFixtures(narrow);
+      await waitForApp(narrow, false);
+      for (const offline of [false, true]) {
+        for (const locale of ['en', 'es']) {
+          for (const theme of ['dark', 'light']) {
+            await exerciseNarrowPanelState(narrow, { width, locale, theme, offline });
+          }
+        }
+      }
+      await narrowContext.setOffline(false);
+      await narrow.close();
+    }
+    await narrowContext.close();
 
     const mobile = await context.newPage();
     mobile.baseURL = baseURL;

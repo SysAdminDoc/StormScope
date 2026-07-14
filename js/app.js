@@ -18,7 +18,7 @@
   })();
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.105.0';
+  var APP_VERSION = '0.106.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -4254,7 +4254,7 @@
     status.textContent = activeAlerts.length
       ? tr(activeAlerts.length === 1 ? 'alerts.countOne' : 'alerts.countMany', { count: localNumber(activeAlerts.length) })
       : tr('alerts.none');
-    panel.classList.toggle('hidden', !alertsVisible);
+    syncAlertsPanelVisibility();
   }
 
   function hideAlertDetail() {
@@ -4485,22 +4485,44 @@
   }
 
   function toggleSituationSummary() {
-    var panel = document.getElementById('situation-panel');
-    var opening = panel.classList.contains('hidden');
-    panel.classList.toggle('hidden', !opening);
-    document.getElementById('btn-summary').setAttribute('aria-expanded', String(opening));
+    var opening = toggleTopLevelPanel('situation-panel', 'btn-summary');
     if (!opening) return;
     if (summaryWildfireStatus === 'error') summaryWildfireStatus = 'idle';
-    document.getElementById('search-panel').classList.add('hidden');
-    document.getElementById('btn-search').setAttribute('aria-expanded', 'false');
-    document.getElementById('layers-panel').classList.add('hidden');
-    document.getElementById('btn-layers').setAttribute('aria-expanded', 'false');
-    document.getElementById('alerts-panel').classList.add('hidden');
     renderSituationSummary(true);
     document.getElementById('situation-heading').focus({ preventScroll: true });
   }
 
   // ── UI Bindings ──
+
+  var TOP_LEVEL_PANELS = Object.freeze([
+    Object.freeze({ panel: 'search-panel', toggle: 'btn-search' }),
+    Object.freeze({ panel: 'situation-panel', toggle: 'btn-summary' }),
+    Object.freeze({ panel: 'layers-panel', toggle: 'btn-layers' })
+  ]);
+
+  function topLevelPanelIsOpen() {
+    return TOP_LEVEL_PANELS.some(function (entry) {
+      return !document.getElementById(entry.panel).classList.contains('hidden');
+    });
+  }
+
+  function syncAlertsPanelVisibility() {
+    document.getElementById('alerts-panel').classList.toggle(
+      'hidden', !alertsVisible || topLevelPanelIsOpen()
+    );
+  }
+
+  function toggleTopLevelPanel(panelId, toggleId) {
+    var panel = document.getElementById(panelId);
+    var opening = panel.classList.contains('hidden');
+    TOP_LEVEL_PANELS.forEach(function (entry) {
+      var open = opening && entry.panel === panelId;
+      document.getElementById(entry.panel).classList.toggle('hidden', !open);
+      document.getElementById(entry.toggle).setAttribute('aria-expanded', String(open));
+    });
+    syncAlertsPanelVisibility();
+    return opening;
+  }
 
   // Close a header-toggled panel (search/layers) if it is open, returning focus
   // to its toggle button so keyboard and screen-reader users keep their place.
@@ -4511,6 +4533,7 @@
     var toggle = document.getElementById(toggleId);
     toggle.setAttribute('aria-expanded', 'false');
     toggle.focus();
+    syncAlertsPanelVisibility();
     return true;
   }
 
@@ -4728,29 +4751,14 @@
       renderSituationSummary(true);
     });
     document.getElementById('btn-search').addEventListener('click', function () {
-      document.getElementById('situation-panel').classList.add('hidden');
-      document.getElementById('btn-summary').setAttribute('aria-expanded', 'false');
-      var panel = document.getElementById('search-panel');
-      var isHidden = panel.classList.toggle('hidden');
-      this.setAttribute('aria-expanded', String(!isHidden));
-      if (!isHidden) {
-        document.getElementById('layers-panel').classList.add('hidden');
-        document.getElementById('btn-layers').setAttribute('aria-expanded', 'false');
-        document.getElementById('alerts-panel').classList.add('hidden');
+      if (toggleTopLevelPanel('search-panel', 'btn-search')) {
         scheduleSearchRender();
         document.getElementById('camera-query').focus();
       }
     });
 
     document.getElementById('btn-layers').addEventListener('click', function () {
-      document.getElementById('situation-panel').classList.add('hidden');
-      document.getElementById('btn-summary').setAttribute('aria-expanded', 'false');
-      var panel = document.getElementById('layers-panel');
-      var isHidden = panel.classList.toggle('hidden');
-      this.setAttribute('aria-expanded', String(!isHidden));
-      document.getElementById('search-panel').classList.add('hidden');
-      document.getElementById('btn-search').setAttribute('aria-expanded', 'false');
-      document.getElementById('alerts-panel').classList.toggle('hidden', !isHidden || !alertsVisible);
+      toggleTopLevelPanel('layers-panel', 'btn-layers');
     });
 
     document.getElementById('toggle-radar').addEventListener('change', function () {
@@ -5084,13 +5092,11 @@
     });
 
     map.on('click', function () {
-      document.getElementById('situation-panel').classList.add('hidden');
-      document.getElementById('btn-summary').setAttribute('aria-expanded', 'false');
-      document.getElementById('layers-panel').classList.add('hidden');
-      document.getElementById('btn-layers').setAttribute('aria-expanded', 'false');
-      document.getElementById('search-panel').classList.add('hidden');
-      document.getElementById('btn-search').setAttribute('aria-expanded', 'false');
-      document.getElementById('alerts-panel').classList.toggle('hidden', !alertsVisible);
+      TOP_LEVEL_PANELS.forEach(function (entry) {
+        document.getElementById(entry.panel).classList.add('hidden');
+        document.getElementById(entry.toggle).setAttribute('aria-expanded', 'false');
+      });
+      syncAlertsPanelVisibility();
     });
     map.on('moveend', function () {
       if (radarFrames.length) sampleRadarCenter(radarFrames[radarIndex]);

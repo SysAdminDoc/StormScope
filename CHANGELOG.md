@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.106.0 - 2026-07-14
+
+- Made Alerts, Layers, Search, and Situation surfaces mutually exclusive through one top-level panel state path. Alert refreshes and locale re-renders can no longer reopen Alerts above an active panel; closing any header panel predictably restores enabled alerts and synchronized `aria-expanded` state.
+- Expanded the live narrow-portrait regression matrix to 320/360/390 px across EN/ES, light/dark, and online/offline states. Every case forces the former alert re-render race, asserts one visible in-viewport surface with no horizontal scroll, and focus-walks every enabled control. SW v79.
+
 ## v0.105.0 - 2026-07-14
 
 - Extracted modal camera playback into `js/camera-feed.js`, with injected localization, timing, HLS, active-camera, and observation dependencies plus one idempotent `destroy()` owner for refresh timers, videos, HLS instances, images, and iframes.
