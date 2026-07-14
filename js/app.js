@@ -18,7 +18,7 @@
   })();
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.96.0';
+  var APP_VERSION = '0.97.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -165,6 +165,14 @@
   var wildfireCount = 0;
   var wildfireStatusState = 'off';
   var wildfireAttributionAdded = false;
+  var earthquakeLayer = null;
+  var earthquakeAbort = null;
+  var earthquakeGeneration = 0;
+  var earthquakeRefreshTimer = null;
+  var earthquakeGeneratedAt = null;
+  var earthquakeCount = 0;
+  var earthquakeStatusState = 'off';
+  var earthquakeAttributionAdded = false;
   var summaryWildfireStatus = 'idle';
   var summaryWildfireCount = 0;
   var summaryWildfireUpdatedAt = null;
@@ -179,19 +187,19 @@
   var WORKFLOW_PRESETS = Object.freeze({
     severe: {
       center: { lat: 39.5, lon: -98.5 }, zoom: 5,
-      layers: { radar: true, cameras: true, coverage: true, alerts: true, satellite: false, lightning: true, wildfires: false, tropical: true, wpcOutlooks: true, usgsGauges: false },
+      layers: { radar: true, cameras: true, coverage: true, alerts: true, satellite: false, lightning: true, wildfires: false, tropical: true, wpcOutlooks: true, usgsGauges: false, earthquakes: false },
       opacity: { radar: 0.7 }, radar: { palette: 'colorblind', speed: 800 }, alertSeverity: 'severe',
       cameraFilters: { query: '', state: '', source: '', type: '', sort: 'distance', healthy: true, favorites: false }, dataMode: 'auto', outlookDay: 1
     },
     wildfire: {
       center: { lat: 39, lon: -112 }, zoom: 5,
-      layers: { radar: false, cameras: true, coverage: false, alerts: true, satellite: true, lightning: false, wildfires: true, tropical: false, wpcOutlooks: false, usgsGauges: false },
+      layers: { radar: false, cameras: true, coverage: false, alerts: true, satellite: true, lightning: false, wildfires: true, tropical: false, wpcOutlooks: false, usgsGauges: false, earthquakes: false },
       opacity: { radar: 0.55 }, radar: { palette: 'standard', speed: 0 }, alertSeverity: 'moderate',
       cameraFilters: { query: '', state: '', source: '', type: '', sort: 'distance', healthy: true, favorites: false }, dataMode: 'auto', outlookDay: 1
     },
     travel: {
       center: { lat: 38.5, lon: -96 }, zoom: 5,
-      layers: { radar: true, cameras: true, coverage: false, alerts: true, satellite: false, lightning: false, wildfires: false, tropical: false, wpcOutlooks: false, usgsGauges: false },
+      layers: { radar: true, cameras: true, coverage: false, alerts: true, satellite: false, lightning: false, wildfires: false, tropical: false, wpcOutlooks: false, usgsGauges: false, earthquakes: false },
       opacity: { radar: 0.55 }, radar: { palette: 'colorblind', speed: 0 }, alertSeverity: 'moderate',
       cameraFilters: { query: '', state: '', source: '', type: '', sort: 'distance', healthy: true, favorites: false }, dataMode: 'auto', outlookDay: 1
     }
@@ -1871,6 +1879,143 @@
     renderWildfireStatus();
   }
 
+  // ── USGS earthquakes ──
+
+  function earthquakeSelection() {
+    return {
+      magnitude: document.getElementById('earthquake-magnitude').value,
+      period: document.getElementById('earthquake-period').value
+    };
+  }
+
+  function renderEarthquakeStatus() {
+    if (earthquakeStatusState === 'off') {
+      setContextStatusElement('earthquake-status', tr('context.earthquakesOff'), 'off');
+      return;
+    }
+    if (earthquakeStatusState === 'loading') {
+      setContextStatusElement('earthquake-status', tr('context.loading'), 'loading');
+      return;
+    }
+    if (earthquakeStatusState === 'error') {
+      setContextStatusElement('earthquake-status', tr(earthquakeLayer ? 'context.refreshFailed' : 'context.unavailable'), 'error');
+      return;
+    }
+    var provider = StormScopeEarthquakes.provider;
+    var fresh = StormScopeEarthquakes.freshness(earthquakeGeneratedAt, provider.staleMs);
+    setContextStatusElement('earthquake-status', tr('context.earthquakeStatus', {
+      count: localNumber(earthquakeCount),
+      freshness: tr(fresh.state === 'stale' ? 'context.stale' : 'context.fresh'),
+      time: earthquakeGeneratedAt ? localTime(earthquakeGeneratedAt) : tr('weather.unknown')
+    }), 'ready');
+  }
+
+  function earthquakePopup(feature) {
+    var properties = feature.properties || {};
+    var container = document.createElement('div');
+    container.className = 'context-popup';
+    var heading = document.createElement('strong');
+    heading.textContent = tr('context.earthquakeMagnitude', { mag: localNumber(properties.mag) });
+    container.appendChild(heading);
+    var place = document.createElement('span');
+    place.textContent = properties.place || tr('context.earthquakeUnknownPlace');
+    container.appendChild(place);
+    if (properties.depthKm != null) {
+      var depth = document.createElement('span');
+      depth.textContent = tr('context.earthquakeDepth', { depth: localNumber(Math.round(properties.depthKm)) });
+      container.appendChild(depth);
+    }
+    if (properties.time != null) {
+      var time = document.createElement('span');
+      time.textContent = localTime(properties.time);
+      container.appendChild(time);
+    }
+    if (properties.url) {
+      var link = document.createElement('a');
+      link.href = safeExternalUrl(properties.url);
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = tr('context.usgsSource');
+      container.appendChild(link);
+    }
+    return container;
+  }
+
+  function scheduleEarthquakeRefresh() {
+    clearTimeout(earthquakeRefreshTimer);
+    earthquakeRefreshTimer = null;
+    if (!document.getElementById('toggle-earthquakes').checked) return;
+    earthquakeRefreshTimer = setTimeout(refreshEarthquakes, StormScopeEarthquakes.provider.refreshMs);
+  }
+
+  async function refreshEarthquakes() {
+    if (!document.getElementById('toggle-earthquakes').checked || document.hidden) return;
+    if (earthquakeAbort) earthquakeAbort.abort();
+    earthquakeAbort = new AbortController();
+    var generation = ++earthquakeGeneration;
+    var signal = earthquakeAbort.signal;
+    earthquakeStatusState = 'loading';
+    renderEarthquakeStatus();
+    try {
+      var provider = StormScopeEarthquakes.provider;
+      var selection = earthquakeSelection();
+      var url = StormScopeEarthquakes.buildFeedUrl(selection.magnitude, selection.period);
+      var response = await fetch(url, { cache: 'no-store', signal: signal });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      var normalized = StormScopeEarthquakes.normalizeCollection(await response.json());
+      if (generation !== earthquakeGeneration) return;
+      var nextLayer = L.geoJSON(normalized.collection, {
+        pane: 'contextVectorPane',
+        pointToLayer: function (feature, latlng) {
+          return L.circleMarker(latlng, {
+            pane: 'contextVectorPane',
+            radius: StormScopeEarthquakes.markerRadius(feature.properties.mag),
+            color: '#1a1a1a', weight: 1,
+            fillColor: StormScopeEarthquakes.markerColor(feature.properties.mag), fillOpacity: 0.75
+          });
+        },
+        onEachFeature: function (feature, layer) {
+          layer.bindPopup(function () { return earthquakePopup(feature); }, { autoPan: false, maxWidth: 320, maxHeight: 320 });
+        }
+      }).addTo(map);
+      if (earthquakeLayer) map.removeLayer(earthquakeLayer);
+      earthquakeLayer = nextLayer;
+      if (!earthquakeAttributionAdded) {
+        map.attributionControl.addAttribution('<a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>');
+        earthquakeAttributionAdded = true;
+      }
+      earthquakeGeneratedAt = normalized.generatedAt;
+      earthquakeCount = normalized.count;
+      earthquakeStatusState = 'ready';
+      renderEarthquakeStatus();
+    } catch (error) {
+      if (error.name === 'AbortError') return;
+      if (generation !== earthquakeGeneration) return;
+      earthquakeStatusState = 'error';
+      renderEarthquakeStatus();
+    } finally {
+      if (generation === earthquakeGeneration) scheduleEarthquakeRefresh();
+    }
+  }
+
+  function disableEarthquakes() {
+    earthquakeGeneration += 1;
+    if (earthquakeAbort) earthquakeAbort.abort();
+    clearTimeout(earthquakeRefreshTimer);
+    earthquakeRefreshTimer = null;
+    if (earthquakeLayer) map.removeLayer(earthquakeLayer);
+    earthquakeLayer = null;
+    if (earthquakeAttributionAdded) {
+      var provider = StormScopeEarthquakes.provider;
+      map.attributionControl.removeAttribution('<a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>');
+      earthquakeAttributionAdded = false;
+    }
+    earthquakeCount = 0;
+    earthquakeGeneratedAt = null;
+    earthquakeStatusState = 'off';
+    renderEarthquakeStatus();
+  }
+
   function centerTileCoordinate(zoom) {
     var center = map.getCenter();
     var scale = Math.pow(2, zoom);
@@ -2484,7 +2629,8 @@
         wildfires: document.getElementById('toggle-wildfires').checked,
         tropical: document.getElementById('toggle-tropical').checked,
         wpcOutlooks: document.getElementById('toggle-wpc-outlooks').checked,
-        usgsGauges: document.getElementById('toggle-usgs-gauges').checked
+        usgsGauges: document.getElementById('toggle-usgs-gauges').checked,
+        earthquakes: document.getElementById('toggle-earthquakes').checked
       },
       opacity: { radar: radarOpacity }
     };
@@ -2632,6 +2778,11 @@
       document.getElementById('toggle-usgs-gauges').checked = layers.usgsGauges;
       if (layers.usgsGauges) refreshUsgsGauges();
       else disableUsgsGauges();
+    }
+    if (typeof layers.earthquakes === 'boolean') {
+      document.getElementById('toggle-earthquakes').checked = layers.earthquakes;
+      if (layers.earthquakes) refreshEarthquakes();
+      else disableEarthquakes();
     }
     if (snapshot.opacity && typeof snapshot.opacity.radar === 'number') {
       radarOpacity = snapshot.opacity.radar;
@@ -3300,7 +3451,7 @@
     radarRefreshTimer = null;
     [alertRefreshTimer, alertMoveTimer, lightningRefreshTimer, satelliteRefreshTimer, satelliteMoveTimer,
       tropicalRefreshTimer, wpcRefreshTimer, usgsGaugeRefreshTimer, usgsGaugeMoveTimer,
-      wildfireRefreshTimer, wildfireMoveTimer].forEach(clearTimeout);
+      wildfireRefreshTimer, wildfireMoveTimer, earthquakeRefreshTimer].forEach(clearTimeout);
     if (alertAbort) alertAbort.abort();
     if (lightningAbort) lightningAbort.abort();
     if (satelliteAbort) satelliteAbort.abort();
@@ -3309,6 +3460,7 @@
     if (wpcFloodAbort) wpcFloodAbort.abort();
     if (usgsGaugeAbort) usgsGaugeAbort.abort();
     if (wildfireAbort) wildfireAbort.abort();
+    if (earthquakeAbort) earthquakeAbort.abort();
   }
 
   function resumeOperationalWorkAfterComparison() {
@@ -3325,6 +3477,7 @@
     if (document.getElementById('toggle-wpc-outlooks').checked) refreshWpcOutlooks();
     if (document.getElementById('toggle-usgs-gauges').checked) refreshUsgsGauges();
     if (document.getElementById('toggle-wildfires').checked) refreshWildfires();
+    if (document.getElementById('toggle-earthquakes').checked) refreshEarthquakes();
   }
 
   function ensureMapComparison() {
@@ -4572,6 +4725,17 @@
       else disableUsgsGauges();
       scheduleLastViewSave();
     });
+    document.getElementById('toggle-earthquakes').addEventListener('change', function () {
+      if (this.checked) refreshEarthquakes();
+      else disableEarthquakes();
+      scheduleLastViewSave();
+    });
+    ['earthquake-magnitude', 'earthquake-period'].forEach(function (id) {
+      document.getElementById(id).addEventListener('change', function () {
+        if (document.getElementById('toggle-earthquakes').checked) refreshEarthquakes();
+        scheduleLastViewSave();
+      });
+    });
 
     document.getElementById('alert-severity').addEventListener('change', fetchNwsAlerts);
 
@@ -5057,6 +5221,7 @@
         if (wpcFloodAbort) wpcFloodAbort.abort();
         if (usgsGaugeAbort) usgsGaugeAbort.abort();
         if (wildfireAbort) wildfireAbort.abort();
+        if (earthquakeAbort) earthquakeAbort.abort();
         clearTimeout(alertRefreshTimer);
         clearTimeout(lightningRefreshTimer);
         clearTimeout(satelliteRefreshTimer);
@@ -5066,6 +5231,7 @@
         clearTimeout(usgsGaugeRefreshTimer);
         clearTimeout(usgsGaugeMoveTimer);
         clearTimeout(wildfireRefreshTimer);
+        clearTimeout(earthquakeRefreshTimer);
         return;
       }
 
@@ -5086,6 +5252,7 @@
       if (document.getElementById('toggle-wpc-outlooks').checked) refreshWpcOutlooks();
       if (document.getElementById('toggle-usgs-gauges').checked) refreshUsgsGauges();
       if (document.getElementById('toggle-wildfires').checked) refreshWildfires();
+      if (document.getElementById('toggle-earthquakes').checked) refreshEarthquakes();
     });
 
     window.addEventListener('online', function () {
@@ -5097,6 +5264,7 @@
       if (document.getElementById('toggle-wpc-outlooks').checked) refreshWpcOutlooks();
       if (document.getElementById('toggle-usgs-gauges').checked) refreshUsgsGauges();
       if (document.getElementById('toggle-wildfires').checked) refreshWildfires();
+      if (document.getElementById('toggle-earthquakes').checked) refreshEarthquakes();
     });
     window.addEventListener('offline', updateConnectionState);
     window.addEventListener('beforeunload', function () {
@@ -5113,6 +5281,7 @@
       clearTimeout(usgsGaugeMoveTimer);
       clearTimeout(wildfireRefreshTimer);
       clearTimeout(wildfireMoveTimer);
+      clearTimeout(earthquakeRefreshTimer);
       setRadarPlaying(false);
       if (radarAbort) radarAbort.abort();
       if (weatherAbort) weatherAbort.abort();
@@ -5321,12 +5490,13 @@
       return {
         satellite: Boolean(satelliteLayer), lightning: Boolean(lightningLayer), wildfires: Boolean(wildfireLayer),
         tropical: Boolean(tropicalLayer), wpcOutlooks: Boolean(wpcEroLayer || wpcFloodLayer),
-        usgsGauges: Boolean(usgsGaugeLayer),
+        usgsGauges: Boolean(usgsGaugeLayer), earthquakes: Boolean(earthquakeLayer),
         satelliteStatus: satelliteStatusState,
         lightningStatus: lightningStatusState, wildfireStatus: wildfireStatusState,
         tropicalStatus: tropicalStatusState, tropicalCount: tropicalStorms.length,
         wpcStatus: wpcStatusState, wpcCount: wpcOutlookCount, wpcDay: wpcOutlookDay,
         gaugeStatus: usgsGaugeStatusState, gaugeCount: usgsGaugeCount,
+        earthquakeStatus: earthquakeStatusState, earthquakeCount: earthquakeCount,
         localOverlays: localOverlayRecords.length,
         rasterZ: map.getPane('contextRasterPane').style.zIndex,
         satelliteZ: map.getPane('satellitePane').style.zIndex,

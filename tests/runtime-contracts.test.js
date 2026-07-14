@@ -295,6 +295,24 @@ test('official context layers are optional, attributed, and cannot obscure warni
   assert.match(app, /StormScopeContextLayers\.buildWildfireQueries/);
 });
 
+test('USGS earthquakes are an optional, attributed, keyless layer wired end to end', () => {
+  assert.match(html, /js\/earthquakes\.js/);
+  assert.match(serviceWorker, /\.\/js\/earthquakes\.js/);
+  assert.match(html, /<input[^>]*type="checkbox"[^>]*id="toggle-earthquakes"[^>]*>/);
+  assert.match(html, /id="earthquake-magnitude"/);
+  assert.match(html, /id="earthquake-period"/);
+  assert.match(html, /id="earthquake-status"[^>]*role="status"/);
+  const csp = html.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)"/)[1];
+  assert.match(csp, /https:\/\/earthquake\.usgs\.gov/);
+  assert.match(app, /function refreshEarthquakes/);
+  assert.match(app, /function disableEarthquakes/);
+  assert.match(app, /StormScopeEarthquakes\.buildFeedUrl/);
+  assert.match(app, /StormScopeEarthquakes\.normalizeCollection/);
+  // Popup href is scheme-guarded and the layer participates in scene state.
+  assert.match(app, /link\.href = safeExternalUrl\(properties\.url\)/);
+  assert.match(app, /earthquakes: document\.getElementById\('toggle-earthquakes'\)\.checked/);
+});
+
 test('live feed checks maintain a local non-destructive health overlay', () => {
   assert.match(app, /stormscope-camera-observations-v1/);
   assert.match(app, /function recordCameraObservation/);

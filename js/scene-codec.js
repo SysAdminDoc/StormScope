@@ -9,7 +9,7 @@
   var VERSION = 1;
   var PREFIX = VERSION + '.';
   var MAX_TOKEN_LENGTH = 2048;
-  var LAYERS = ['radar', 'cameras', 'coverage', 'alerts', 'lightning', 'wildfires', 'satellite', 'tropical', 'wpcOutlooks', 'usgsGauges'];
+  var LAYERS = ['radar', 'cameras', 'coverage', 'alerts', 'lightning', 'wildfires', 'satellite', 'tropical', 'wpcOutlooks', 'usgsGauges', 'earthquakes'];
   var MAX_LAYER_BITS = (1 << LAYERS.length) - 1;
   var PALETTES = ['standard', 'colorblind', 'contrast'];
   var SPEEDS = [0, 400, 800, 1600];

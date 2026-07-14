@@ -514,7 +514,8 @@ button:focus-visible {
 .context-layer-option { margin: -2px 0 2px 24px; }
 .context-source-links { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 3px 6px; }
 .context-limitation { grid-column: 2 / 4; margin: -1px 0 2px; color: var(--text-dim); font-size: 10px; line-height: 1.35; }
-.satellite-swatch, .tropical-swatch, .wpc-outlook-swatch, .usgs-gauge-swatch, .lightning-swatch, .wildfire-swatch { width: 9px; height: 9px; border-radius: 2px; }
+.satellite-swatch, .tropical-swatch, .wpc-outlook-swatch, .usgs-gauge-swatch, .lightning-swatch, .wildfire-swatch, .earthquake-swatch { width: 9px; height: 9px; border-radius: 2px; }
+.earthquake-swatch { border-radius: 50%; border: 2px solid #f76707; background: rgba(247, 103, 7, 0.25); }
 .satellite-swatch { background: linear-gradient(135deg, #2a9d8f, #e9c46a); }
 .tropical-swatch { position: relative; box-sizing: border-box; width: 10px; height: 10px; border: 2px dashed #f4a261; border-radius: 50%; background: transparent; }
 .tropical-swatch::after { position: absolute; inset: 2px; border-radius: 50%; background: #ff2d55; content: ''; }

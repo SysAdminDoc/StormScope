@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.97.0 - 2026-07-14
+
+- Added an optional, default-off USGS earthquakes layer from the keyless static GeoJSON summary feeds (`Access-Control-Allow-Origin: *`). Selectable magnitude (significant/M4.5+/M2.5+/M1.0+/all) and period (hour/day/week/month) drive magnitude-scaled, magnitude-colored markers with DOM-only popups (place, magnitude, depth, time, official USGS event link scheme-guarded to http/https). Freshness, attribution, and independent abort-on-teardown match the other context layers; the layer participates in shareable scenes and workflow profiles. Added `js/earthquakes.js` with unit coverage, EN/ES localization, a hostile-content headless regression, and `earthquake.usgs.gov` in `connect-src`. SW v70.
+
 ## v0.96.0 - 2026-07-14
 
 - Added a header "locate me" control that centers the map on the device location via the browser Geolocation API and drops a transient marker. Permission prompts, denials, timeouts, and unsupported browsers are handled with a localized (EN/ES) polite-announcer message. Coordinates are used only for the in-session view and marker — never stored, shared, or added to scene links. Headless-mocked coverage recenters on a mocked position and confirms the announcement. SW v69.
