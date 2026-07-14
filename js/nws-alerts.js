@@ -12,6 +12,24 @@
   var SEVERITY_ORDER = Object.freeze({ Extreme: 0, Severe: 1, Moderate: 2, Minor: 3, Unknown: 4 });
   var URGENCY_ORDER = Object.freeze({ Immediate: 0, Expected: 1, Future: 2, Past: 3, Unknown: 4 });
   var CERTAINTY_ORDER = Object.freeze({ Observed: 0, Likely: 1, Possible: 2, Unlikely: 3, Unknown: 4 });
+  var PARAMETER_SPECS = Object.freeze([
+    Object.freeze({ name: 'NWSheadline', kind: 'officialHeadline', maxLength: 512 }),
+    Object.freeze({ name: 'tornadoDamageThreat', kind: 'tornadoDamageThreat', maxLength: 64 }),
+    Object.freeze({ name: 'thunderstormDamageThreat', kind: 'thunderstormDamageThreat', maxLength: 64 }),
+    Object.freeze({ name: 'flashFloodDamageThreat', kind: 'flashFloodDamageThreat', maxLength: 64 }),
+    Object.freeze({ name: 'snowSquallImpact', kind: 'snowSquallImpact', maxLength: 64 }),
+    Object.freeze({ name: 'maxHailSize', kind: 'maxHailSize', maxLength: 32 }),
+    Object.freeze({ name: 'hailSize', kind: 'hailSize', maxLength: 32, supersededBy: 'maxHailSize' }),
+    Object.freeze({ name: 'maxWindGust', kind: 'maxWindGust', maxLength: 32 }),
+    Object.freeze({ name: 'windGust', kind: 'windGust', maxLength: 32, supersededBy: 'maxWindGust' }),
+    Object.freeze({ name: 'eventMotionDescription', kind: 'eventMotionDescription', maxLength: 512 }),
+    Object.freeze({ name: 'tornadoDetection', kind: 'tornadoDetection', maxLength: 96 }),
+    Object.freeze({ name: 'waterspoutDetection', kind: 'waterspoutDetection', maxLength: 96 }),
+    Object.freeze({ name: 'flashFloodDetection', kind: 'flashFloodDetection', maxLength: 96 }),
+    Object.freeze({ name: 'hailThreat', kind: 'hailThreat', maxLength: 96 }),
+    Object.freeze({ name: 'windThreat', kind: 'windThreat', maxLength: 96 }),
+    Object.freeze({ name: 'WEAHandling', kind: 'weaHandling', maxLength: 96 })
+  ]);
 
   function finiteNumber(value, label) {
     var number = Number(value);
@@ -112,14 +130,29 @@
     }
   }
 
-  function firstParameter(parameters, name) {
+  function firstParameter(parameters, name, maxLength) {
     var values = parameters && parameters[name];
     if (!Array.isArray(values) || !values.length) return '';
-    return cleanString(values[0]);
+    if (typeof values[0] !== 'string') return '';
+    var value = values[0].replace(/\s+/g, ' ').trim();
+    var limit = maxLength == null ? 512 : maxLength;
+    if (!value || value.length > limit || /[\u0000-\u001f\u007f]/.test(value)) return '';
+    return value;
+  }
+
+  function impactParameters(parameters) {
+    var result = [];
+    PARAMETER_SPECS.forEach(function (spec) {
+      if (spec.supersededBy && firstParameter(parameters, spec.supersededBy, spec.maxLength)) return;
+      var value = firstParameter(parameters, spec.name, spec.maxLength);
+      if (!value) return;
+      result.push(Object.freeze({ kind: spec.kind, sourceName: spec.name, value: value }));
+    });
+    return Object.freeze(result);
   }
 
   function vtecSeries(parameters) {
-    var vtec = firstParameter(parameters, 'VTEC');
+    var vtec = firstParameter(parameters, 'VTEC', 128);
     if (!vtec) return '';
     var match = vtec.match(/^\/[A-Z]\.[A-Z]{3}\.([A-Z0-9]{4})\.([A-Z]{2})\.([A-Z])\.(\d{4})\./i);
     return match ? [match[1], match[2], match[3], match[4]].join('.').toUpperCase() : '';
@@ -143,7 +176,7 @@
     var effective = timestamp(properties.effective);
     var onset = timestamp(properties.onset);
     var expires = timestamp(properties.expires);
-    var ends = timestamp(properties.ends || firstParameter(properties.parameters, 'eventEndingTime'));
+    var ends = timestamp(properties.ends || firstParameter(properties.parameters, 'eventEndingTime', 64));
     var apiUrl = trustedWeatherUrl(properties['@id']) || trustedWeatherUrl(feature.id) || trustedWeatherUrl(id);
     var weatherUrl = trustedWeatherUrl(properties.web) || WEATHER_URL;
     var sourceUrl = apiUrl || weatherUrl;
@@ -153,6 +186,7 @@
     var status = canonical(properties.status, ['Actual', 'Exercise', 'System', 'Test', 'Draft', 'Unknown']);
     var messageType = canonical(properties.messageType, ['Alert', 'Update', 'Cancel', 'Ack', 'Error', 'Unknown']);
     var series = vtecSeries(properties.parameters);
+    var impacts = impactParameters(properties.parameters);
 
     return Object.freeze({
       id: id,
@@ -189,7 +223,7 @@
       affectedZones: Array.isArray(properties.affectedZones) ? properties.affectedZones.slice() : [],
       geometry: feature.geometry || properties.geometry || null,
       references: Array.isArray(properties.references) ? properties.references.slice() : [],
-      parameters: properties.parameters && typeof properties.parameters === 'object' ? properties.parameters : {},
+      impactParameters: impacts,
       vtecSeries: series
     });
   }
@@ -347,6 +381,7 @@
     buildPointQuery: buildPointQuery,
     buildViewportQuery: buildViewportQuery,
     normalizeBounds: normalizeBounds,
+    impactParameters: impactParameters,
     normalizeAlert: normalizeAlert,
     normalizeCollection: normalizeCollection,
     dedupeAlerts: dedupeAlerts,

@@ -21,7 +21,7 @@ REQUIREMENTS = ROOT / "requirements-dev.txt"
 PACKAGE_LOCK = ROOT / "package-lock.json"
 VENDOR_MANIFEST = ROOT / "vendor" / "dependencies.json"
 ADVISORY_POLICY = ROOT / "config" / "dependency-advisories.json"
-USER_AGENT = "StormScope/0.109.0 dependency-audit"
+USER_AGENT = "StormScope/0.110.0 dependency-audit"
 PIN_PATTERN = re.compile(r"^([A-Za-z0-9_.-]+)==([A-Za-z0-9][A-Za-z0-9.+_-]*)$")
 ALLOWED_ECOSYSTEMS = {"npm", "PyPI"}
 ALLOWED_STATUSES = {"affected", "mitigated", "not_affected_by_usage", "patched"}

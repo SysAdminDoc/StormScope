@@ -357,6 +357,15 @@ button:focus-visible {
   font-size: 11px;
 }
 
+.alert-list-button .alert-impact-summary {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text);
+  font-weight: 600;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .alert-detail {
   position: relative;
   margin-top: 10px;
@@ -400,6 +409,35 @@ button:focus-visible {
   font-weight: 600;
   letter-spacing: 0.02em;
   text-transform: uppercase;
+}
+
+.alert-impact-details {
+  margin: 8px 0 10px;
+  padding: 8px 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-inset);
+}
+
+.alert-impact-details h4 {
+  margin: 0 0 5px;
+  font-size: 12px;
+}
+
+.alert-impact-details dl { margin: 0; }
+
+.alert-impact-details dl div {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.8fr) minmax(0, 1.2fr);
+  gap: 4px 10px;
+  padding: 3px 0;
+}
+
+.alert-impact-details dt { color: var(--text-dim); }
+.alert-impact-details dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+
+@media (max-width: 420px) {
+  .alert-impact-details dl div { grid-template-columns: 1fr; gap: 0; }
 }
 
 .alerts-provider-note {

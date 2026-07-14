@@ -1,6 +1,6 @@
 {
   "name": "stormscope",
-  "version": "0.109.0",
+  "version": "0.110.0",
   "private": true,
   "description": "Live weather radar and webcam map",
   "packageManager": "npm@11.13.0",

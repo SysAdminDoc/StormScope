@@ -18,7 +18,7 @@
   })();
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.109.0';
+  var APP_VERSION = '0.110.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -4342,6 +4342,40 @@
     return '#70d6ff';
   }
 
+  function alertImpactRows(alert) {
+    return (alert.impactParameters || []).map(function (parameter) {
+      var labelKey = 'alerts.impact.' + parameter.kind;
+      var label = tr(labelKey);
+      if (!parameter.value || label === labelKey) return null;
+      return { kind: parameter.kind, label: label, value: parameter.value };
+    }).filter(Boolean);
+  }
+
+  function appendAlertImpactDetails(container, alert) {
+    var rows = alertImpactRows(alert);
+    if (!rows.length) return;
+    var section = document.createElement('section');
+    section.className = 'alert-impact-details';
+    section.setAttribute('aria-labelledby', 'alert-impact-heading');
+    var heading = document.createElement('h4');
+    heading.id = 'alert-impact-heading';
+    heading.textContent = tr('alerts.impact.heading');
+    var list = document.createElement('dl');
+    rows.forEach(function (row) {
+      var item = document.createElement('div');
+      var term = document.createElement('dt');
+      var description = document.createElement('dd');
+      term.textContent = row.label;
+      description.textContent = row.value;
+      item.appendChild(term);
+      item.appendChild(description);
+      list.appendChild(item);
+    });
+    section.appendChild(heading);
+    section.appendChild(list);
+    container.appendChild(section);
+  }
+
   function renderAlerts() {
     var panel = document.getElementById('alerts-panel');
     var list = document.getElementById('alerts-list');
@@ -4366,6 +4400,15 @@
         time: localTime(alert.expires)
       });
       button.appendChild(title);
+      var impactSummary = alertImpactRows(alert).filter(function (row) {
+        return row.kind === 'officialHeadline' || /DamageThreat$/.test(row.kind);
+      }).slice(0, 2);
+      impactSummary.forEach(function (row) {
+        var impact = document.createElement('span');
+        impact.className = 'alert-impact-summary';
+        impact.textContent = row.label + ': ' + row.value;
+        button.appendChild(impact);
+      });
       button.appendChild(summary);
       button.addEventListener('click', function () { showAlertDetail(alert, true, button); });
       item.appendChild(button);
@@ -4421,6 +4464,7 @@
     providerLabel.className = 'provider-content-label';
     providerLabel.textContent = tr('alerts.providerContent');
     detail.appendChild(providerLabel);
+    appendAlertImpactDetails(detail, alert);
     [
       [tr('alerts.area'), alert.areaDescription],
       [tr('alerts.effective'), localTime(alert.effective)],

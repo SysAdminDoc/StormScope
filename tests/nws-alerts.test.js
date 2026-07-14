@@ -104,6 +104,82 @@ test('missing provider prose stays empty for the localized UI fallback', () => {
   assert.equal(alert.headline, '');
 });
 
+test('normalizes only bounded official impact-based warning parameters', () => {
+  const alert = alerts.normalizeAlert(feature({ parameters: {
+    VTEC: ['/O.NEW.KTST.TO.W.0042.260711T2000Z-260711T2100Z/'],
+    NWSheadline: ['  TORNADO EMERGENCY\nFOR TEST COUNTY  '],
+    tornadoDamageThreat: ['CATASTROPHIC'],
+    thunderstormDamageThreat: ['DESTRUCTIVE'],
+    flashFloodDamageThreat: ['CONSIDERABLE'],
+    snowSquallImpact: ['SIGNIFICANT'],
+    maxHailSize: ['2.75'],
+    maxWindGust: ['80 MPH'],
+    eventMotionDescription: ['2026-07-11T16:01:00-04:00...storm...240DEG...35KT...39.0,-90.0'],
+    tornadoDetection: ['OBSERVED'],
+    waterspoutDetection: ['RADAR INDICATED'],
+    flashFloodDetection: ['GAUGE INDICATED'],
+    hailThreat: ['RADAR INDICATED'],
+    windThreat: ['OBSERVED'],
+    WEAHandling: ['Imminent Threat'],
+    BLOCKCHANNEL: ['EAS'],
+    untrustedFutureField: ['must not cross the adapter boundary']
+  } }));
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(alert.impactParameters)),
+    [
+      { kind: 'officialHeadline', sourceName: 'NWSheadline', value: 'TORNADO EMERGENCY FOR TEST COUNTY' },
+      { kind: 'tornadoDamageThreat', sourceName: 'tornadoDamageThreat', value: 'CATASTROPHIC' },
+      { kind: 'thunderstormDamageThreat', sourceName: 'thunderstormDamageThreat', value: 'DESTRUCTIVE' },
+      { kind: 'flashFloodDamageThreat', sourceName: 'flashFloodDamageThreat', value: 'CONSIDERABLE' },
+      { kind: 'snowSquallImpact', sourceName: 'snowSquallImpact', value: 'SIGNIFICANT' },
+      { kind: 'maxHailSize', sourceName: 'maxHailSize', value: '2.75' },
+      { kind: 'maxWindGust', sourceName: 'maxWindGust', value: '80 MPH' },
+      { kind: 'eventMotionDescription', sourceName: 'eventMotionDescription', value: '2026-07-11T16:01:00-04:00...storm...240DEG...35KT...39.0,-90.0' },
+      { kind: 'tornadoDetection', sourceName: 'tornadoDetection', value: 'OBSERVED' },
+      { kind: 'waterspoutDetection', sourceName: 'waterspoutDetection', value: 'RADAR INDICATED' },
+      { kind: 'flashFloodDetection', sourceName: 'flashFloodDetection', value: 'GAUGE INDICATED' },
+      { kind: 'hailThreat', sourceName: 'hailThreat', value: 'RADAR INDICATED' },
+      { kind: 'windThreat', sourceName: 'windThreat', value: 'OBSERVED' },
+      { kind: 'weaHandling', sourceName: 'WEAHandling', value: 'Imminent Threat' }
+    ]
+  );
+  assert.equal(Object.isFrozen(alert.impactParameters), true);
+  assert.equal(Object.isFrozen(alert.impactParameters[0]), true);
+  assert.equal('parameters' in alert, false, 'raw provider parameters must not escape the adapter');
+});
+
+test('drops absent, malformed, control-character, and oversized impact parameters', () => {
+  const oversized = 'X'.repeat(513);
+  const alert = alerts.normalizeAlert(feature({ parameters: {
+    VTEC: ['/O.NEW.KTST.SV.W.0042.260711T2000Z-260711T2100Z/'],
+    NWSheadline: [oversized],
+    tornadoDamageThreat: 'CATASTROPHIC',
+    maxHailSize: [2.75],
+    maxWindGust: [{ value: '80 MPH' }],
+    eventMotionDescription: ['motion\u0000payload'],
+    WEAHandling: []
+  } }));
+  assert.equal(alert.impactParameters.length, 0);
+  assert.equal(alert.vtecSeries, 'KTST.SV.W.0042', 'non-impact adapter fields remain available');
+  assert.equal(alerts.impactParameters(null).length, 0);
+});
+
+test('accepts legacy hail and wind tags only when modern replacements are absent', () => {
+  const legacy = alerts.impactParameters({ hailSize: ['Up to 1.75'], windGust: ['60 MPH'] });
+  assert.deepEqual(JSON.parse(JSON.stringify(legacy)), [
+    { kind: 'hailSize', sourceName: 'hailSize', value: 'Up to 1.75' },
+    { kind: 'windGust', sourceName: 'windGust', value: '60 MPH' }
+  ]);
+
+  const modern = alerts.impactParameters({
+    maxHailSize: ['2.75'], hailSize: ['1.75'], maxWindGust: ['80 MPH'], windGust: ['60 MPH']
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(modern)), [
+    { kind: 'maxHailSize', sourceName: 'maxHailSize', value: '2.75' },
+    { kind: 'maxWindGust', sourceName: 'maxWindGust', value: '80 MPH' }
+  ]);
+});
+
 test('deduplicates an alert series to its latest update and removes expired alerts', () => {
   const first = alerts.normalizeAlert(feature());
   const update = alerts.normalizeAlert(feature({

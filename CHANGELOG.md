@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.110.0 - 2026-07-14
+
+- Surfaced bounded, provider-authored NWS Impact-Based Warning details near alert headlines, including damage threats, official headlines, hail/wind values, storm motion, detection sources, and Wireless Emergency Alert handling, with accessible EN/ES labels and malformed/oversized parameter rejection. SW v83.
+
 ## v0.109.0 - 2026-07-14
 
 - Added dry-run and atomic release preparation with prevalidated semver, lockfile, application, service-worker cache, badge, changelog, and User-Agent updates plus rollback if any replace or parity check fails.

@@ -494,7 +494,16 @@ async function addNetworkFixtures(page, metrics, options) {
             sent: new Date(now - 60000).toISOString(),
             effective: new Date(now - 60000).toISOString(),
             expires: new Date(now + 3600000).toISOString(),
-            parameters: {}
+            parameters: {
+              NWSheadline: ['SEVERE THUNDERSTORM WARNING REMAINS IN EFFECT FOR TEST COUNTY'],
+              thunderstormDamageThreat: ['DESTRUCTIVE'],
+              maxHailSize: ['2.75'],
+              maxWindGust: ['80 MPH'],
+              eventMotionDescription: ['2026-07-14T12:00:00-05:00...storm...240DEG...35KT...39.0,-99.0'],
+              hailThreat: ['RADAR INDICATED'],
+              windThreat: ['OBSERVED'],
+              WEAHandling: ['Imminent Threat']
+            }
           }
         }] })
       });
@@ -738,6 +747,16 @@ async function main() {
     });
     await page.locator('.summary-read-alert').first().click();
     await page.locator('#alert-detail').waitFor({ state: 'visible' });
+    const impactDetails = page.locator('#alert-detail .alert-impact-details');
+    await impactDetails.getByRole('heading', { name: 'Official impact details' }).waitFor({ state: 'visible' });
+    assert.match(await impactDetails.textContent(), /Official NWS headline.*SEVERE THUNDERSTORM WARNING REMAINS IN EFFECT/s);
+    assert.match(await impactDetails.textContent(), /Thunderstorm damage threat.*DESTRUCTIVE/s);
+    assert.match(await impactDetails.textContent(), /Maximum hail size.*2\.75/s);
+    assert.match(await impactDetails.textContent(), /Maximum wind gust.*80 MPH/s);
+    assert.match(await impactDetails.textContent(), /Storm motion.*240DEG.*35KT/s);
+    assert.match(await impactDetails.textContent(), /Hail detection.*RADAR INDICATED/s);
+    assert.match(await impactDetails.textContent(), /Wind detection.*OBSERVED/s);
+    assert.match(await impactDetails.textContent(), /Wireless Emergency Alert handling.*Imminent Threat/s);
     assert.deepEqual(await page.evaluate(() => {
       const map = window._stormscope.getMap();
       return { center: map.getCenter(), zoom: map.getZoom() };
@@ -1134,6 +1153,9 @@ async function main() {
     await page.getByRole('button', { name: /Severe Thunderstorm Warning/ }).click();
     await page.locator('#alert-detail').waitFor({ state: 'visible' });
     assert.match(await page.locator('#alert-detail').textContent(), /Severa • Inmediata • Observada/);
+    assert.match(await page.locator('#alert-detail').textContent(), /Detalles oficiales del impacto/);
+    assert.match(await page.locator('#alert-detail').textContent(), /Amenaza de daños por tormenta.*DESTRUCTIVE/s);
+    assert.match(await page.locator('#alert-detail').textContent(), /Ráfaga máxima de viento.*80 MPH/s);
     await page.locator('#alert-detail .alert-detail-dismiss').click();
     await page.locator('#btn-layers').click();
     await page.locator('#app-locale').selectOption('en');
