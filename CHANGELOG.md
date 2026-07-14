@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.100.0 - 2026-07-14
+
+- Added keyless place/address geocoding search at the top of the camera search panel (Photon primary, Nominatim fallback — both OpenStreetMap). Debounced type-ahead (≥300 ms) respects provider fair-use limits, returns up to five results as an accessible listbox (arrow/Enter/Escape keyboard navigation), pans and zooms the map on selection, shows OpenStreetMap attribution, and degrades gracefully when both providers fail. Queries are used only for the in-session map view and are never stored, shared, or added to scene links. Added `js/geocode.js` with unit + headless coverage, EN/ES localization, and `photon.komoot.io`/`nominatim.openstreetmap.org` in `connect-src`. SW v73.
+
 ## v0.99.0 - 2026-07-14
 
 - Added an optional, default-off SPC severe & tornado watch layer from the keyless NOAA `watch_warn_adv` ArcGIS service, filtered to Tornado Watch and Severe Thunderstorm Watch product types. These are watch AREAS (a region under threat), distinct from the CAP warnings already shown. Already-expired and non-severe watches are dropped, tornado watches render above severe-thunderstorm watches below the CAP warnings, insecure (non-HTTPS) official URLs are nulled, and DOM-only popups link the official SPC watch. Freshness/attribution, transfer-limit pagination, a 2-minute refresh, and last-good recovery match the other context layers; the layer participates in shareable scenes and workflow profiles and reuses the already-allowlisted `mapservices.weather.noaa.gov` origin. Added `js/severe-watches.js` with unit + headless coverage and EN/ES. SW v72.

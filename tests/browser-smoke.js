@@ -279,6 +279,16 @@ async function addNetworkFixtures(page, metrics, options) {
       });
       return;
     }
+    if (url.startsWith('https://photon.komoot.io/api')) {
+      await route.fulfill({
+        contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ type: 'FeatureCollection', features: [
+          { type: 'Feature', geometry: { type: 'Point', coordinates: [-122.3321, 47.6062] }, properties: { name: 'Seattle', state: 'Washington', country: 'United States' } },
+          { type: 'Feature', geometry: { type: 'Point', coordinates: [-122.2015, 47.6101] }, properties: { name: 'Bellevue', state: 'Washington', country: 'United States' } }
+        ] })
+      });
+      return;
+    }
     if (url.startsWith('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/')) {
       await route.fulfill({
         contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' },
@@ -585,6 +595,30 @@ async function main() {
       map.once('moveend', reset);
       setTimeout(reset, 1200);
     }));
+
+    // Place/address geocoding: open the search panel, type a query, pick the top
+    // result, and confirm the map recenters. Then restore the default view.
+    await page.locator('#btn-search').click();
+    await page.locator('#search-panel').waitFor({ state: 'visible' });
+    await page.locator('#place-query').fill('Seattle');
+    await page.locator('#place-results .place-result').first().waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#place-results .place-result').count(), 2);
+    assert.match(await page.locator('#place-status').textContent(), /places found/);
+    await page.locator('#place-results .place-result').first().click();
+    await page.waitForFunction(() => {
+      const center = window._stormscope.getMap().getCenter();
+      return Math.abs(center.lat - 47.6062) < 0.5 && Math.abs(center.lng + 122.3321) < 0.5;
+    }, { timeout: 5000 });
+    assert.match(await page.locator('#place-status').textContent(), /Centered on Seattle/);
+    await page.evaluate(() => new Promise((resolve) => {
+      const map = window._stormscope.getMap();
+      let settled = false;
+      const reset = () => { if (settled) return; settled = true; map.setView([39.5, -98.5], 5, { animate: false }); resolve(); };
+      map.once('moveend', reset);
+      setTimeout(reset, 1200);
+    }));
+    await page.locator('#btn-search').click();
+    await page.locator('#search-panel').waitFor({ state: 'hidden' });
 
     assert.equal(await page.locator('html').evaluate((element) => element.scrollWidth > element.clientWidth), false);
     assert.equal(await page.locator('#radar-retry').isHidden(), true);

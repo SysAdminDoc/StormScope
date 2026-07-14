@@ -18,7 +18,7 @@
   })();
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.99.0';
+  var APP_VERSION = '0.100.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -4891,8 +4891,124 @@
     }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
   }
 
+  // ── Place / address geocoding search ──
+  // Keyless OSM geocoding (Photon primary, Nominatim fallback). Queries are
+  // debounced to respect provider rate limits; results pan the map only and are
+  // never stored, shared, or added to scene links.
+  var placeSearchTimer = null;
+  var placeSearchAbort = null;
+  var placeResults = [];
+
+  function clearPlaceResults() {
+    placeResults = [];
+    document.getElementById('place-results').replaceChildren();
+    document.getElementById('place-query').setAttribute('aria-expanded', 'false');
+  }
+
+  function selectPlaceResult(result) {
+    if (!result) return;
+    map.setView([result.lat, result.lon], Math.max(map.getZoom(), 11));
+    document.getElementById('place-status').textContent = tr('place.centered', { place: result.label });
+    clearPlaceResults();
+  }
+
+  function handlePlaceResultKey(event, index) {
+    var list = document.getElementById('place-results');
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      selectPlaceResult(placeResults[index]);
+    } else if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      var next = list.children[index + 1];
+      if (next) next.focus();
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (index === 0) document.getElementById('place-query').focus();
+      else list.children[index - 1].focus();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      clearPlaceResults();
+      document.getElementById('place-query').focus();
+    }
+  }
+
+  function renderPlaceResults(results) {
+    placeResults = results;
+    var list = document.getElementById('place-results');
+    var input = document.getElementById('place-query');
+    list.replaceChildren();
+    results.forEach(function (result, index) {
+      var item = document.createElement('li');
+      item.className = 'place-result';
+      item.setAttribute('role', 'option');
+      item.id = 'place-result-' + index;
+      item.tabIndex = -1;
+      item.textContent = result.label;
+      item.addEventListener('click', function () { selectPlaceResult(result); });
+      item.addEventListener('keydown', function (event) { handlePlaceResultKey(event, index); });
+      list.appendChild(item);
+    });
+    input.setAttribute('aria-expanded', results.length ? 'true' : 'false');
+    document.getElementById('place-status').textContent = results.length
+      ? tr('place.results', { count: localNumber(results.length) })
+      : tr('place.noResults');
+  }
+
+  async function runPlaceSearch(query) {
+    if (placeSearchAbort) placeSearchAbort.abort();
+    placeSearchAbort = new AbortController();
+    var signal = placeSearchAbort.signal;
+    document.getElementById('place-status').textContent = tr('place.searching');
+    try {
+      var response = await fetch(StormScopeGeocode.photonUrl(query), { signal: signal });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      renderPlaceResults(StormScopeGeocode.parsePhoton(await response.json()));
+    } catch (photonError) {
+      if (photonError.name === 'AbortError') return;
+      try {
+        var fallback = await fetch(StormScopeGeocode.nominatimUrl(query), { signal: signal });
+        if (!fallback.ok) throw new Error('HTTP ' + fallback.status);
+        renderPlaceResults(StormScopeGeocode.parseNominatim(await fallback.json()));
+      } catch (nominatimError) {
+        if (nominatimError.name === 'AbortError') return;
+        clearPlaceResults();
+        document.getElementById('place-status').textContent = tr('place.error');
+      }
+    }
+  }
+
+  function schedulePlaceSearch() {
+    var query = StormScopeGeocode.normalizeQuery(document.getElementById('place-query').value);
+    clearTimeout(placeSearchTimer);
+    if (placeSearchAbort) placeSearchAbort.abort();
+    if (query.length < StormScopeGeocode.MIN_QUERY) {
+      clearPlaceResults();
+      document.getElementById('place-status').textContent = '';
+      return;
+    }
+    // Debounce ≥300 ms so type-ahead stays within Photon/Nominatim fair-use limits.
+    placeSearchTimer = setTimeout(function () { runPlaceSearch(query); }, 350);
+  }
+
   function bindUI() {
     document.getElementById('btn-locate').addEventListener('click', locateMe);
+    document.getElementById('place-query').addEventListener('input', schedulePlaceSearch);
+    document.getElementById('place-query').addEventListener('keydown', function (event) {
+      if (event.key === 'ArrowDown' && placeResults.length) {
+        event.preventDefault();
+        document.getElementById('place-results').children[0].focus();
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        clearTimeout(placeSearchTimer);
+        if (placeResults.length) selectPlaceResult(placeResults[0]);
+        else {
+          var query = StormScopeGeocode.normalizeQuery(this.value);
+          if (query.length >= StormScopeGeocode.MIN_QUERY) runPlaceSearch(query);
+        }
+      } else if (event.key === 'Escape') {
+        clearPlaceResults();
+      }
+    });
     document.getElementById('open-comparison').addEventListener('click', openMapComparison);
     document.querySelector('[data-comparison-close]').addEventListener('click', function () {
       closeMapComparison(true);

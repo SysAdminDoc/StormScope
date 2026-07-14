@@ -295,6 +295,24 @@ test('official context layers are optional, attributed, and cannot obscure warni
   assert.match(app, /StormScopeContextLayers\.buildWildfireQueries/);
 });
 
+test('place/address geocoding is keyless, debounced, attributed, and session-only', () => {
+  assert.match(html, /js\/geocode\.js/);
+  assert.match(serviceWorker, /\.\/js\/geocode\.js/);
+  assert.match(html, /id="place-query"[^>]*role="combobox"/);
+  assert.match(html, /id="place-results"[^>]*role="listbox"/);
+  assert.match(html, /openstreetmap\.org\/copyright/);
+  const csp = html.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)"/)[1];
+  assert.match(csp, /https:\/\/photon\.komoot\.io/);
+  assert.match(csp, /https:\/\/nominatim\.openstreetmap\.org/);
+  assert.match(app, /function runPlaceSearch/);
+  assert.match(app, /StormScopeGeocode\.photonUrl/);
+  assert.match(app, /StormScopeGeocode\.nominatimUrl/);
+  // Debounced (≥300 ms) and never persisted.
+  assert.match(app, /setTimeout\(function \(\) \{ runPlaceSearch\(query\); \}, 3[0-9][0-9]\)/);
+  const placeBlock = app.slice(app.indexOf('function runPlaceSearch'), app.indexOf('function bindUI()'));
+  assert.doesNotMatch(placeBlock, /localStorage|sessionStorage|indexedDB/i);
+});
+
 test('SPC severe & tornado watches are an optional, attributed, keyless layer wired end to end', () => {
   assert.match(html, /js\/severe-watches\.js/);
   assert.match(serviceWorker, /\.\/js\/severe-watches\.js/);

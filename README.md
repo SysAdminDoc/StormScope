@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.99.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.100.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
 [![Cameras](https://img.shields.io/badge/cameras-36%2C592-cyan)]()
@@ -22,6 +22,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 - **Official GOES Satellite Context** — Optional NOAA NESDIS merged GeoColor imagery uses the latest authoritative frame, bounded viewport exports, explicit coverage/freshness/attribution, and an independent pane below radar, warnings, and cameras
 - **36,592 Indexed Cameras** — 13,071 verified healthy, 1 degraded, and 23,520 not yet verified across traffic, FAA, NOAA/NWS, USGS, NRAO, park, university, provider, and webcam sources
 - **Locate Me** — A header control centers the map on your device location (browser Geolocation, permission-gated) with a transient marker; coordinates are session-only and never stored, shared, or added to scene links
+- **Place & Address Search** — Keyless OpenStreetMap geocoding (Photon with Nominatim fallback) with debounced type-ahead, an accessible results listbox, and OSM attribution; selecting a result pans the map, and queries are session-only
 - **Fast Camera Discovery** — Progressive state shards make the map interactive before the full corpus loads; accessible search, health/source/type filters, health-first name/distance sorting, and a virtualized result list stay synchronized with the map without reclustering on scroll; Arrow/Page/Home/End navigation crosses unrendered slices
 - **Visible Feed Provenance** — Every camera viewer distinguishes provider frame time, StormScope verification, expiring device-local playback evidence, provider/source, feed type, cadence, and degraded reason without relying on hover text
 - **Local Favorites and Workflow Profiles** — Named schema-v3 profiles restore map, layers, radar presentation, alert threshold, camera filters, weather units, and data mode; three immutable presets and validated portable migration/import/export work without an account
