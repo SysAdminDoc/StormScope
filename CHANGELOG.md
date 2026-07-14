@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.115.0 - 2026-07-14
+
+- Shared scene links now preserve USGS earthquake magnitude and period plus the selected SPC convective outlook day, with backward-compatible defaults for existing links. SW v88.
+
 ## v0.114.0 - 2026-07-14
 
 - Made saved-state imports strict, 5 MiB/UTF-8 bounded, duplicate-safe, staged, and recoverable through a 12-second Undo without mutating state on rejection. SW v87.

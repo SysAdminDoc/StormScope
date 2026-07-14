@@ -15,7 +15,9 @@ function scene(overrides = {}) {
     alertSeverity: 'severe',
     cameraFilters: { query: 'río', state: 'New Mexico', source: 'dot', type: 'image', sort: 'distance', healthy: true },
     activeCameraId: 31415,
-    outlookDay: 2
+    outlookDay: 2,
+    convectiveDay: 3,
+    earthquake: { magnitude: '4.5', period: 'week' }
   }, overrides);
 }
 
@@ -33,7 +35,9 @@ test('versioned scene token round-trips every documented public field', () => {
     alertSeverity: 'severe',
     cameraFilters: { query: 'río', state: 'New Mexico', source: 'dot', type: 'image', sort: 'distance', healthy: true },
     activeCameraId: '31415',
-    outlookDay: 2
+    outlookDay: 2,
+    convectiveDay: 3,
+    earthquake: { magnitude: '4.5', period: 'week' }
   });
   assert.deepEqual(codec.fromHash('#' + codec.toHash(scene())), codec.decode(token));
 });
@@ -66,6 +70,8 @@ test('decodes legacy scene tokens with appended layers disabled and Day 1 select
   assert.equal(decoded.layers.watches, false);
   assert.equal(decoded.layers.wildfires, true);
   assert.equal(decoded.outlookDay, 1);
+  assert.equal(decoded.convectiveDay, 1);
+  assert.deepEqual(decoded.earthquake, { magnitude: '2.5', period: 'day' });
 });
 
 test('invalid, oversized, future, and old scene URLs fail closed', () => {
@@ -76,6 +82,9 @@ test('invalid, oversized, future, and old scene URLs fail closed', () => {
   assert.throws(() => codec.encode(scene({ map: { lat: 91, lon: 0, zoom: 1 } })), /latitude/);
   assert.throws(() => codec.encode(scene({ radar: { opacity: 1, palette: 'animated', speed: 800, frameTime: null } })), /palette/);
   assert.throws(() => codec.encode(scene({ radar: { opacity: 1, palette: 'standard', speed: 123, frameTime: null } })), /speed/);
+  assert.throws(() => codec.encode(scene({ convectiveDay: 4 })), /convective day/);
+  assert.throws(() => codec.encode(scene({ earthquake: { magnitude: '3.0', period: 'day' } })), /magnitude/);
+  assert.throws(() => codec.encode(scene({ earthquake: { magnitude: '2.5', period: 'year' } })), /period/);
   const excessiveLayerBits = Buffer.from(JSON.stringify({
     v: 1, m: [0, 0, 1], l: 8192, r: [50, 0, 0, null], a: 0, f: ['', '', 0, 0, 0, 0], c: null
   }), 'utf8').toString('base64url');

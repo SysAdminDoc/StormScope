@@ -14,6 +14,8 @@
   var PALETTES = ['standard', 'colorblind', 'contrast'];
   var SPEEDS = [0, 400, 800, 1600];
   var SEVERITIES = ['all', 'minor', 'moderate', 'severe', 'extreme'];
+  var EARTHQUAKE_MAGNITUDES = ['significant', '4.5', '2.5', '1.0', 'all'];
+  var EARTHQUAKE_PERIODS = ['hour', 'day', 'week', 'month'];
   var SOURCES = ['', 'angelcam', 'dot', 'earthcam', 'faa', 'hazcams', 'ipcamlive', 'livebeaches',
     'mwra', 'noaa', 'nps', 'nrao', 'rtspme', 'smithsonian', 'state_park', 'university', 'usgs', 'youtube'];
   var FEED_TYPES = ['', 'image', 'hls', 'mjpeg', 'embed', 'youtube'];
@@ -68,6 +70,10 @@
     if (SPEEDS.indexOf(speed) === -1) throw new TypeError('radar speed is unsupported');
     var outlookDay = source.outlookDay == null ? 1 : finite(source.outlookDay, 'outlook day', 1, 3);
     if (!Number.isInteger(outlookDay)) throw new TypeError('outlook day is invalid');
+    var convectiveDay = source.convectiveDay == null ? 1 : finite(source.convectiveDay, 'convective day', 1, 3);
+    if (!Number.isInteger(convectiveDay)) throw new TypeError('convective day is invalid');
+    var earthquake = source.earthquake == null ? { magnitude: '2.5', period: 'day' }
+      : objectValue(source.earthquake, 'scene earthquake');
     return {
       map: {
         lat: Math.round(finite(map.lat, 'latitude', -90, 90) * 100000) / 100000,
@@ -91,7 +97,12 @@
         healthy: Boolean(filters.healthy)
       },
       activeCameraId: activeCameraId,
-      outlookDay: outlookDay
+      outlookDay: outlookDay,
+      convectiveDay: convectiveDay,
+      earthquake: {
+        magnitude: choice(earthquake.magnitude, EARTHQUAKE_MAGNITUDES, 'earthquake magnitude'),
+        period: choice(earthquake.period, EARTHQUAKE_PERIODS, 'earthquake period')
+      }
     };
   }
 
@@ -108,7 +119,9 @@
       f: [scene.cameraFilters.query, scene.cameraFilters.state, SOURCES.indexOf(scene.cameraFilters.source),
         FEED_TYPES.indexOf(scene.cameraFilters.type), SORTS.indexOf(scene.cameraFilters.sort), scene.cameraFilters.healthy ? 1 : 0],
       c: scene.activeCameraId,
-      o: scene.outlookDay
+      o: scene.outlookDay,
+      d: scene.convectiveDay,
+      e: [EARTHQUAKE_MAGNITUDES.indexOf(scene.earthquake.magnitude), EARTHQUAKE_PERIODS.indexOf(scene.earthquake.period)]
     };
   }
 
@@ -125,7 +138,11 @@
         SPEEDS[source.r[2]] == null || !Number.isInteger(source.a) || !SEVERITIES[source.a] ||
         !Number.isInteger(source.f[2]) || SOURCES[source.f[2]] == null || !Number.isInteger(source.f[3]) ||
         FEED_TYPES[source.f[3]] == null || !Number.isInteger(source.f[4]) || !SORTS[source.f[4]] ||
-        (source.f[5] !== 0 && source.f[5] !== 1)) throw new TypeError('scene payload enum is invalid');
+        (source.f[5] !== 0 && source.f[5] !== 1) || (source.e != null && (!Array.isArray(source.e) || source.e.length !== 2 ||
+          !Number.isInteger(source.e[0]) || EARTHQUAKE_MAGNITUDES[source.e[0]] == null ||
+          !Number.isInteger(source.e[1]) || EARTHQUAKE_PERIODS[source.e[1]] == null))) {
+      throw new TypeError('scene payload enum is invalid');
+    }
     return normalizeScene({
       map: { lat: source.m[0], lon: source.m[1], zoom: source.m[2] },
       layers: layers,
@@ -136,7 +153,11 @@
         sort: SORTS[source.f[4]], healthy: Boolean(source.f[5])
       },
       activeCameraId: source.c,
-      outlookDay: source.o == null ? 1 : source.o
+      outlookDay: source.o == null ? 1 : source.o,
+      convectiveDay: source.d == null ? 1 : source.d,
+      earthquake: source.e == null ? { magnitude: '2.5', period: 'day' } : {
+        magnitude: EARTHQUAKE_MAGNITUDES[source.e[0]], period: EARTHQUAKE_PERIODS[source.e[1]]
+      }
     });
   }
 

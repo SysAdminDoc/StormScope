@@ -1595,7 +1595,9 @@ async function main() {
         query: sceneFixture.cameraName, state: '', source: '', type: '', sort: 'distance', healthy: false
       },
       activeCameraId: sceneFixture.cameraId,
-      outlookDay: 3
+      outlookDay: 3,
+      convectiveDay: 2,
+      earthquake: { magnitude: '4.5', period: 'week' }
     };
     const scenePage = await context.newPage();
     scenePage.baseURL = baseURL + '#' + sceneCodec.toHash(sharedScene);
@@ -1618,6 +1620,9 @@ async function main() {
     assert.ok(Math.abs(restoredScene.frameTime - sharedScene.radar.frameTime) <= 30 * 60 * 1000);
     assert.equal(restoredScene.scene.alertSeverity, sharedScene.alertSeverity);
     assert.deepEqual(restoredScene.scene.cameraFilters, sharedScene.cameraFilters);
+    assert.equal(restoredScene.scene.outlookDay, sharedScene.outlookDay);
+    assert.equal(restoredScene.scene.convectiveDay, sharedScene.convectiveDay);
+    assert.deepEqual(restoredScene.scene.earthquake, sharedScene.earthquake);
     assert.equal(restoredScene.activeCameraId, sharedScene.activeCameraId);
     assert.equal(restoredScene.favoriteOnly, false);
 

@@ -18,7 +18,7 @@
   })();
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.114.0';
+  var APP_VERSION = '0.115.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -3142,7 +3142,9 @@
         healthy: filters.healthy
       },
       activeCameraId: activeCamera ? activeCamera.id : null,
-      outlookDay: wpcOutlookDay
+      outlookDay: wpcOutlookDay,
+      convectiveDay: convectiveDay,
+      earthquake: earthquakeSelection()
     };
   }
 
@@ -3155,11 +3157,14 @@
   function applySharedScene(scene) {
     wpcOutlookDay = scene.outlookDay;
     document.getElementById('wpc-outlook-day').value = String(wpcOutlookDay);
+    document.getElementById('earthquake-magnitude').value = scene.earthquake.magnitude;
+    document.getElementById('earthquake-period').value = scene.earthquake.period;
     applyViewSnapshot({
       center: { lat: scene.map.lat, lon: scene.map.lon },
       zoom: scene.map.zoom,
       layers: scene.layers,
-      opacity: { radar: scene.radar.opacity }
+      opacity: { radar: scene.radar.opacity },
+      convectiveDay: scene.convectiveDay
     });
     radarPalette = scene.radar.palette;
     preferredRadarAnimationSpeed = scene.radar.speed;

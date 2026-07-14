@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.114.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.115.0-blue)](CHANGELOG.md)
 [![CI](https://github.com/SysAdminDoc/StormScope/actions/workflows/ci.yml/badge.svg)](https://github.com/SysAdminDoc/StormScope/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
