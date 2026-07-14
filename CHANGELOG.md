@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.113.0 - 2026-07-14
+
+- Bounded camera-generation caching to validated current and previous datasets within 64 MiB, added cached recovery for transient HTTP failures, and serialized pruning with runtime cache clearing. SW v86.
+
 ## v0.112.0 - 2026-07-14
 
 - Enforced bounded same-origin camera artifacts with shared schema and feed-trust validation, cancellable generation ownership, staged generation identity, and malformed-input regression coverage. SW v85.

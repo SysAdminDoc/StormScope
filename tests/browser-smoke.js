@@ -1589,6 +1589,12 @@ async function main() {
       return keys.includes('/data/cameras.index.json') &&
         keys.filter((pathname) => pathname.includes('/data/camera-shards/')).length === 49;
     });
+    await page.waitForFunction(async () => {
+      const expected = window._stormscope.getCameraLoadMetrics().index.dataset_sha256;
+      const cache = await caches.open('stormscope-data-v2');
+      const marker = await cache.match(location.origin + '/__stormscope-camera-generations__');
+      return marker && (await marker.json()).completed.includes(expected);
+    });
     await context.setOffline(true);
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.getByRole('heading', { name: 'StormScope' }).waitFor({ state: 'visible' });

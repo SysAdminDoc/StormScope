@@ -86,6 +86,9 @@ test('extracted lifecycle modules load before app, remain offline, and own one t
   assert.match(serviceWorker, /\.\/js\/camera-record\.js/);
   assert.match(serviceWorker, /\.\/js\/camera-feed\.js/);
   assert.match(serviceWorker, /\.\/js\/context-layer-controllers\.js/);
+  assert.match(app, /STORMSCOPE_CAMERA_GENERATION_COMPLETE/);
+  assert.match(serviceWorker, /rememberCompleteCameraGeneration/);
+  assert.match(serviceWorker, /CAMERA_CACHE_MAX_BYTES = 64 \* 1024 \* 1024/);
   assert.match(contextControllers, /function createControllerSet/);
   assert.match(app, /teardownResources\.forEach\(function \(resource\) \{ resource\.destroy\(\); \}\)/);
   assert.doesNotMatch(app, /function loadHLSFeed/);

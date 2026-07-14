@@ -18,7 +18,7 @@
   })();
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.112.0';
+  var APP_VERSION = '0.113.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -2641,6 +2641,21 @@
     });
   }
 
+  function notifyValidatedCameraGeneration(result) {
+    if (!result || !result.complete || result.source !== 'shards' || !result.index ||
+        !/^[a-f0-9]{64}$/.test(String(result.index.dataset_sha256 || '')) ||
+        !('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.ready.then(function (registration) {
+      var worker = navigator.serviceWorker.controller || registration.active;
+      if (worker) worker.postMessage({
+        type: 'STORMSCOPE_CAMERA_GENERATION_COMPLETE',
+        generation: result.index.dataset_sha256
+      });
+    }).catch(function (error) {
+      diagnostics.capture(error, 'camera-generation-cache');
+    });
+  }
+
   function showDeferredCameraCatalog(index) {
     cameraCatalogDeferred = true;
     var container = document.getElementById('camera-catalog-deferred');
@@ -2668,6 +2683,7 @@
       cameraLoadMetrics.completeMs = performance.now() - cameraLoadMetrics.startedAt;
       cameraLoadMetrics.source = result.source;
       cameraLoadMetrics.index = result.index;
+      notifyValidatedCameraGeneration(result);
       document.getElementById('camera-catalog-deferred').classList.add('hidden');
       document.getElementById('camera-count').textContent = cameraCountLabel();
       document.getElementById('search-progress').textContent = tr('camera.firstBatch', {
@@ -2724,6 +2740,7 @@
       cameraLoadMetrics.completeMs = performance.now() - cameraLoadMetrics.startedAt;
       cameraLoadMetrics.source = result.source;
       cameraLoadMetrics.index = result.index;
+      notifyValidatedCameraGeneration(result);
       cameraDataTimestamp = result.index ? new Date(result.index.generated_at) : null;
       if (!result.complete) {
         showDeferredCameraCatalog(result.index);

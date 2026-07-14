@@ -14,13 +14,19 @@
  */
 'use strict';
 
-var VERSION = 'v85';
+var VERSION = 'v86';
 var RUNTIME_CACHE_VERSION = 'v2';
 var SHELL_CACHE = 'stormscope-shell-' + VERSION;
 var TILE_CACHE = 'stormscope-tiles-' + RUNTIME_CACHE_VERSION;
 var DATA_CACHE = 'stormscope-data-' + RUNTIME_CACHE_VERSION;
 
 var TILE_CACHE_LIMIT = 600; // ~radar frames + visible basemap tiles
+var CAMERA_INDEX_MAX_BYTES = 256 * 1024;
+var CAMERA_SHARD_MAX_BYTES = 2 * 1024 * 1024;
+var CAMERA_MONOLITH_MAX_BYTES = 32 * 1024 * 1024;
+var CAMERA_CACHE_MAX_BYTES = 64 * 1024 * 1024;
+var CAMERA_GENERATION_STATE_PATH = '/__stormscope-camera-generations__';
+var CAMERA_GENERATIONS_TO_KEEP = 2;
 var CACHE_PREFIX = 'stormscope-';
 var trimQueues = Object.create(null);
 var runtimeWrites = [];
@@ -125,19 +131,24 @@ function isLiveApiRequest(url) {
 }
 
 function isCameraIndex(url) {
-  return url.pathname.indexOf('data/cameras.index.json') !== -1;
+  return url.origin === self.location.origin && /\/data\/cameras\.index\.json$/.test(url.pathname);
 }
 
 function isCameraSourceHealth(url) {
-  return url.pathname.indexOf('data/source-health.json') !== -1;
+  return url.origin === self.location.origin && /\/data\/source-health\.json$/.test(url.pathname);
 }
 
 function isCameraShard(url) {
-  return url.pathname.indexOf('data/camera-shards/') !== -1 && url.searchParams.has('generation');
+  return url.origin === self.location.origin && /\/data\/camera-shards\/\d{4}\.json$/.test(url.pathname) &&
+    /^[a-f0-9]{64}$/.test(url.searchParams.get('generation') || '');
 }
 
 function isCameraMonolith(url) {
-  return url.pathname.indexOf('data/cameras.json') !== -1;
+  return url.origin === self.location.origin && /\/data\/cameras\.json$/.test(url.pathname);
+}
+
+function isTransientHttpResponse(response) {
+  return response && (response.status === 408 || response.status === 429 || response.status >= 500);
 }
 
 // Bound a cache to a max entry count (approximate LRU via insertion order).
@@ -177,11 +188,35 @@ function notifyCacheError(cacheName, error) {
   }).catch(function () { return null; });
 }
 
+function requestUrl(request) {
+  try { return new URL(typeof request === 'string' ? request : request.url, self.location.origin); } catch (_error) { return null; }
+}
+
+function runtimeResponseLimit(cacheName, request) {
+  if (cacheName !== DATA_CACHE) return null;
+  var url = requestUrl(request);
+  if (!url) return 0;
+  if (isCameraIndex(url) || isCameraSourceHealth(url) || isRadarManifest(url)) return CAMERA_INDEX_MAX_BYTES;
+  if (isCameraShard(url)) return CAMERA_SHARD_MAX_BYTES;
+  if (isCameraMonolith(url)) return CAMERA_MONOLITH_MAX_BYTES;
+  return null;
+}
+
+function responseFitsRuntimeLimit(cacheName, request, response) {
+  var limit = runtimeResponseLimit(cacheName, request);
+  if (limit === null) return Promise.resolve(true);
+  if (!limit) return Promise.resolve(false);
+  return responseSize(response).then(function (size) { return size <= limit; });
+}
+
 function putInCache(cache, cacheName, request, response) {
-  return cache.put(request, response).then(function () {
-    return true;
-  }).catch(function (error) {
-    return notifyCacheError(cacheName, error).then(function () { return false; });
+  return responseFitsRuntimeLimit(cacheName, request, response).then(function (allowed) {
+    if (!allowed) return false;
+    return cache.put(request, response).then(function () {
+      return true;
+    }).catch(function (error) {
+      return notifyCacheError(cacheName, error).then(function () { return false; });
+    });
   });
 }
 
@@ -269,6 +304,9 @@ function networkFirstWithCache(request, cacheName) {
   if (cacheName === DATA_CACHE && (runtimeClearing || runtimeCachingPaused)) return fetch(request);
   var operation = caches.open(cacheName).then(function (cache) {
     return fetch(request).then(function (response) {
+      if (isTransientHttpResponse(response)) {
+        return cache.match(request).then(function (cached) { return cached || response; });
+      }
       if (!response || !response.ok || response.type === 'opaque') return response;
       return putInCache(cache, cacheName, request, response.clone()).then(function () { return response; });
     }).catch(function (error) {
@@ -279,6 +317,24 @@ function networkFirstWithCache(request, cacheName) {
     });
   });
   return cacheName === DATA_CACHE ? trackRuntimeWrite(operation) : operation;
+}
+
+function cachedShellFallback() {
+  return caches.match('./index.html').then(function (cached) {
+    return cached || caches.match('./');
+  });
+}
+
+function navigationNetworkFirst(request) {
+  return fetch(request).then(function (response) {
+    if (!isTransientHttpResponse(response)) return response;
+    return cachedShellFallback().then(function (cached) { return cached || response; });
+  }).catch(function (error) {
+    return cachedShellFallback().then(function (cached) {
+      if (cached) return cached;
+      throw error;
+    });
+  });
 }
 
 function stormScopeCacheNames() {
@@ -303,6 +359,130 @@ function responseSize(response) {
   return response.clone().blob().then(function (blob) { return blob.size || 0; }).catch(function () {
     return 0;
   });
+}
+
+function cameraGenerationStateRequest() {
+  return new Request(self.location.origin + CAMERA_GENERATION_STATE_PATH, {
+    method: 'GET', credentials: 'same-origin'
+  });
+}
+
+function readCompletedCameraGenerations(cache) {
+  return cache.match(cameraGenerationStateRequest()).then(function (response) {
+    if (!response || typeof response.json !== 'function') return [];
+    return response.json().catch(function () { return []; });
+  }).then(function (state) {
+    var values = state && state.schemaVersion === 1 && Array.isArray(state.completed) ? state.completed : state;
+    if (!Array.isArray(values)) return [];
+    return values.filter(function (value, index, items) {
+      return typeof value === 'string' && /^[a-f0-9]{64}$/.test(value) && items.indexOf(value) === index;
+    }).slice(-CAMERA_GENERATIONS_TO_KEEP);
+  });
+}
+
+function writeCompletedCameraGenerations(cache, completed) {
+  var body = JSON.stringify({ schemaVersion: 1, completed: completed });
+  var response = new Response(body, {
+    headers: { 'content-type': 'application/json', 'content-length': String(body.length) }
+  });
+  return putInCache(cache, DATA_CACHE, cameraGenerationStateRequest(), response).then(function () { return completed; });
+}
+
+function generationFromCacheKey(key) {
+  var url = requestUrl(key);
+  return url && isCameraShard(url) ? url.searchParams.get('generation') : null;
+}
+
+function cameraMetadataEntries(cache) {
+  return cache.keys().then(function (keys) {
+    var cameraKeys = keys.filter(function (key) {
+      var url = requestUrl(key);
+      return url && (isCameraIndex(url) || isCameraSourceHealth(url) || isCameraShard(url) || isCameraMonolith(url));
+    });
+    return Promise.all(cameraKeys.map(function (key) {
+      return cache.match(key).then(function (response) {
+        if (!response) return { key: key, url: requestUrl(key), generation: generationFromCacheKey(key), bytes: 0 };
+        return responseSize(response).then(function (bytes) {
+          return { key: key, url: requestUrl(key), generation: generationFromCacheKey(key), bytes: bytes };
+        });
+      });
+    }));
+  });
+}
+
+function deleteCacheEntries(cache, entries) {
+  return Promise.all(entries.map(function (entry) { return cache.delete(entry.key || entry); }));
+}
+
+function enforceCameraMetadataBudget(cache, completed) {
+  return cameraMetadataEntries(cache).then(function (entries) {
+    var retained = completed.slice();
+    var total = entries.reduce(function (sum, entry) { return sum + entry.bytes; }, 0);
+    var deletions = [];
+    function removeWhere(predicate) {
+      entries.forEach(function (entry) {
+        if (deletions.indexOf(entry) !== -1 || !predicate(entry)) return;
+        deletions.push(entry);
+        total -= entry.bytes;
+      });
+    }
+    for (var index = 0; total > CAMERA_CACHE_MAX_BYTES && index < retained.length - 1; index += 1) {
+      var previous = retained[index];
+      removeWhere(function (entry) { return entry.generation === previous; });
+      retained[index] = null;
+    }
+    if (total > CAMERA_CACHE_MAX_BYTES) {
+      removeWhere(function (entry) { return entry.url && isCameraMonolith(entry.url); });
+    }
+    if (total > CAMERA_CACHE_MAX_BYTES && retained.length) {
+      var current = retained[retained.length - 1];
+      removeWhere(function (entry) { return entry.generation === current; });
+      retained[retained.length - 1] = null;
+    }
+    retained = retained.filter(Boolean);
+    return deleteCacheEntries(cache, deletions).then(function () {
+      return { completed: retained, bytes: Math.max(0, total), deleted: deletions.length };
+    });
+  });
+}
+
+var cameraGenerationQueue = Promise.resolve();
+
+function rememberCompleteCameraGeneration(generation) {
+  var operation = cameraGenerationQueue.catch(function () { return null; }).then(function () {
+    if (runtimeClearing || runtimeCachingPaused) {
+      return { type: 'STORMSCOPE_CAMERA_GENERATION_RETAINED', generation: generation, retained: [], bytes: 0, skipped: true };
+    }
+    return caches.open(DATA_CACHE).then(function (cache) {
+      return readCompletedCameraGenerations(cache).then(function (completed) {
+        completed = completed.filter(function (value) { return value !== generation; });
+        completed.push(generation);
+        completed = completed.slice(-CAMERA_GENERATIONS_TO_KEEP);
+        return cache.keys().then(function (keys) {
+          var keep = new Set(completed);
+          var stale = keys.filter(function (key) {
+            var cachedGeneration = generationFromCacheKey(key);
+            return cachedGeneration && !keep.has(cachedGeneration);
+          });
+          return deleteCacheEntries(cache, stale);
+        }).then(function () {
+          return enforceCameraMetadataBudget(cache, completed);
+        }).then(function (result) {
+          return writeCompletedCameraGenerations(cache, result.completed).then(function () {
+            return {
+              type: 'STORMSCOPE_CAMERA_GENERATION_RETAINED',
+              generation: generation,
+              retained: result.completed,
+              bytes: result.bytes,
+              deleted: result.deleted
+            };
+          });
+        });
+      });
+    });
+  });
+  cameraGenerationQueue = operation.then(function () { return null; }, function () { return null; });
+  return trackRuntimeWrite(operation);
 }
 
 function inspectStormScopeCaches() {
@@ -387,6 +567,14 @@ self.addEventListener('message', function (event) {
   var operation;
   if (type === 'STORMSCOPE_GET_CACHE_USAGE') operation = inspectStormScopeCaches();
   if (type === 'STORMSCOPE_CLEAR_CACHES') operation = clearStormScopeCaches();
+  if (type === 'STORMSCOPE_CAMERA_GENERATION_COMPLETE') {
+    var generation = event.data && event.data.generation;
+    if (typeof generation !== 'string' || !/^[a-f0-9]{64}$/.test(generation)) {
+      operation = Promise.resolve({ type: 'STORMSCOPE_CACHE_ERROR', reason: 'invalid-generation' });
+    } else {
+      operation = rememberCompleteCameraGeneration(generation);
+    }
+  }
   if (!operation) return;
 
   event.waitUntil(operation.then(function (message) {
@@ -414,13 +602,7 @@ self.addEventListener('fetch', function (event) {
   // Navigations: network-first, offline fallback to cached shell.
   if (request.mode === 'navigate') {
     runtimeCachingPaused = false;
-    event.respondWith(
-      fetch(request).catch(function () {
-        return caches.match('./index.html').then(function (cached) {
-          return cached || caches.match('./');
-        });
-      })
-    );
+    event.respondWith(navigationNetworkFirst(request));
     return;
   }
 

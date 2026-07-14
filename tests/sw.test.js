@@ -14,9 +14,10 @@ const tileCache = 'stormscope-tiles-' + runtimeCacheVersion;
 const dataCache = 'stormscope-data-' + runtimeCacheVersion;
 
 function response(options) {
-  const config = Object.assign({ ok: true, type: 'basic', size: 0 }, options);
+  const config = Object.assign({ ok: true, type: 'basic', size: 0, status: 200 }, options);
   return {
     ok: config.ok,
+    status: config.status,
     type: config.type,
     headers: { get: () => config.contentLength == null ? null : String(config.contentLength) },
     clone() { return this; },
@@ -36,6 +37,26 @@ function deferred() {
     reject = no;
   });
   return { promise, resolve, reject };
+}
+
+function memoryCache(initialEntries) {
+  const entries = new Map(initialEntries || []);
+  const key = value => typeof value === 'string' ? value : value.url;
+  return {
+    entries,
+    add(value, cachedResponse) { entries.set(key(value), cachedResponse); },
+    match(value) {
+      const cached = entries.get(key(value));
+      return Promise.resolve(cached && typeof cached.clone === 'function' ? cached.clone() : cached);
+    },
+    put(value, cachedResponse) {
+      entries.set(key(value), cachedResponse && typeof cachedResponse.clone === 'function'
+        ? cachedResponse.clone() : cachedResponse);
+      return Promise.resolve();
+    },
+    keys() { return Promise.resolve(Array.from(entries.keys()).map(url => request(url))); },
+    delete(value) { return Promise.resolve(entries.delete(key(value))); }
+  };
 }
 
 function loadWorker(options) {
@@ -71,6 +92,7 @@ function loadWorker(options) {
   const sandbox = {
     URL,
     Request: settings.Request || TestRequest,
+    Response: settings.Response || Response,
     Promise,
     Object,
     Number,
@@ -273,12 +295,104 @@ test('generation-keyed camera shards are immutable cache-first entries', async (
   assert.equal(networkCalls, 0);
 });
 
+test('oversized camera artifacts are returned but never persisted', async () => {
+  let puts = 0;
+  const cache = {
+    match: () => Promise.resolve(undefined),
+    put: () => { puts += 1; return Promise.resolve(); }
+  };
+  const oversizedShard = response({
+    size: 2 * 1024 * 1024 + 1,
+    contentLength: 2 * 1024 * 1024 + 1
+  });
+  const worker = loadWorker({
+    cachesByName: { [dataCache]: cache },
+    fetch: () => Promise.resolve(oversizedShard)
+  });
+  const shardRequest = request('https://example.test/data/camera-shards/0001.json?generation=' + 'a'.repeat(64));
+  assert.equal(await worker.context.cacheFirst(shardRequest, dataCache), oversizedShard);
+  assert.equal(puts, 0);
+  assert.equal(worker.context.runtimeResponseLimit(dataCache, shardRequest), 2 * 1024 * 1024);
+  assert.equal(worker.context.runtimeResponseLimit(dataCache,
+    request('https://example.test/data/cameras.index.json')), 256 * 1024);
+  assert.equal(worker.context.runtimeResponseLimit(dataCache,
+    request('https://example.test/data/cameras.json')), 32 * 1024 * 1024);
+});
+
 test('camera index is distinct from immutable shards and monolith recovery', () => {
   const worker = loadWorker();
   assert.equal(worker.context.isCameraIndex(new URL('https://example.test/data/cameras.index.json')), true);
   assert.equal(worker.context.isCameraSourceHealth(new URL('https://example.test/data/source-health.json')), true);
   assert.equal(worker.context.isCameraMonolith(new URL('https://example.test/data/cameras.json')), true);
   assert.equal(worker.context.isCameraShard(new URL('https://example.test/data/camera-shards/0001.json')), false);
+});
+
+test('completed-generation signals retain only current and previous while incomplete shards remain untouched', async () => {
+  const a = 'a'.repeat(64);
+  const b = 'b'.repeat(64);
+  const c = 'c'.repeat(64);
+  const shard = generation => `https://example.test/data/camera-shards/0001.json?generation=${generation}`;
+  const cache = memoryCache([[shard(a), response({ size: 10, contentLength: 10 })]]);
+  const worker = loadWorker({ cachesByName: { [dataCache]: cache } });
+
+  await worker.context.rememberCompleteCameraGeneration(a);
+  cache.add(shard(b), response({ size: 10, contentLength: 10 }));
+  await worker.context.rememberCompleteCameraGeneration(b);
+  cache.add(shard(c), response({ size: 10, contentLength: 10 }));
+  assert.ok(cache.entries.has(shard(a)) && cache.entries.has(shard(b)) && cache.entries.has(shard(c)),
+    'an incomplete generation must not trigger pruning');
+
+  const result = await worker.context.rememberCompleteCameraGeneration(c);
+  assert.deepEqual(Array.from(result.retained), [b, c]);
+  assert.equal(cache.entries.has(shard(a)), false);
+  assert.equal(cache.entries.has(shard(b)), true);
+  assert.equal(cache.entries.has(shard(c)), true);
+  const stateResponse = await cache.match('https://example.test/__stormscope-camera-generations__');
+  assert.deepEqual((await stateResponse.json()).completed, [b, c]);
+});
+
+test('camera metadata budget evicts the previous generation before the current generation or monolith', async () => {
+  const a = 'a'.repeat(64);
+  const b = 'b'.repeat(64);
+  const shard = generation => `https://example.test/data/camera-shards/0001.json?generation=${generation}`;
+  const cache = memoryCache([
+    ['https://example.test/data/cameras.json', response({ size: 32 * 1024 * 1024, contentLength: 32 * 1024 * 1024 })],
+    [shard(a), response({ size: 20 * 1024 * 1024, contentLength: 20 * 1024 * 1024 })]
+  ]);
+  const worker = loadWorker({ cachesByName: { [dataCache]: cache } });
+  await worker.context.rememberCompleteCameraGeneration(a);
+  cache.add(shard(b), response({ size: 20 * 1024 * 1024, contentLength: 20 * 1024 * 1024 }));
+  const result = await worker.context.rememberCompleteCameraGeneration(b);
+
+  assert.ok(result.bytes <= 64 * 1024 * 1024);
+  assert.deepEqual(Array.from(result.retained), [b]);
+  assert.equal(cache.entries.has(shard(a)), false);
+  assert.equal(cache.entries.has(shard(b)), true);
+  assert.equal(cache.entries.has('https://example.test/data/cameras.json'), true);
+});
+
+test('manual cache clear drains an in-flight generation prune before deleting runtime storage', async () => {
+  const gate = deferred();
+  let keyReads = 0;
+  const cache = memoryCache();
+  cache.keys = () => {
+    keyReads += 1;
+    return keyReads === 1 ? gate.promise : Promise.resolve([]);
+  };
+  const worker = loadWorker({
+    cacheNames: [dataCache],
+    cachesByName: { [dataCache]: cache }
+  });
+  const remembering = worker.context.rememberCompleteCameraGeneration('a'.repeat(64));
+  await new Promise(resolve => setImmediate(resolve));
+  const clearing = worker.context.clearStormScopeCaches();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(worker.deleted, []);
+  gate.resolve([]);
+  await remembering;
+  await clearing;
+  assert.deepEqual(worker.deleted, [dataCache]);
+  assert.equal(worker.context.runtimeCachingPaused, true);
 });
 
 test('clearing runtime caches waits for camera revalidation writes', async () => {
@@ -320,6 +434,46 @@ test('radar manifest uses last-known-good cache when offline', async () => {
   const manifestRequest = request('https://api.rainviewer.com/public/weather-maps.json');
   assert.equal(await worker.context.networkFirstWithCache(manifestRequest, dataCache), cached);
   assert.equal(worker.context.isRadarManifest(new URL(manifestRequest.url)), true);
+});
+
+test('transient HTTP failures use last-known-good data while non-transient 4xx stays authoritative', async () => {
+  const cached = response({ size: 2 });
+  const cache = { match: () => Promise.resolve(cached), put: () => Promise.resolve() };
+  for (const status of [408, 429, 500, 503]) {
+    const transient = response({ ok: false, status });
+    const worker = loadWorker({
+      cachesByName: { [dataCache]: cache },
+      fetch: () => Promise.resolve(transient)
+    });
+    assert.equal(await worker.context.networkFirstWithCache(
+      request('https://example.test/data/cameras.index.json'), dataCache), cached);
+  }
+  const notFound = response({ ok: false, status: 404 });
+  const notFoundWorker = loadWorker({
+    cachesByName: { [dataCache]: cache },
+    fetch: () => Promise.resolve(notFound)
+  });
+  assert.equal(await notFoundWorker.context.networkFirstWithCache(
+    request('https://example.test/data/cameras.index.json'), dataCache), notFound);
+});
+
+test('transient navigation responses fall back to the cached shell without hiding ordinary 4xx', async () => {
+  const shell = response({ size: 10 });
+  const transient = response({ ok: false, status: 503 });
+  const worker = loadWorker({
+    cacheMatch: value => Promise.resolve(value === './index.html' ? shell : undefined),
+    fetch: () => Promise.resolve(transient)
+  });
+  assert.equal(await worker.context.navigationNetworkFirst(
+    request('https://example.test/', 'navigate')), shell);
+
+  const notFound = response({ ok: false, status: 404 });
+  const notFoundWorker = loadWorker({
+    cacheMatch: () => Promise.resolve(shell),
+    fetch: () => Promise.resolve(notFound)
+  });
+  assert.equal(await notFoundWorker.context.navigationNetworkFirst(
+    request('https://example.test/missing', 'navigate')), notFound);
 });
 
 test('opaque tile fallback is returned but never cached', async () => {
