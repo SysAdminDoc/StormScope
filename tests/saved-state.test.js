@@ -210,7 +210,8 @@ test('workflow profiles round-trip bounded settings while v2 views migrate uncha
     radar: { palette: 'colorblind', speed: 400 },
     alertSeverity: 'severe',
     cameraFilters: { query: 'I-95', state: 'Virginia', source: 'dot', type: 'image', sort: 'distance', healthy: true, favorites: false },
-    dataMode: 'low', weatherUnits: 'metric', outlookDay: 2
+    dataMode: 'low', weatherUnits: 'metric', outlookDay: 2, convectiveDay: 3,
+    earthquake: { magnitude: '4.5', period: 'week' }
   });
   const store = SavedState.createStore(storeOptions(SavedState.memoryStorage()));
   store.saveView('Workflow', workflow, { id: 'workflow' });
@@ -224,6 +225,13 @@ test('workflow profiles round-trip bounded settings while v2 views migrate uncha
   assert.equal(migrated.version, 3);
   assert.deepEqual(migrated.views[0].snapshot, snapshot());
   assert.throws(() => store.saveView('Bad outlook', snapshot({ outlookDay: 4 })), /outlook day/);
+  assert.throws(() => store.saveView('Bad convective', snapshot({ convectiveDay: '2' })), /convective day/);
+  assert.throws(() => store.saveView('Bad magnitude', snapshot({
+    earthquake: { magnitude: '5.0', period: 'day' }
+  })), /earthquake magnitude/);
+  assert.throws(() => store.saveView('Bad period', snapshot({
+    earthquake: { magnitude: '2.5', period: 'year' }
+  })), /earthquake period/);
 });
 
 test('corrupt imports and future versions do not overwrite good state', () => {

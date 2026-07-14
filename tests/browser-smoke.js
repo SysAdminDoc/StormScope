@@ -1458,6 +1458,14 @@ async function main() {
     await page.locator('#alert-severity').selectOption('severe');
     await page.locator('#data-mode').selectOption('low');
     await page.locator('#weather-units').selectOption('metric');
+    await page.locator('#wpc-outlook-day').selectOption('2');
+    await page.locator('#convective-day').selectOption('3');
+    await page.locator('#earthquake-magnitude').selectOption('4.5');
+    await page.locator('#earthquake-period').selectOption('week');
+    assert.deepEqual(await page.evaluate(() => window._stormscope.getLayerRegistryState().ids), [
+      'radar', 'cameras', 'coverage', 'alerts', 'lightning', 'wildfires', 'satellite', 'tropical',
+      'wpcOutlooks', 'usgsGauges', 'earthquakes', 'convective', 'watches'
+    ]);
     await page.locator('#camera-favorites').evaluate(element => {
       element.checked = true;
       element.dispatchEvent(new Event('change', { bubbles: true }));
@@ -1481,6 +1489,10 @@ async function main() {
     await page.locator('#radar-speed').selectOption('800');
     await page.locator('#alert-severity').selectOption('all');
     await page.locator('#weather-units').selectOption('us');
+    await page.locator('#wpc-outlook-day').selectOption('1');
+    await page.locator('#convective-day').selectOption('1');
+    await page.locator('#earthquake-magnitude').selectOption('2.5');
+    await page.locator('#earthquake-period').selectOption('day');
     await page.locator('#camera-favorites').evaluate(element => {
       element.checked = false;
       element.dispatchEvent(new Event('change', { bubbles: true }));
@@ -1493,6 +1505,10 @@ async function main() {
     assert.equal(await page.locator('#alert-severity').inputValue(), 'severe');
     assert.equal(await page.locator('#weather-units').inputValue(), 'metric');
     assert.equal(await page.locator('#camera-favorites').isChecked(), true);
+    assert.equal(await page.locator('#wpc-outlook-day').inputValue(), '2');
+    assert.equal(await page.locator('#convective-day').inputValue(), '3');
+    assert.equal(await page.locator('#earthquake-magnitude').inputValue(), '4.5');
+    assert.equal(await page.locator('#earthquake-period').inputValue(), 'week');
     await page.locator('#data-mode').selectOption('standard');
     assert.equal(await page.locator('#radar-speed').inputValue(), '400');
     await page.locator('#data-mode').selectOption('auto');

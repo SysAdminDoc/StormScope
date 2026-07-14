@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.120.0 - 2026-07-14
+
+- Centralized layer identity, defaults, scene/workflow controls, and lifecycle ownership in a validated offline registry, including WPC, earthquake, and convective round-trips. SW v93.
+
 ## v0.119.0 - 2026-07-14
 
 - Added an opt-in Screen Wake Lock for active radar, camera, multi-camera, and comparison monitoring with visibility release/reacquire, revocation, rejection, and unsupported-browser handling. SW v92.

@@ -178,6 +178,25 @@
       }
       snapshot.outlookDay = outlookDay;
     }
+    if (source.convectiveDay != null) {
+      var convectiveDay = finiteNumber(source.convectiveDay, 'view convective day', legacy);
+      if (!Number.isInteger(convectiveDay) || convectiveDay < 1 || convectiveDay > 3) {
+        throw new TypeError('view convective day is invalid');
+      }
+      snapshot.convectiveDay = convectiveDay;
+    }
+    if (source.earthquake != null) {
+      var earthquake = objectValue(source.earthquake, 'view earthquake');
+      var magnitude = boundedString(earthquake.magnitude, 'view earthquake magnitude', 12);
+      var period = boundedString(earthquake.period, 'view earthquake period', 8);
+      if (['significant', '4.5', '2.5', '1.0', 'all'].indexOf(magnitude) === -1) {
+        throw new TypeError('view earthquake magnitude is invalid');
+      }
+      if (['hour', 'day', 'week', 'month'].indexOf(period) === -1) {
+        throw new TypeError('view earthquake period is invalid');
+      }
+      snapshot.earthquake = { magnitude: magnitude, period: period };
+    }
     return snapshot;
   }
 

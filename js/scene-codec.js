@@ -2,14 +2,17 @@
 'use strict';
 
 (function (root, factory) {
-  var api = factory();
+  var registry = root && root.StormScopeLayerRegistry;
+  if (typeof module === 'object' && module.exports) registry = require('./layer-registry.js');
+  var api = factory(registry);
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.StormScopeSceneCodec = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (registry) {
+  if (!registry || typeof registry.sceneKeys !== 'function') throw new Error('layer registry is required');
   var VERSION = 1;
   var PREFIX = VERSION + '.';
   var MAX_TOKEN_LENGTH = 2048;
-  var LAYERS = ['radar', 'cameras', 'coverage', 'alerts', 'lightning', 'wildfires', 'satellite', 'tropical', 'wpcOutlooks', 'usgsGauges', 'earthquakes', 'convective', 'watches'];
+  var LAYERS = registry.sceneKeys();
   var MAX_LAYER_BITS = (1 << LAYERS.length) - 1;
   var PALETTES = ['standard', 'colorblind', 'contrast'];
   var SPEEDS = [0, 400, 800, 1600];

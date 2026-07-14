@@ -15,6 +15,7 @@ const cameraFeedSource = fs.readFileSync(path.join(root, 'js', 'camera-feed.js')
 const serviceWorker = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const spatialQuery = fs.readFileSync(path.join(root, 'js', 'spatial-query.js'), 'utf8');
 const wakeLockSource = fs.readFileSync(path.join(root, 'js', 'wake-lock.js'), 'utf8');
+const layerRegistrySource = fs.readFileSync(path.join(root, 'js', 'layer-registry.js'), 'utf8');
 const cameraData = JSON.parse(fs.readFileSync(path.join(root, 'data', 'cameras.json'), 'utf8'));
 const i18n = require('../js/i18n.js');
 const cameraRecord = require('../js/camera-record.js');
@@ -181,10 +182,11 @@ test('deterministic runtime status copy never exposes raw localization bypasses'
 });
 
 test('versioned scene links load before the app and remain available offline', () => {
+  const registryPosition = html.indexOf('js/layer-registry.js');
   const savedStatePosition = html.indexOf('js/saved-state.js');
   const sceneCodecPosition = html.indexOf('js/scene-codec.js');
   const appPosition = html.indexOf('js/app.js');
-  assert.ok(savedStatePosition >= 0 && sceneCodecPosition > savedStatePosition);
+  assert.ok(registryPosition >= 0 && savedStatePosition > registryPosition && sceneCodecPosition > savedStatePosition);
   assert.ok(appPosition > sceneCodecPosition);
   assert.match(html, /id="copy-scene"/);
   assert.match(html, /id="share-scene"/);
@@ -192,6 +194,19 @@ test('versioned scene links load before the app and remain available offline', (
   assert.match(app, /navigator\.share/);
   assert.match(app, /navigator\.clipboard\.writeText/);
   assert.match(serviceWorker, /\.\/js\/scene-codec\.js/);
+  assert.match(serviceWorker, /\.\/js\/layer-registry\.js/);
+});
+
+test('operational layer identity, controls, and lifecycle ownership use one local registry', () => {
+  assert.match(layerRegistrySource, /var RAW_DESCRIPTORS = \[/);
+  assert.match(layerRegistrySource, /id: 'wpcOutlooks'/);
+  assert.match(layerRegistrySource, /id: 'earthquakes'/);
+  assert.match(layerRegistrySource, /id: 'convective'/);
+  assert.match(app, /StormScopeLayerRegistry\.captureEnabled\(document\)/);
+  assert.match(app, /StormScopeLayerRegistry\.captureControlState\(document, 'profile'\)/);
+  assert.match(app, /StormScopeLayerRegistry\.applyControlState\(document, snapshot, 'profile'\)/);
+  assert.match(app, /StormScopeLayerRegistry\.lifecycleDescriptors\(\)\.map/);
+  assert.match(app, /StormScopeLayerRegistry\.lifecycleDescriptors\(\)\.forEach/);
 });
 
 test('incident camera proximity loads before the app and remains available offline', () => {
@@ -362,7 +377,7 @@ test('SPC severe & tornado watches are an optional, attributed, keyless layer wi
   assert.match(app, /function refreshSevereWatches/);
   assert.match(app, /function disableSevereWatches/);
   assert.match(app, /StormScopeSevereWatches\.fetchAllPages/);
-  assert.match(app, /watches: document\.getElementById\('toggle-watches'\)\.checked/);
+  assert.match(layerRegistrySource, /id: 'watches', toggleId: 'toggle-watches'/);
   assert.match(app, /link\.href = safeExternalUrl\(properties\.officialUrl\)/);
 });
 
@@ -375,7 +390,7 @@ test('SPC convective outlooks are an optional, attributed, keyless layer wired e
   assert.match(app, /function refreshConvectiveOutlooks/);
   assert.match(app, /function disableConvectiveOutlooks/);
   assert.match(app, /StormScopeConvectiveOutlooks\.fetchAllPages/);
-  assert.match(app, /convective: document\.getElementById\('toggle-convective'\)\.checked/);
+  assert.match(layerRegistrySource, /id: 'convective', toggleId: 'toggle-convective'/);
   // Host already CSP-allowed; no new connect-src origin required.
   const csp = html.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)"/)[1];
   assert.match(csp, /https:\/\/mapservices\.weather\.noaa\.gov/);
@@ -396,7 +411,7 @@ test('USGS earthquakes are an optional, attributed, keyless layer wired end to e
   assert.match(app, /StormScopeEarthquakes\.normalizeCollection/);
   // Popup href is scheme-guarded and the layer participates in scene state.
   assert.match(app, /link\.href = safeExternalUrl\(properties\.url\)/);
-  assert.match(app, /earthquakes: document\.getElementById\('toggle-earthquakes'\)\.checked/);
+  assert.match(layerRegistrySource, /id: 'earthquakes', toggleId: 'toggle-earthquakes'/);
 });
 
 test('live feed checks maintain a local non-destructive health overlay', () => {

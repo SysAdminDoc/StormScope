@@ -18,7 +18,7 @@
   })();
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.119.0';
+  var APP_VERSION = '0.120.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -3118,21 +3118,7 @@
     var snapshot = {
       center: { lat: center.lat, lon: center.lng },
       zoom: map.getZoom(),
-      layers: {
-        radar: document.getElementById('toggle-radar').checked,
-        cameras: document.getElementById('toggle-cameras').checked,
-        coverage: document.getElementById('toggle-coverage').checked,
-        alerts: document.getElementById('toggle-alerts').checked,
-        satellite: document.getElementById('toggle-satellite').checked,
-        lightning: document.getElementById('toggle-lightning').checked,
-        wildfires: document.getElementById('toggle-wildfires').checked,
-        tropical: document.getElementById('toggle-tropical').checked,
-        wpcOutlooks: document.getElementById('toggle-wpc-outlooks').checked,
-        usgsGauges: document.getElementById('toggle-usgs-gauges').checked,
-        earthquakes: document.getElementById('toggle-earthquakes').checked,
-        convective: document.getElementById('toggle-convective').checked,
-        watches: document.getElementById('toggle-watches').checked
-      },
+      layers: StormScopeLayerRegistry.captureEnabled(document),
       opacity: { radar: radarOpacity }
     };
     if (includeWorkflow) {
@@ -3146,8 +3132,7 @@
       };
       snapshot.dataMode = dataModePreference;
       snapshot.weatherUnits = weatherUnits;
-      snapshot.outlookDay = wpcOutlookDay;
-      snapshot.convectiveDay = convectiveDay;
+      Object.assign(snapshot, StormScopeLayerRegistry.captureControlState(document, 'profile'));
     }
     return snapshot;
   }
@@ -3155,7 +3140,7 @@
   function captureSharedScene() {
     var snapshot = captureViewSnapshot();
     var filters = cameraSearchFilters();
-    return {
+    return Object.assign({
       map: { lat: snapshot.center.lat, lon: snapshot.center.lon, zoom: snapshot.zoom },
       layers: snapshot.layers,
       radar: {
@@ -3173,11 +3158,8 @@
         sort: document.getElementById('camera-sort').value,
         healthy: filters.healthy
       },
-      activeCameraId: activeCamera ? activeCamera.id : null,
-      outlookDay: wpcOutlookDay,
-      convectiveDay: convectiveDay,
-      earthquake: earthquakeSelection()
-    };
+      activeCameraId: activeCamera ? activeCamera.id : null
+    }, StormScopeLayerRegistry.captureControlState(document, 'scene'));
   }
 
   function sharedSceneUrl() {
@@ -3187,16 +3169,14 @@
   }
 
   function applySharedScene(scene) {
-    wpcOutlookDay = scene.outlookDay;
-    document.getElementById('wpc-outlook-day').value = String(wpcOutlookDay);
-    document.getElementById('earthquake-magnitude').value = scene.earthquake.magnitude;
-    document.getElementById('earthquake-period').value = scene.earthquake.period;
     applyViewSnapshot({
       center: { lat: scene.map.lat, lon: scene.map.lon },
       zoom: scene.map.zoom,
       layers: scene.layers,
       opacity: { radar: scene.radar.opacity },
-      convectiveDay: scene.convectiveDay
+      outlookDay: scene.outlookDay,
+      convectiveDay: scene.convectiveDay,
+      earthquake: scene.earthquake
     });
     radarPalette = scene.radar.palette;
     preferredRadarAnimationSpeed = scene.radar.speed;
@@ -3229,6 +3209,9 @@
 
   function applyViewSnapshot(snapshot) {
     if (!snapshot) return;
+    StormScopeLayerRegistry.applyControlState(document, snapshot, 'profile');
+    wpcOutlookDay = Number(document.getElementById('wpc-outlook-day').value);
+    convectiveDay = Number(document.getElementById('convective-day').value);
     map.setView([snapshot.center.lat, snapshot.center.lon], snapshot.zoom, { animate: false });
     var layers = snapshot.layers || {};
     if (typeof layers.radar === 'boolean') {
@@ -3277,7 +3260,7 @@
       else disableTropical();
     }
     if (typeof layers.wpcOutlooks === 'boolean') {
-      document.getElementById('toggle-wpc-outlooks').checked = layers.wpcOutlooks;
+      document.getElementById(StormScopeLayerRegistry.get('wpcOutlooks').toggleId).checked = layers.wpcOutlooks;
       if (layers.wpcOutlooks) refreshWpcOutlooks();
       else disableWpcOutlooks();
     }
@@ -3287,16 +3270,12 @@
       else disableUsgsGauges();
     }
     if (typeof layers.earthquakes === 'boolean') {
-      document.getElementById('toggle-earthquakes').checked = layers.earthquakes;
+      document.getElementById(StormScopeLayerRegistry.get('earthquakes').toggleId).checked = layers.earthquakes;
       if (layers.earthquakes) refreshEarthquakes();
       else disableEarthquakes();
     }
     if (typeof layers.convective === 'boolean') {
-      if (snapshot.convectiveDay >= 1 && snapshot.convectiveDay <= 3) {
-        convectiveDay = Number(snapshot.convectiveDay);
-        document.getElementById('convective-day').value = String(convectiveDay);
-      }
-      document.getElementById('toggle-convective').checked = layers.convective;
+      document.getElementById(StormScopeLayerRegistry.get('convective').toggleId).checked = layers.convective;
       if (layers.convective) refreshConvectiveOutlooks();
       else disableConvectiveOutlooks();
     }
@@ -3341,11 +3320,6 @@
       document.getElementById('weather-units').value = weatherUnits;
       try { localStorage.setItem('stormscope-weather-units', weatherUnits); } catch (error) { /* optional */ }
       if (activeCamera) fetchWeather(activeCamera.lat, activeCamera.lon, activeCamera);
-    }
-    if (snapshot.outlookDay) {
-      wpcOutlookDay = snapshot.outlookDay;
-      document.getElementById('wpc-outlook-day').value = String(wpcOutlookDay);
-      if (document.getElementById('toggle-wpc-outlooks').checked) refreshWpcOutlooks();
     }
   }
 
@@ -5029,6 +5003,76 @@
     placeSearchTimer = setTimeout(function () { runPlaceSearch(query); }, 350);
   }
 
+  function operationalLayerRuntimeBindings() {
+    return {
+      alerts: {
+        isEnabled: function () { return alertsVisible; },
+        refresh: fetchNwsAlerts,
+        aborts: function () { return alertAbort; },
+        timers: function () { return [alertRefreshTimer, alertMoveTimer]; }
+      },
+      lightning: {
+        refresh: refreshLightning, disable: disableLightning,
+        aborts: function () { return lightningAbort; }, timers: function () { return lightningRefreshTimer; }
+      },
+      wildfires: {
+        refresh: refreshWildfires, disable: disableWildfires,
+        aborts: function () { return wildfireAbort; }, timers: function () { return [wildfireRefreshTimer, wildfireMoveTimer]; }
+      },
+      satellite: {
+        refresh: refreshSatellite, disable: disableSatellite,
+        aborts: function () { return satelliteAbort; }, timers: function () { return [satelliteRefreshTimer, satelliteMoveTimer]; }
+      },
+      tropical: {
+        refresh: refreshTropical, disable: disableTropical,
+        aborts: function () { return tropicalAbort; }, timers: function () { return tropicalRefreshTimer; }
+      },
+      wpcOutlooks: {
+        refresh: refreshWpcOutlooks, disable: disableWpcOutlooks,
+        aborts: function () { return [wpcEroAbort, wpcFloodAbort]; }, timers: function () { return wpcRefreshTimer; },
+        onControl: function (_control, value) { wpcOutlookDay = Number(value); }
+      },
+      usgsGauges: {
+        refresh: refreshUsgsGauges, disable: disableUsgsGauges,
+        aborts: function () { return usgsGaugeAbort; }, timers: function () { return [usgsGaugeRefreshTimer, usgsGaugeMoveTimer]; }
+      },
+      earthquakes: {
+        refresh: refreshEarthquakes, disable: disableEarthquakes,
+        aborts: function () { return earthquakeAbort; }, timers: function () { return earthquakeRefreshTimer; }
+      },
+      convective: {
+        refresh: refreshConvectiveOutlooks, disable: disableConvectiveOutlooks,
+        aborts: function () { return convectiveAbort; }, timers: function () { return convectiveRefreshTimer; },
+        onControl: function (_control, value) { convectiveDay = Number(value); }
+      },
+      watches: {
+        refresh: refreshSevereWatches, disable: disableSevereWatches,
+        aborts: function () { return watchAbort; }, timers: function () { return watchRefreshTimer; }
+      }
+    };
+  }
+
+  function bindOperationalLayer(descriptor, binding) {
+    var toggle = document.getElementById(descriptor.toggleId);
+    if (!toggle || !binding || typeof binding.refresh !== 'function' || typeof binding.disable !== 'function') {
+      throw new Error('operational layer binding is incomplete: ' + descriptor.id);
+    }
+    toggle.addEventListener('change', function () {
+      if (this.checked) binding.refresh();
+      else binding.disable();
+      scheduleLastViewSave();
+    });
+    descriptor.controls.forEach(function (control) {
+      var element = document.getElementById(control.controlId);
+      if (!element) throw new Error('operational layer control is missing: ' + control.controlId);
+      element.addEventListener('change', function () {
+        if (binding.onControl) binding.onControl(control, this.value);
+        if (toggle.checked) binding.refresh();
+        scheduleLastViewSave();
+      });
+    });
+  }
+
   function bindUI() {
     document.getElementById('wake-lock-monitoring').addEventListener('change', function () {
       wakeLockController.setEnabled(this.checked, true);
@@ -5122,70 +5166,9 @@
       scheduleLastViewSave();
     });
 
-    document.getElementById('toggle-lightning').addEventListener('change', function () {
-      if (this.checked) refreshLightning();
-      else disableLightning();
-      scheduleLastViewSave();
-    });
-
-    document.getElementById('toggle-satellite').addEventListener('change', function () {
-      if (this.checked) refreshSatellite();
-      else disableSatellite();
-      scheduleLastViewSave();
-    });
-
-    document.getElementById('toggle-wildfires').addEventListener('change', function () {
-      if (this.checked) refreshWildfires();
-      else disableWildfires();
-      scheduleLastViewSave();
-    });
-
-    document.getElementById('toggle-tropical').addEventListener('change', function () {
-      if (this.checked) refreshTropical();
-      else disableTropical();
-      scheduleLastViewSave();
-    });
-
-    document.getElementById('toggle-wpc-outlooks').addEventListener('change', function () {
-      if (this.checked) refreshWpcOutlooks();
-      else disableWpcOutlooks();
-      scheduleLastViewSave();
-    });
-    document.getElementById('wpc-outlook-day').addEventListener('change', function () {
-      wpcOutlookDay = Number(this.value);
-      if (document.getElementById('toggle-wpc-outlooks').checked) refreshWpcOutlooks();
-      scheduleLastViewSave();
-    });
-    document.getElementById('toggle-usgs-gauges').addEventListener('change', function () {
-      if (this.checked) refreshUsgsGauges();
-      else disableUsgsGauges();
-      scheduleLastViewSave();
-    });
-    document.getElementById('toggle-watches').addEventListener('change', function () {
-      if (this.checked) refreshSevereWatches();
-      else disableSevereWatches();
-      scheduleLastViewSave();
-    });
-    document.getElementById('toggle-convective').addEventListener('change', function () {
-      if (this.checked) refreshConvectiveOutlooks();
-      else disableConvectiveOutlooks();
-      scheduleLastViewSave();
-    });
-    document.getElementById('convective-day').addEventListener('change', function () {
-      convectiveDay = Number(this.value);
-      if (document.getElementById('toggle-convective').checked) refreshConvectiveOutlooks();
-      scheduleLastViewSave();
-    });
-    document.getElementById('toggle-earthquakes').addEventListener('change', function () {
-      if (this.checked) refreshEarthquakes();
-      else disableEarthquakes();
-      scheduleLastViewSave();
-    });
-    ['earthquake-magnitude', 'earthquake-period'].forEach(function (id) {
-      document.getElementById(id).addEventListener('change', function () {
-        if (document.getElementById('toggle-earthquakes').checked) refreshEarthquakes();
-        scheduleLastViewSave();
-      });
+    var operationalBindings = operationalLayerRuntimeBindings();
+    StormScopeLayerRegistry.lifecycleDescriptors().forEach(function (descriptor) {
+      if (descriptor.id !== 'alerts') bindOperationalLayer(descriptor, operationalBindings[descriptor.id]);
     });
 
     document.getElementById('alert-severity').addEventListener('change', fetchNwsAlerts);
@@ -5690,28 +5673,22 @@
       });
     }
 
-    return StormScopeContextLayerControllers.createControllerSet([
-      controller('alerts', function () { return alertsVisible; }, fetchNwsAlerts,
-        function () { return alertAbort; }, function () { return [alertRefreshTimer, alertMoveTimer]; }),
-      controller('lightning', toggle('toggle-lightning'), refreshLightning,
-        function () { return lightningAbort; }, function () { return lightningRefreshTimer; }),
-      controller('satellite', toggle('toggle-satellite'), refreshSatellite,
-        function () { return satelliteAbort; }, function () { return [satelliteRefreshTimer, satelliteMoveTimer]; }),
-      controller('tropical', toggle('toggle-tropical'), refreshTropical,
-        function () { return tropicalAbort; }, function () { return tropicalRefreshTimer; }),
-      controller('wpc-outlooks', toggle('toggle-wpc-outlooks'), refreshWpcOutlooks,
-        function () { return [wpcEroAbort, wpcFloodAbort]; }, function () { return wpcRefreshTimer; }),
-      controller('usgs-gauges', toggle('toggle-usgs-gauges'), refreshUsgsGauges,
-        function () { return usgsGaugeAbort; }, function () { return [usgsGaugeRefreshTimer, usgsGaugeMoveTimer]; }),
-      controller('wildfires', toggle('toggle-wildfires'), refreshWildfires,
-        function () { return wildfireAbort; }, function () { return [wildfireRefreshTimer, wildfireMoveTimer]; }),
-      controller('earthquakes', toggle('toggle-earthquakes'), refreshEarthquakes,
-        function () { return earthquakeAbort; }, function () { return earthquakeRefreshTimer; }),
-      controller('convective', toggle('toggle-convective'), refreshConvectiveOutlooks,
-        function () { return convectiveAbort; }, function () { return convectiveRefreshTimer; }),
-      controller('watches', toggle('toggle-watches'), refreshSevereWatches,
-        function () { return watchAbort; }, function () { return watchRefreshTimer; })
-    ]);
+    var bindings = operationalLayerRuntimeBindings();
+    var controllers = StormScopeLayerRegistry.lifecycleDescriptors().map(function (descriptor) {
+      var binding = bindings[descriptor.id];
+      if (!binding || typeof binding.refresh !== 'function' || typeof binding.aborts !== 'function' ||
+          typeof binding.timers !== 'function') {
+        throw new Error('operational lifecycle binding is incomplete: ' + descriptor.id);
+      }
+      return controller(
+        descriptor.lifecycleId,
+        binding.isEnabled || toggle(descriptor.toggleId),
+        binding.refresh,
+        binding.aborts,
+        binding.timers
+      );
+    });
+    return StormScopeContextLayerControllers.createControllerSet(controllers);
   }
 
   function initLifecycle() {
@@ -5985,6 +5962,12 @@
     getCameraResults: function () { return currentCameraResults.slice(); },
     getSearchRenderMetrics: function () { return Object.assign({}, searchRenderMetrics); },
     getWakeLockState: function () { return wakeLockController ? wakeLockController.snapshot() : null; },
+    getLayerRegistryState: function () {
+      return {
+        ids: StormScopeLayerRegistry.descriptors.map(function (descriptor) { return descriptor.id; }),
+        enabled: StormScopeLayerRegistry.captureEnabled(document)
+      };
+    },
     captureSharedScene: captureSharedScene,
     getSharedSceneUrl: sharedSceneUrl,
     getActiveCameraId: function () { return activeCamera ? String(activeCamera.id) : null; },
