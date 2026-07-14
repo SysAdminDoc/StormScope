@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.116.0 - 2026-07-14
+
+- Alert refreshes now diff and reuse map layers so open details survive polling without LayerGroup churn; service-worker strategy documentation now matches browser-network fallthrough. SW v89.
+
 ## v0.115.0 - 2026-07-14
 
 - Shared scene links now preserve USGS earthquake magnitude and period plus the selected SPC convective outlook day, with backward-compatible defaults for existing links. SW v88.

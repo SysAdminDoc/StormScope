@@ -1173,6 +1173,19 @@ async function main() {
     const alertButton = page.getByRole('button', { name: /Severe Thunderstorm Warning/ });
     await alertButton.click();
     await page.locator('#alert-detail').waitFor({ state: 'visible' });
+    const alertRefreshLayers = await page.evaluate(async () => {
+      const group = window._stormscope.getAlertLayerGroup();
+      const before = group.getLayers().length;
+      await window._stormscope.refreshAlerts();
+      return {
+        sameGroup: group === window._stormscope.getAlertLayerGroup(),
+        before: before,
+        after: group.getLayers().length
+      };
+    });
+    assert.equal(alertRefreshLayers.sameGroup, true, 'alert refresh should retain the LayerGroup instance');
+    assert.equal(alertRefreshLayers.after, alertRefreshLayers.before, 'unchanged alerts should retain their map layers');
+    assert.equal(await page.locator('#alert-detail').isVisible(), true, 'alert refresh should preserve open details');
     const alertCameras = page.locator('#alert-detail .incident-cameras');
     await alertCameras.locator('li').first().waitFor({ state: 'visible' });
     assert.match(await alertCameras.locator('.incident-camera-status').textContent(), /nearby camera/);

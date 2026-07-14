@@ -10,11 +10,13 @@
  *     stale-while-revalidate.
  *   - RainViewer's small frame manifest: network-first with last-known-good
  *     fallback so already-cached radar tiles can initialize offline.
- *   - Live weather APIs (NWS, Open-Meteo): always fetched fresh.
+ *   - Live weather APIs (NWS, Open-Meteo): browser-network only, never cached.
+ *   - Other cross-origin context APIs fall through to the browser network and
+ *     are likewise never persisted by this worker.
  */
 'use strict';
 
-var VERSION = 'v88';
+var VERSION = 'v89';
 var RUNTIME_CACHE_VERSION = 'v2';
 var SHELL_CACHE = 'stormscope-shell-' + VERSION;
 var TILE_CACHE = 'stormscope-tiles-' + RUNTIME_CACHE_VERSION;

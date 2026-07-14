@@ -18,7 +18,7 @@
   })();
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.115.0';
+  var APP_VERSION = '0.116.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -4473,10 +4473,9 @@
     var list = document.getElementById('alerts-list');
     var status = document.getElementById('alerts-status');
     list.replaceChildren();
-    if (alertLayerGroup) map.removeLayer(alertLayerGroup);
-    alertLayerGroup = L.layerGroup();
-    alertLayersById = Object.create(null);
-    if (alertsVisible) alertLayerGroup.addTo(map);
+    if (!alertLayerGroup) alertLayerGroup = L.layerGroup();
+    if (alertsVisible && !map.hasLayer(alertLayerGroup)) alertLayerGroup.addTo(map);
+    var nextLayersById = Object.create(null);
 
     activeAlerts.forEach(function (alert) {
       var item = document.createElement('li');
@@ -4507,19 +4506,31 @@
       list.appendChild(item);
 
       if (alert.geometry) {
-        var layer = L.geoJSON(alert.geometry, {
-          style: {
-            color: alertColor(alert),
-            weight: alert.severity === 'Extreme' ? 4 : 3,
-            opacity: 0.9,
-            fillOpacity: 0.12
-          }
-        });
-        layer.on('click', function () { showAlertDetail(alert, false); });
-        layer.addTo(alertLayerGroup);
-        alertLayersById[alert.id] = layer;
+        var signature = alert.severity + ':' + JSON.stringify(alert.geometry);
+        var layer = alertLayersById[alert.id];
+        if (!layer || layer._stormscopeSignature !== signature) {
+          if (layer) alertLayerGroup.removeLayer(layer);
+          layer = L.geoJSON(alert.geometry, {
+            style: {
+              color: alertColor(alert),
+              weight: alert.severity === 'Extreme' ? 4 : 3,
+              opacity: 0.9,
+              fillOpacity: 0.12
+            }
+          });
+          layer._stormscopeSignature = signature;
+          layer.on('click', function () { showAlertDetail(this._stormscopeAlert, false); });
+          layer.addTo(alertLayerGroup);
+        }
+        layer._stormscopeAlert = alert;
+        nextLayersById[alert.id] = layer;
       }
     });
+
+    Object.keys(alertLayersById).forEach(function (alertId) {
+      if (!nextLayersById[alertId]) alertLayerGroup.removeLayer(alertLayersById[alertId]);
+    });
+    alertLayersById = nextLayersById;
 
     status.textContent = activeAlerts.length
       ? tr(activeAlerts.length === 1 ? 'alerts.countOne' : 'alerts.countMany', { count: localNumber(activeAlerts.length) })
@@ -5883,6 +5894,8 @@
     getSharedSceneUrl: sharedSceneUrl,
     getActiveCameraId: function () { return activeCamera ? String(activeCamera.id) : null; },
     getRadarFrameTime: function () { return radarFrames[radarIndex] ? radarFrames[radarIndex].time : null; },
+    getAlertLayerGroup: function () { return alertLayerGroup; },
+    refreshAlerts: fetchNwsAlerts,
     getLowDataState: function () {
       return {
         preference: dataModePreference, enabled: lowDataMode, source: lowDataSource,
