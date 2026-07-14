@@ -8,10 +8,13 @@ const app = fs.readFileSync(path.join(root, 'js', 'app.js'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'css', 'style.css'), 'utf8');
 const contextLayers = fs.readFileSync(path.join(root, 'js', 'context-layers.js'), 'utf8');
+const contextControllers = fs.readFileSync(path.join(root, 'js', 'context-layer-controllers.js'), 'utf8');
+const cameraFeedSource = fs.readFileSync(path.join(root, 'js', 'camera-feed.js'), 'utf8');
 const serviceWorker = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const spatialQuery = fs.readFileSync(path.join(root, 'js', 'spatial-query.js'), 'utf8');
 const cameraData = JSON.parse(fs.readFileSync(path.join(root, 'data', 'cameras.json'), 'utf8'));
 const i18n = require('../js/i18n.js');
+const cameraFeed = require('../js/camera-feed.js');
 
 test('RainViewer uses the 2026 past-radar contract', () => {
   assert.match(app, /RAINVIEWER_COLOR_SCHEME = 2/);
@@ -31,51 +34,54 @@ test('RainViewer uses the 2026 past-radar contract', () => {
 });
 
 test('embed trust uses exact host-or-subdomain matching', () => {
-  const helperMatch = app.match(/function hostMatchesSuffix\(hostname, suffix\) \{([\s\S]*?)\n  \}/);
-  assert.ok(helperMatch, 'hostMatchesSuffix helper should exist');
-  const hostMatchesSuffix = new Function('hostname', 'suffix', helperMatch[1]);
+  assert.equal(cameraFeed.hostMatchesSuffix('earthcam.com', 'earthcam.com'), true);
+  assert.equal(cameraFeed.hostMatchesSuffix('www.earthcam.com', 'earthcam.com'), true);
+  assert.equal(cameraFeed.hostMatchesSuffix('earthcam.com.attacker.example', 'earthcam.com'), false);
+  assert.equal(cameraFeed.hostMatchesSuffix('notearthcam.com', 'earthcam.com'), false);
 
-  assert.equal(hostMatchesSuffix('earthcam.com', 'earthcam.com'), true);
-  assert.equal(hostMatchesSuffix('www.earthcam.com', 'earthcam.com'), true);
-  assert.equal(hostMatchesSuffix('earthcam.com.attacker.example', 'earthcam.com'), false);
-  assert.equal(hostMatchesSuffix('notearthcam.com', 'earthcam.com'), false);
+  for (const suffix of ['abbeyroad.com', 'v.angelcam.com', 'cdn.jwplayer.com', 'esbnyc.com',
+    'weathercams.faa.gov', 'hazcams.com', 'ipcamlive.com', 'rtsp.me']) {
+    assert.ok(cameraFeed.TRUSTED_EMBED_HOST_SUFFIXES.includes(suffix));
+  }
+  assert.doesNotMatch(cameraFeedSource, /hostname\.indexOf/);
+  assert.doesNotMatch(cameraFeedSource, /'511'/);
+  assert.match(cameraFeedSource, /parsed\.protocol !== 'https:'/);
 
-  assert.match(app, /'abbeyroad\.com'/);
-  assert.match(app, /'v\.angelcam\.com'/);
-  assert.match(app, /'cdn\.jwplayer\.com'/);
-  assert.match(app, /'esbnyc\.com'/);
-  assert.match(app, /'weathercams\.faa\.gov'/);
-  assert.match(app, /'hazcams\.com'/);
-  assert.match(app, /'ipcamlive\.com'/);
-  assert.match(app, /'rtsp\.me'/);
-  assert.doesNotMatch(app, /hostname\.indexOf/);
-  assert.doesNotMatch(app, /'511'/);
-  assert.match(app, /parsed\.protocol !== 'https:'/);
-
-  const allowlistMatch = app.match(/TRUSTED_EMBED_HOST_SUFFIXES = Object\.freeze\(\[([\s\S]*?)\]\)/);
-  assert.ok(allowlistMatch, 'trusted embed suffixes should be centralized');
-  const suffixes = [...allowlistMatch[1].matchAll(/'([^']+)'/g)].map((match) => match[1]);
+  const suffixes = cameraFeed.TRUSTED_EMBED_HOST_SUFFIXES;
   const rejectedEmbeds = cameraData.filter((camera) => {
     if (camera.type !== 'embed') return false;
     const parsed = new URL(camera.url);
-    return parsed.protocol !== 'https:' || !suffixes.some((suffix) => hostMatchesSuffix(parsed.hostname, suffix));
+    return parsed.protocol !== 'https:' || !suffixes.some((suffix) => cameraFeed.hostMatchesSuffix(parsed.hostname, suffix));
   });
   assert.deepEqual(rejectedEmbeds, [], 'every shipped embed should pass the exact trust policy');
 });
 
 test('feed failures tear down resources before replacing the DOM and are retryable', () => {
-  const renderMatch = app.match(/function renderFeedError\([\s\S]*?\n  \}/);
-  assert.ok(renderMatch, 'renderFeedError should exist');
+  const renderMatch = cameraFeedSource.match(/function renderError\([\s\S]*?\n    \}/);
+  assert.ok(renderMatch, 'renderError should exist');
   const renderSource = renderMatch[0];
-  assert.ok(renderSource.indexOf('destroyActiveFeed(container)') < renderSource.indexOf('container.replaceChildren(error)'));
-  assert.match(app, /if \(destroyed\) return;/);
-  assert.match(app, /hls\.destroy\(\)/);
-  assert.match(app, /camera\.feedRetry/);
+  assert.ok(renderSource.indexOf('destroy(container)') < renderSource.indexOf('container.replaceChildren(error)'));
+  assert.match(cameraFeedSource, /if \(destroyed\) return;/);
+  assert.match(cameraFeedSource, /hls\.destroy\(\)/);
+  assert.match(cameraFeedSource, /camera\.feedRetry/);
   assert.equal(i18n.catalogs.en['camera.feedRetry'], 'Retry feed');
   assert.match(css, /\.feed-retry-btn/);
-  assert.match(app, /appendFrameFallback/);
-  assert.match(app, /camera\.openSource/);
+  assert.match(cameraFeedSource, /appendFrameFallback/);
+  assert.match(cameraFeedSource, /camera\.openSource/);
   assert.equal(i18n.catalogs.en['camera.openSource'], 'Open source');
+});
+
+test('extracted lifecycle modules load before app, remain offline, and own one teardown loop', () => {
+  const cameraPosition = html.indexOf('js/camera-feed.js');
+  const controllerPosition = html.indexOf('js/context-layer-controllers.js');
+  const appPosition = html.indexOf('js/app.js');
+  assert.ok(cameraPosition >= 0 && controllerPosition >= 0 &&
+    appPosition > cameraPosition && appPosition > controllerPosition);
+  assert.match(serviceWorker, /\.\/js\/camera-feed\.js/);
+  assert.match(serviceWorker, /\.\/js\/context-layer-controllers\.js/);
+  assert.match(contextControllers, /function createControllerSet/);
+  assert.match(app, /teardownResources\.forEach\(function \(resource\) \{ resource\.destroy\(\); \}\)/);
+  assert.doesNotMatch(app, /function loadHLSFeed/);
 });
 
 test('static CSP removes inline script execution and mirrors trusted frame hosts', () => {
@@ -359,13 +365,14 @@ test('USGS earthquakes are an optional, attributed, keyless layer wired end to e
 });
 
 test('live feed checks maintain a local non-destructive health overlay', () => {
+  const feedHealthSource = app + '\n' + cameraFeedSource;
   assert.match(app, /stormscope-camera-observations-v1/);
   assert.match(app, /function recordCameraObservation/);
   assert.match(app, /CAMERA_OBSERVATION_TTL/);
-  assert.match(app, /loadeddata/);
-  assert.match(app, /decoded_media/);
-  assert.match(app, /refresh_advanced/);
-  assert.match(app, /manual_retry/);
+  assert.match(feedHealthSource, /loadeddata/);
+  assert.match(feedHealthSource, /decoded_media/);
+  assert.match(feedHealthSource, /refresh_advanced/);
+  assert.match(feedHealthSource, /manual_retry/);
   assert.doesNotMatch(app, /cam\.health\s*=/);
   assert.doesNotMatch(app, /cam\.last_verified\s*=/);
 });
@@ -429,18 +436,18 @@ test('direct camera media suppresses cross-origin referrers', () => {
   // referrer-policied iframe) must set referrerPolicy='no-referrer' so the
   // document origin+path never leaks to DOT/FAA/USGS/relay hosts.
   const directMediaBuilders = [
-    'function loadHLSFeed',
-    'function loadMJPEGFeed',
-    'function loadImageFeed',
-    'function createMonitorImagePlayer',
-    'function createMonitorHlsPlayer'
+    [cameraFeedSource, 'function loadHls'],
+    [cameraFeedSource, 'function loadMjpeg'],
+    [cameraFeedSource, 'function loadImage'],
+    [app, 'function createMonitorImagePlayer'],
+    [app, 'function createMonitorHlsPlayer']
   ];
-  for (const marker of directMediaBuilders) {
-    const start = app.indexOf(marker);
+  for (const [source, marker] of directMediaBuilders) {
+    const start = source.indexOf(marker);
     assert.ok(start >= 0, `${marker} should exist`);
     // The referrerPolicy assignment appears immediately after the element is
     // created, before any other property, in each builder.
-    const window = app.slice(start, start + 220);
+    const window = source.slice(start, start + 220);
     assert.match(window, /referrerPolicy = 'no-referrer'/, `${marker} must set no-referrer`);
   }
   // The radar tile pixel sampler fetches provider tiles cross-origin too.

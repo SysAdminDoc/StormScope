@@ -18,29 +18,12 @@
   })();
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.104.0';
+  var APP_VERSION = '0.105.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
   var IMAGE_REFRESH_INTERVAL = 15000;
   var CAMERA_OBSERVATION_TTL = 6 * 60 * 60 * 1000;
-  var OBSERVATION_UNSUPPORTED = 'unsupported';
-  var REASON_BROWSER_HLS = 'browser_hls';
-  var REASON_UNTRUSTED_EMBED = 'untrusted_embed';
-  var TRUSTED_EMBED_HOST_SUFFIXES = Object.freeze([
-    'v.angelcam.com',
-    'cdn.jwplayer.com',
-    'earthcam.com',
-    'myearthcam.com',
-    'nps.gov',
-    'brownrice.com',
-    'abbeyroad.com',
-    'esbnyc.com',
-    'weathercams.faa.gov',
-    'hazcams.com',
-    'ipcamlive.com',
-    'rtsp.me'
-  ]);
   var RAINVIEWER_COLOR_SCHEME = 2;
   var RAINVIEWER_MAX_NATIVE_ZOOM = 7;
   var RAINVIEWER_PRELOAD_RESERVE = 20;
@@ -72,8 +55,6 @@
   var activeCamera = null;
   var priorFocusEl = null;
   var weatherAbort = null;
-  var imageRefreshTimer = null;
-  var activeFeedCleanup = null;
   var allCameras = [];
   var cameraIconCache = Object.create(null);
   var cameraObservations = Object.create(null);
@@ -97,6 +78,8 @@
   var diagnostics = StormScopeDiagnostics.create();
   var radarWasPlaying = false;
   var feedPausedForVisibility = false;
+  var operationalControllers = null;
+  var teardownResources = [];
   var reloadForUpdate = false;
   var refreshInstallDiscovery = function () {};
   var weatherUnits = 'us';
@@ -237,6 +220,21 @@
   function imageRefreshInterval() {
     return dataPolicy.imageRefreshMs;
   }
+
+  var cameraFeed = StormScopeCameraFeed.create({
+    document: document,
+    Hls: typeof Hls === 'undefined' ? null : Hls,
+    origin: location.origin,
+    translate: tr,
+    localNumber: localNumber,
+    imageRefreshInterval: imageRefreshInterval,
+    isActive: function (camera) { return activeCamera === camera; },
+    recordObservation: recordCameraObservation,
+    setTimeout: setTimeout,
+    clearTimeout: clearTimeout,
+    now: Date.now
+  });
+  teardownResources.push(cameraFeed);
 
   function updateLowDataUi() {
     document.getElementById('data-mode').value = dataModePreference;
@@ -544,6 +542,10 @@
       map.removeLayer(radarCoverageLayer);
       radarCoverageLayer = null;
     }
+  }
+
+  function hostMatchesSuffix(hostname, suffix) {
+    return hostname === suffix || hostname.endsWith('.' + suffix);
   }
 
   function getTrustedRainViewerHost(value) {
@@ -3544,7 +3546,7 @@
     iframe.title = camera.name;
     iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
     iframe.referrerPolicy = 'strict-origin-when-cross-origin';
-    iframe.src = youtubeEmbedUrl(camera.url, 'enablejsapi=1');
+    iframe.src = StormScopeCameraFeed.youtubeEmbedUrl(camera.url, 'enablejsapi=1', location.origin);
     function command(name) {
       if (iframe.contentWindow) iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: name, args: [] }), '*');
     }
@@ -3748,20 +3750,7 @@
     setRadarPlaying(false);
     clearInterval(radarRefreshTimer);
     radarRefreshTimer = null;
-    [alertRefreshTimer, alertMoveTimer, lightningRefreshTimer, satelliteRefreshTimer, satelliteMoveTimer,
-      tropicalRefreshTimer, wpcRefreshTimer, usgsGaugeRefreshTimer, usgsGaugeMoveTimer,
-      wildfireRefreshTimer, wildfireMoveTimer, earthquakeRefreshTimer, convectiveRefreshTimer, watchRefreshTimer].forEach(clearTimeout);
-    if (alertAbort) alertAbort.abort();
-    if (lightningAbort) lightningAbort.abort();
-    if (satelliteAbort) satelliteAbort.abort();
-    if (tropicalAbort) tropicalAbort.abort();
-    if (wpcEroAbort) wpcEroAbort.abort();
-    if (wpcFloodAbort) wpcFloodAbort.abort();
-    if (usgsGaugeAbort) usgsGaugeAbort.abort();
-    if (wildfireAbort) wildfireAbort.abort();
-    if (earthquakeAbort) earthquakeAbort.abort();
-    if (convectiveAbort) convectiveAbort.abort();
-    if (watchAbort) watchAbort.abort();
+    operationalControllers.suspend();
   }
 
   function resumeOperationalWorkAfterComparison() {
@@ -3771,16 +3760,7 @@
       if (comparisonRadarWasPlaying && radarVisible && radarFrames.length) setRadarPlaying(true);
       comparisonRadarWasPlaying = false;
     });
-    fetchNwsAlerts();
-    if (document.getElementById('toggle-lightning').checked) refreshLightning();
-    if (document.getElementById('toggle-satellite').checked) refreshSatellite();
-    if (document.getElementById('toggle-tropical').checked) refreshTropical();
-    if (document.getElementById('toggle-wpc-outlooks').checked) refreshWpcOutlooks();
-    if (document.getElementById('toggle-usgs-gauges').checked) refreshUsgsGauges();
-    if (document.getElementById('toggle-wildfires').checked) refreshWildfires();
-    if (document.getElementById('toggle-earthquakes').checked) refreshEarthquakes();
-    if (document.getElementById('toggle-convective').checked) refreshConvectiveOutlooks();
-    if (document.getElementById('toggle-watches').checked) refreshSevereWatches();
+    operationalControllers.refreshEnabled();
   }
 
   function ensureMapComparison() {
@@ -3905,337 +3885,12 @@
   }
 
   function loadCameraFeed(cam, container) {
-    destroyActiveFeed(container);
-
-    if (cam.type === 'youtube') {
-      loadYouTubeFeed(cam, container);
-    } else if (cam.type === 'hls') {
-      loadHLSFeed(cam, container);
-    } else if (cam.type === 'mjpeg') {
-      loadMJPEGFeed(cam, container);
-    } else if (cam.type === 'embed') {
-      loadEmbedFeed(cam, container);
-    } else {
-      loadImageFeed(cam, container);
-    }
+    cameraFeed.load(cam, container);
   }
 
   function destroyActiveFeed(container) {
-    clearInterval(imageRefreshTimer);
-    imageRefreshTimer = null;
-
-    var cleanup = activeFeedCleanup;
-    activeFeedCleanup = null;
-    if (cleanup) cleanup();
-
-    if (!container) return;
-    var orphanedVideos = container.querySelectorAll('video');
-    for (var i = 0; i < orphanedVideos.length; i++) {
-      orphanedVideos[i].pause();
-      orphanedVideos[i].removeAttribute('src');
-      orphanedVideos[i].load();
-    }
-    var orphanedFrames = container.querySelectorAll('iframe');
-    for (var j = 0; j < orphanedFrames.length; j++) {
-      orphanedFrames[j].src = 'about:blank';
-    }
+    cameraFeed.destroy(container);
   }
-
-  function renderFeedError(cam, container, message, outcome, reason) {
-    if (activeCamera !== cam) return;
-    recordCameraObservation(cam, outcome || 'unavailable', reason || 'playback_error');
-    destroyActiveFeed(container);
-
-    var error = document.createElement('div');
-    error.className = 'feed-error';
-    error.setAttribute('role', 'alert');
-
-    var text = document.createElement('p');
-    text.textContent = message;
-    error.appendChild(text);
-
-    var retry = document.createElement('button');
-    retry.type = 'button';
-    retry.className = 'feed-retry-btn';
-    retry.textContent = tr('camera.feedRetry');
-    retry.addEventListener('click', function () {
-      if (activeCamera !== cam) return;
-      recordCameraObservation(cam, 'retrying', 'manual_retry');
-      var loading = document.createElement('div');
-      loading.className = 'feed-loading';
-      loading.textContent = tr('camera.retrying');
-      container.replaceChildren(loading);
-      loadCameraFeed(cam, container);
-    });
-    error.appendChild(retry);
-
-    var source = document.createElement('a');
-    source.className = 'feed-source-link';
-    source.href = cam.type === 'youtube'
-      ? 'https://www.youtube.com/watch?v=' + encodeURIComponent(cam.url)
-      : cam.url;
-    source.target = '_blank';
-    source.rel = 'noopener noreferrer';
-    source.textContent = tr('camera.openSource');
-    error.appendChild(source);
-    container.replaceChildren(error);
-  }
-
-  function appendFrameFallback(cam, container, iframe, sourceUrl) {
-    var actions = document.createElement('div');
-    actions.className = 'feed-frame-actions';
-
-    var retry = document.createElement('button');
-    retry.type = 'button';
-    retry.className = 'feed-retry-btn';
-    retry.textContent = tr('camera.reload');
-    retry.addEventListener('click', function () {
-      if (activeCamera !== cam) return;
-      recordCameraObservation(cam, 'retrying', 'manual_retry');
-      destroyActiveFeed(container);
-      loadCameraFeed(cam, container);
-    });
-
-    var source = document.createElement('a');
-    source.className = 'feed-source-link';
-    source.href = sourceUrl;
-    source.target = '_blank';
-    source.rel = 'noopener noreferrer';
-    source.textContent = tr('camera.openSource');
-    actions.appendChild(retry);
-    actions.appendChild(source);
-    container.appendChild(actions);
-
-    var timeout = setTimeout(function () {
-      if (activeCamera === cam) {
-        renderFeedError(cam, container, tr('feed.embedTimeout'));
-      }
-    }, 12000);
-    iframe.addEventListener('load', function () { clearTimeout(timeout); }, { once: true });
-    return function () { clearTimeout(timeout); };
-  }
-
-  function loadHLSFeed(cam, container) {
-    var video = document.createElement('video');
-    video.referrerPolicy = 'no-referrer';
-    video.autoplay = true;
-    video.muted = true;
-    video.playsInline = true;
-    video.controls = true;
-    var hls = null;
-    var destroyed = false;
-
-    activeFeedCleanup = function () {
-      if (destroyed) return;
-      destroyed = true;
-      video.pause();
-      video.removeAttribute('src');
-      video.load();
-      if (hls) {
-        hls.destroy();
-        hls = null;
-      }
-    };
-
-    if (typeof Hls !== 'undefined' && Hls.isSupported()) {
-      hls = new Hls({
-        enableWorker: true,
-        lowLatencyMode: true,
-        maxBufferLength: 10,
-        maxMaxBufferLength: 20
-      });
-      hls.loadSource(cam.url);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.ERROR, function (event, data) {
-        if (data.fatal) {
-          renderFeedError(cam, container, tr('feed.streamUnavailable'));
-        }
-      });
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = cam.url;
-      video.addEventListener('error', function () {
-        renderFeedError(cam, container, tr('feed.streamUnavailable'));
-      }, { once: true });
-    } else {
-      renderFeedError(cam, container, tr('feed.hlsUnsupported'), OBSERVATION_UNSUPPORTED, REASON_BROWSER_HLS);
-      return;
-    }
-
-    video.addEventListener('loadeddata', function () {
-      if (activeCamera === cam) recordCameraObservation(cam, 'playable', 'decoded_media');
-    }, { once: true });
-
-    container.replaceChildren(video);
-    appendLiveIndicator(container, tr('camera.liveStream'));
-  }
-
-  function loadMJPEGFeed(cam, container) {
-    var img = document.createElement('img');
-    img.referrerPolicy = 'no-referrer';
-    img.alt = cam.name;
-    img.src = cam.url;
-
-    img.onerror = function () {
-      if (activeCamera === cam) {
-        renderFeedError(cam, container, tr('feed.cameraUnavailable'));
-      }
-    };
-    img.onload = function () {
-      if (activeCamera === cam) recordCameraObservation(cam, 'playable', 'mjpeg_rendered');
-    };
-
-    activeFeedCleanup = function () {
-      img.onload = null;
-      img.onerror = null;
-      img.src = '';
-    };
-    container.replaceChildren(img);
-    appendLiveIndicator(container, tr('camera.liveMjpeg'));
-  }
-
-  // YouTube's embedded player refuses to start with a "video player configuration
-  // error" (error 153 / embedder.identity.missing.referrer) when the embedding page
-  // sends no referrer. Send the origin and pass it as ?origin= so the player can
-  // verify the embedder. Falls back gracefully on file:// (origin is "null").
-  function youtubeEmbedUrl(videoId, extraParams) {
-    var params = 'autoplay=1&mute=1&playsinline=1&rel=0';
-    if (extraParams) params += '&' + extraParams;
-    if (location.origin && location.origin !== 'null') {
-      params += '&origin=' + encodeURIComponent(location.origin);
-    }
-    return 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(videoId) + '?' + params;
-  }
-
-  function loadYouTubeFeed(cam, container) {
-    var iframe = document.createElement('iframe');
-    var sourceUrl = 'https://www.youtube.com/watch?v=' + encodeURIComponent(cam.url);
-    iframe.src = youtubeEmbedUrl(cam.url);
-    iframe.width = '100%';
-    iframe.height = '100%';
-    iframe.style.cssText = 'min-height:400px;border:none;';
-    iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
-    iframe.allowFullscreen = true;
-    iframe.title = cam.name;
-    iframe.referrerPolicy = 'strict-origin-when-cross-origin';
-
-    container.replaceChildren(iframe);
-    var clearLoadTimeout = appendFrameFallback(cam, container, iframe, sourceUrl);
-    activeFeedCleanup = function () {
-      clearLoadTimeout();
-      iframe.src = 'about:blank';
-    };
-    appendLiveIndicator(container, tr('camera.youtubeLive'));
-  }
-
-  function hostMatchesSuffix(hostname, suffix) {
-    return hostname === suffix || hostname.endsWith('.' + suffix);
-  }
-
-  function isAllowedEmbedUrl(url) {
-    try {
-      var parsed = new URL(url);
-      var hostname = parsed.hostname.toLowerCase();
-      if (parsed.protocol !== 'https:') return false;
-      for (var i = 0; i < TRUSTED_EMBED_HOST_SUFFIXES.length; i++) {
-        if (hostMatchesSuffix(hostname, TRUSTED_EMBED_HOST_SUFFIXES[i])) return true;
-      }
-    } catch (e) {
-      return false;
-    }
-    return false;
-  }
-
-  function loadEmbedFeed(cam, container) {
-    if (!isAllowedEmbedUrl(cam.url)) {
-      renderFeedError(cam, container, tr('feed.untrusted'), OBSERVATION_UNSUPPORTED, REASON_UNTRUSTED_EMBED);
-      return;
-    }
-
-    var iframe = document.createElement('iframe');
-    iframe.src = cam.url;
-    iframe.width = '100%';
-    iframe.height = '100%';
-    iframe.style.cssText = 'min-height:400px;border:none;';
-    iframe.allow = 'autoplay; encrypted-media';
-    iframe.allowFullscreen = true;
-    iframe.title = cam.name;
-    iframe.referrerPolicy = 'no-referrer';
-    iframe.setAttribute('loading', 'lazy');
-    iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups');
-
-    iframe.onerror = function () {
-      if (activeCamera === cam) {
-        renderFeedError(cam, container, tr('feed.embedUnavailable'));
-      }
-    };
-
-    container.replaceChildren(iframe);
-    var clearLoadTimeout = appendFrameFallback(cam, container, iframe, cam.url);
-    activeFeedCleanup = function () {
-      clearLoadTimeout();
-      iframe.onerror = null;
-      iframe.src = 'about:blank';
-    };
-  }
-
-  function loadImageFeed(cam, container) {
-    var img = document.createElement('img');
-    img.referrerPolicy = 'no-referrer';
-    img.alt = cam.name;
-    var successfulLoads = 0;
-
-    function setImageSrc() {
-      img.src = cam.url + (cam.url.indexOf('?') >= 0 ? '&' : '?') + '_t=' + Date.now();
-    }
-
-    img.onerror = function () {
-      if (activeCamera === cam) {
-        renderFeedError(cam, container, tr('feed.imageUnavailable'));
-      }
-    };
-
-    img.onload = function () {
-      successfulLoads += 1;
-      if (activeCamera === cam) {
-        recordCameraObservation(
-          cam,
-          successfulLoads >= 2 ? 'playable' : 'loaded',
-          successfulLoads >= 2 ? 'refresh_advanced' : 'initial_image'
-        );
-      }
-      var loadingEl = container.querySelector('.feed-loading');
-      if (loadingEl) loadingEl.remove();
-    };
-
-    setImageSrc();
-    activeFeedCleanup = function () {
-      img.onload = null;
-      img.onerror = null;
-      img.src = '';
-    };
-    container.replaceChildren(img);
-    appendLiveIndicator(container, tr('camera.autoRefresh', { seconds: localNumber(imageRefreshInterval() / 1000) }));
-
-    function scheduleImageRefresh() {
-      clearTimeout(imageRefreshTimer);
-      imageRefreshTimer = setTimeout(function () {
-        if (activeCamera !== cam) return;
-        setImageSrc();
-        scheduleImageRefresh();
-      }, imageRefreshInterval());
-    }
-    scheduleImageRefresh();
-  }
-
-  function appendLiveIndicator(container, label) {
-    var indicator = document.createElement('div');
-    indicator.className = 'feed-refresh-indicator';
-    indicator.setAttribute('role', 'status');
-    indicator.setAttribute('aria-label', label);
-    indicator.title = label;
-    container.appendChild(indicator);
-  }
-
   // ── Weather (NWS for US, Open-Meteo for international) ──
 
   var WMO_CODES = {
@@ -5658,9 +5313,51 @@
     }, RADAR_REFRESH_INTERVAL);
   }
 
+  function createOperationalControllers() {
+    function toggle(id) {
+      return function () { return document.getElementById(id).checked; };
+    }
+
+    function controller(id, isEnabled, refresh, aborts, timers) {
+      return StormScopeContextLayerControllers.createController({
+        id: id,
+        isEnabled: isEnabled,
+        refresh: refresh,
+        aborts: aborts,
+        timers: timers,
+        cancelTimer: clearTimeout
+      });
+    }
+
+    return StormScopeContextLayerControllers.createControllerSet([
+      controller('alerts', function () { return alertsVisible; }, fetchNwsAlerts,
+        function () { return alertAbort; }, function () { return [alertRefreshTimer, alertMoveTimer]; }),
+      controller('lightning', toggle('toggle-lightning'), refreshLightning,
+        function () { return lightningAbort; }, function () { return lightningRefreshTimer; }),
+      controller('satellite', toggle('toggle-satellite'), refreshSatellite,
+        function () { return satelliteAbort; }, function () { return [satelliteRefreshTimer, satelliteMoveTimer]; }),
+      controller('tropical', toggle('toggle-tropical'), refreshTropical,
+        function () { return tropicalAbort; }, function () { return tropicalRefreshTimer; }),
+      controller('wpc-outlooks', toggle('toggle-wpc-outlooks'), refreshWpcOutlooks,
+        function () { return [wpcEroAbort, wpcFloodAbort]; }, function () { return wpcRefreshTimer; }),
+      controller('usgs-gauges', toggle('toggle-usgs-gauges'), refreshUsgsGauges,
+        function () { return usgsGaugeAbort; }, function () { return [usgsGaugeRefreshTimer, usgsGaugeMoveTimer]; }),
+      controller('wildfires', toggle('toggle-wildfires'), refreshWildfires,
+        function () { return wildfireAbort; }, function () { return [wildfireRefreshTimer, wildfireMoveTimer]; }),
+      controller('earthquakes', toggle('toggle-earthquakes'), refreshEarthquakes,
+        function () { return earthquakeAbort; }, function () { return earthquakeRefreshTimer; }),
+      controller('convective', toggle('toggle-convective'), refreshConvectiveOutlooks,
+        function () { return convectiveAbort; }, function () { return convectiveRefreshTimer; }),
+      controller('watches', toggle('toggle-watches'), refreshSevereWatches,
+        function () { return watchAbort; }, function () { return watchRefreshTimer; })
+    ]);
+  }
+
   function initLifecycle() {
     updateConnectionState();
     startRadarRefreshTimer();
+    operationalControllers = createOperationalControllers();
+    teardownResources.push(operationalControllers);
 
     document.addEventListener('visibilitychange', function () {
       var container = document.getElementById('modal-feed');
@@ -5678,31 +5375,7 @@
           container.replaceChildren(paused);
           feedPausedForVisibility = true;
         }
-        if (alertAbort) alertAbort.abort();
-        if (lightningAbort) lightningAbort.abort();
-        if (satelliteAbort) satelliteAbort.abort();
-        if (tropicalAbort) tropicalAbort.abort();
-        if (wpcEroAbort) wpcEroAbort.abort();
-        if (wpcFloodAbort) wpcFloodAbort.abort();
-        if (usgsGaugeAbort) usgsGaugeAbort.abort();
-        if (wildfireAbort) wildfireAbort.abort();
-        if (earthquakeAbort) earthquakeAbort.abort();
-        if (convectiveAbort) convectiveAbort.abort();
-        if (watchAbort) watchAbort.abort();
-        clearTimeout(alertRefreshTimer);
-        clearTimeout(alertMoveTimer);
-        clearTimeout(lightningRefreshTimer);
-        clearTimeout(satelliteRefreshTimer);
-        clearTimeout(satelliteMoveTimer);
-        clearTimeout(tropicalRefreshTimer);
-        clearTimeout(wpcRefreshTimer);
-        clearTimeout(usgsGaugeRefreshTimer);
-        clearTimeout(usgsGaugeMoveTimer);
-        clearTimeout(wildfireRefreshTimer);
-        clearTimeout(wildfireMoveTimer);
-        clearTimeout(earthquakeRefreshTimer);
-        clearTimeout(convectiveRefreshTimer);
-        clearTimeout(watchRefreshTimer);
+        operationalControllers.suspend();
         resetPlaceSearch();
         return;
       }
@@ -5717,70 +5390,28 @@
         feedPausedForVisibility = false;
         loadCameraFeed(activeCamera, container);
       }
-      fetchNwsAlerts();
-      if (document.getElementById('toggle-lightning').checked) refreshLightning();
-      if (document.getElementById('toggle-satellite').checked) refreshSatellite();
-      if (document.getElementById('toggle-tropical').checked) refreshTropical();
-      if (document.getElementById('toggle-wpc-outlooks').checked) refreshWpcOutlooks();
-      if (document.getElementById('toggle-usgs-gauges').checked) refreshUsgsGauges();
-      if (document.getElementById('toggle-wildfires').checked) refreshWildfires();
-      if (document.getElementById('toggle-earthquakes').checked) refreshEarthquakes();
-      if (document.getElementById('toggle-convective').checked) refreshConvectiveOutlooks();
-      if (document.getElementById('toggle-watches').checked) refreshSevereWatches();
+      operationalControllers.refreshEnabled();
     });
 
     window.addEventListener('online', function () {
       updateConnectionState();
       initRadar();
-      if (document.getElementById('toggle-lightning').checked) refreshLightning();
-      if (document.getElementById('toggle-satellite').checked) refreshSatellite();
-      if (document.getElementById('toggle-tropical').checked) refreshTropical();
-      if (document.getElementById('toggle-wpc-outlooks').checked) refreshWpcOutlooks();
-      if (document.getElementById('toggle-usgs-gauges').checked) refreshUsgsGauges();
-      if (document.getElementById('toggle-wildfires').checked) refreshWildfires();
-      if (document.getElementById('toggle-earthquakes').checked) refreshEarthquakes();
-      if (document.getElementById('toggle-convective').checked) refreshConvectiveOutlooks();
-      if (document.getElementById('toggle-watches').checked) refreshSevereWatches();
+      operationalControllers.refreshEnabled();
     });
     window.addEventListener('offline', updateConnectionState);
     window.addEventListener('beforeunload', function () {
       clearInterval(radarRefreshTimer);
       clearTimeout(radarPreloadTimer);
-      clearTimeout(alertRefreshTimer);
-      clearTimeout(alertMoveTimer);
-      clearTimeout(lightningRefreshTimer);
-      clearTimeout(satelliteRefreshTimer);
-      clearTimeout(satelliteMoveTimer);
-      clearTimeout(tropicalRefreshTimer);
-      clearTimeout(wpcRefreshTimer);
-      clearTimeout(usgsGaugeRefreshTimer);
-      clearTimeout(usgsGaugeMoveTimer);
-      clearTimeout(wildfireRefreshTimer);
-      clearTimeout(wildfireMoveTimer);
-      clearTimeout(earthquakeRefreshTimer);
-      clearTimeout(convectiveRefreshTimer);
-      clearTimeout(watchRefreshTimer);
       setRadarPlaying(false);
       if (radarAbort) radarAbort.abort();
       if (weatherAbort) weatherAbort.abort();
-      if (alertAbort) alertAbort.abort();
-      if (lightningAbort) lightningAbort.abort();
-      if (satelliteAbort) satelliteAbort.abort();
-      if (tropicalAbort) tropicalAbort.abort();
-      if (wpcEroAbort) wpcEroAbort.abort();
-      if (wpcFloodAbort) wpcFloodAbort.abort();
-      if (usgsGaugeAbort) usgsGaugeAbort.abort();
-      if (wildfireAbort) wildfireAbort.abort();
-      if (earthquakeAbort) earthquakeAbort.abort();
-      if (convectiveAbort) convectiveAbort.abort();
-      if (watchAbort) watchAbort.abort();
       if (summaryWildfireAbort) summaryWildfireAbort.abort();
       resetPlaceSearch();
       if (cameraStore) cameraStore.cancel();
       if (monitorRegistry) monitorRegistry.destroyAll();
       if (localOverlayDatabase) localOverlayDatabase.close();
       clearTimeout(saveLastViewTimer);
-      destroyActiveFeed(document.getElementById('modal-feed'));
+      teardownResources.forEach(function (resource) { resource.destroy(); });
     });
   }
 

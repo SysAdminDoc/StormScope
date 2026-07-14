@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.105.0 - 2026-07-14
+
+- Extracted modal camera playback into `js/camera-feed.js`, with injected localization, timing, HLS, active-camera, and observation dependencies plus one idempotent `destroy()` owner for refresh timers, videos, HLS instances, images, and iframes.
+- Replaced repeated context-layer abort/timer/refresh lists across comparison, visibility, reconnect, and unload paths with injected controllers in `js/context-layer-controllers.js`. Each alert/context provider is registered once, and app shutdown now enumerates the extracted resource owners through one teardown loop. Added focused lifecycle/player contracts and retained the complete live browser behavior gate. SW v78.
+
 ## v0.104.0 - 2026-07-14
 
 - Upgraded the exact yt-dlp development pin to 2026.7.4, which contains the fix for GHSA-6v4j-43gg-vj32/CVE-2026-55404. StormScope's extractor command is now built through a tested metadata-only contract that rejects non-video IDs and forbids all shortcut-writing flags implicated by the advisory.

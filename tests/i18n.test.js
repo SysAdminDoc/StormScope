@@ -42,7 +42,9 @@ test('Spanish deterministic weather, CAP, source, radar, and recovery vocabulary
 });
 
 test('application control logic routes user-facing copy through the locale catalog', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8');
+  const source = ['app.js', 'camera-feed.js'].map((file) => (
+    fs.readFileSync(path.join(__dirname, '..', 'js', file), 'utf8')
+  )).join('\n');
   const forbidden = [
     /textContent\s*=\s*['"][A-Za-z]/,
     /setRadarStatus\(\s*['"][A-Za-z]/,

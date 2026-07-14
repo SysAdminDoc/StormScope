@@ -13,7 +13,7 @@
  */
 'use strict';
 
-var VERSION = 'v77';
+var VERSION = 'v78';
 var RUNTIME_CACHE_VERSION = 'v2';
 var SHELL_CACHE = 'stormscope-shell-' + VERSION;
 var TILE_CACHE = 'stormscope-tiles-' + RUNTIME_CACHE_VERSION;
@@ -42,8 +42,10 @@ var SHELL_ASSETS = [
   './js/saved-state.js',
   './js/scene-codec.js',
   './js/multi-camera.js',
+  './js/camera-feed.js',
   './js/map-comparison.js',
   './js/context-layers.js',
+  './js/context-layer-controllers.js',
   './js/tropical-cyclones.js',
   './js/flood-outlooks.js',
   './js/convective-outlooks.js',
