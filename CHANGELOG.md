@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.94.0 - 2026-07-14
+
+- Hardened cross-origin privacy: every direct camera media element (HLS `video`, MJPEG/image `img`, and the multi-camera monitor's image/HLS players) plus the radar tile pixel sampler now set `referrerPolicy='no-referrer'`, matching the existing iframe policy so the document origin and path never leak to DOT/FAA/USGS/relay hosts.
+- Added clickjacking protection via a JavaScript frame-guard that breaks out of cross-origin framing. (CSP `frame-ancestors` is spec-ignored when delivered via `<meta>` and a static host cannot send a CSP response header, so a frame-guard is the only deliverable control.)
+- Guarded popup anchor hrefs built from fetched provider text against Leaflet CVE-2025-69993: added `safeExternalUrl()` (allows only http/https, else `#`) and routed the NHC advisory and USGS gauge source links through it. All feature popups already construct DOM via `textContent`; a regression contract now asserts the referrer policy, the CSP directive, DOM-only popups, and the scheme guard. SW v67.
+
 ## v0.93.0 - 2026-07-12
 
 - Added an opt-in synchronized two-map comparison workspace with independent per-pane radar frame, latest validated GOES GeoColor, and current normalized NWS hazard selections. Opening pauses normal refresh/animation work; close or hidden-tab lifecycle destroys comparison layers, timers, handlers, and Leaflet instances before normal work resumes.

@@ -1,8 +1,24 @@
 (function () {
   'use strict';
 
+  // Clickjacking protection. CSP frame-ancestors is the correct control, but it is
+  // spec-ignored when delivered via a <meta> element and GitHub Pages (and most
+  // static hosts) cannot send an HTTP CSP header, so this is the only deliverable
+  // guard: if StormScope is framed by another origin, break out to the top window.
+  // Same-origin framing (own comparison/monitor iframes are never cross-origin) is
+  // allowed; cross-origin access throws, which we treat as hostile framing.
+  (function preventFraming() {
+    try {
+      if (window.top === window.self) return;
+      // Throws for cross-origin parents; a readable same-origin href is trusted.
+      var parentHref = window.top.location.href;
+      if (parentHref) return;
+    } catch (e) { /* cross-origin parent — bust out below */ }
+    try { window.top.location = window.self.location.href; } catch (e2) { /* ignore */ }
+  })();
+
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.93.0';
+  var APP_VERSION = '0.94.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -243,6 +259,19 @@
     var div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+  }
+
+  // Defense-in-depth for popup/anchor hrefs built from fetched provider text.
+  // Leaflet 1.9.4 bindPopup renders unsanitized HTML (CVE-2025-69993); all popup
+  // builders already construct DOM via textContent, so the only remaining sink is
+  // an anchor href carrying a javascript:/data: scheme. Allow http(s) only.
+  function safeExternalUrl(value) {
+    if (value == null || String(value).trim() === '') return '#';
+    try {
+      var parsed = new URL(String(value), location.href);
+      if (parsed.protocol === 'https:' || parsed.protocol === 'http:') return parsed.href;
+    } catch (e) { /* fall through */ }
+    return '#';
   }
 
   function sourceLabel(value) {
@@ -1009,7 +1038,7 @@
       container.appendChild(intensity);
     }
     var link = document.createElement('a');
-    link.href = properties.advisoryUrl;
+    link.href = safeExternalUrl(properties.advisoryUrl);
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
     link.textContent = tr('context.tropicalAdvisory');
@@ -1273,7 +1302,7 @@
     source.textContent = tr('context.gaugeSource', { source: properties.source });
     container.appendChild(source);
     var link = document.createElement('a');
-    link.href = properties.sourceUrl;
+    link.href = safeExternalUrl(properties.sourceUrl);
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
     link.textContent = tr('context.gaugeOfficial');
@@ -1867,6 +1896,7 @@
       var settled = false;
       var timeout = setTimeout(function () { if (!settled) resolve(null); }, 4000);
       image.crossOrigin = 'anonymous';
+      image.referrerPolicy = 'no-referrer';
       image.onload = function () {
         settled = true;
         clearTimeout(timeout);
@@ -3019,6 +3049,7 @@
 
   function createMonitorImagePlayer(camera, container, refreshing) {
     var image = document.createElement('img');
+    image.referrerPolicy = 'no-referrer';
     image.alt = camera.name;
     var timer = null;
     var active = false;
@@ -3069,6 +3100,7 @@
 
   function createMonitorHlsPlayer(camera, container) {
     var video = document.createElement('video');
+    video.referrerPolicy = 'no-referrer';
     video.controls = true;
     video.muted = true;
     video.autoplay = true;
@@ -3521,6 +3553,7 @@
 
   function loadHLSFeed(cam, container) {
     var video = document.createElement('video');
+    video.referrerPolicy = 'no-referrer';
     video.autoplay = true;
     video.muted = true;
     video.playsInline = true;
@@ -3574,6 +3607,7 @@
 
   function loadMJPEGFeed(cam, container) {
     var img = document.createElement('img');
+    img.referrerPolicy = 'no-referrer';
     img.alt = cam.name;
     img.src = cam.url;
 
@@ -3682,6 +3716,7 @@
 
   function loadImageFeed(cam, container) {
     var img = document.createElement('img');
+    img.referrerPolicy = 'no-referrer';
     img.alt = cam.name;
     var successfulLoads = 0;
 

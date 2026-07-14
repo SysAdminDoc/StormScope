@@ -85,6 +85,10 @@ test('static CSP removes inline script execution and mirrors trusted frame hosts
   assert.doesNotMatch(csp[1], /script-src[^;]*'unsafe-inline'/);
   assert.match(csp[1], /object-src 'none'/);
   assert.match(csp[1], /base-uri 'none'/);
+  // frame-ancestors is intentionally NOT in the meta CSP: it is spec-ignored when
+  // delivered via <meta> and a static host cannot send a CSP header. Clickjacking
+  // is instead handled by a JS frame-guard (asserted below).
+  assert.doesNotMatch(csp[1], /frame-ancestors/);
   assert.match(csp[1], /worker-src 'self' blob:/);
   assert.match(csp[1], /https:\/\/\*\.abbeyroad\.com/);
   assert.match(csp[1], /https:\/\/v\.angelcam\.com/);
@@ -317,4 +321,52 @@ test('virtual camera results expose roving keyboard collection semantics', () =>
   assert.match(app, /PageDown/);
   assert.match(app, /aria-posinset/);
   assert.match(app, /aria-setsize/);
+});
+
+test('a JS frame-guard breaks out of cross-origin framing', () => {
+  const match = app.match(/function preventFraming\(\) \{([\s\S]*?)\n  \}\)\(\);/);
+  assert.ok(match, 'preventFraming guard should exist and run immediately');
+  const body = match[1];
+  assert.match(body, /window\.top === window\.self/);
+  assert.match(body, /window\.top\.location = window\.self\.location\.href/);
+});
+
+test('direct camera media suppresses cross-origin referrers', () => {
+  // Every element that loads third-party camera media directly (not via a
+  // referrer-policied iframe) must set referrerPolicy='no-referrer' so the
+  // document origin+path never leaks to DOT/FAA/USGS/relay hosts.
+  const directMediaBuilders = [
+    'function loadHLSFeed',
+    'function loadMJPEGFeed',
+    'function loadImageFeed',
+    'function createMonitorImagePlayer',
+    'function createMonitorHlsPlayer'
+  ];
+  for (const marker of directMediaBuilders) {
+    const start = app.indexOf(marker);
+    assert.ok(start >= 0, `${marker} should exist`);
+    // The referrerPolicy assignment appears immediately after the element is
+    // created, before any other property, in each builder.
+    const window = app.slice(start, start + 220);
+    assert.match(window, /referrerPolicy = 'no-referrer'/, `${marker} must set no-referrer`);
+  }
+  // The radar tile pixel sampler fetches provider tiles cross-origin too.
+  assert.match(app, /image\.crossOrigin = 'anonymous';\s*\n\s*image\.referrerPolicy = 'no-referrer';/);
+});
+
+test('popup anchor hrefs from fetched provider text are scheme-guarded (CVE-2025-69993)', () => {
+  const match = app.match(/function safeExternalUrl\(value\) \{([\s\S]*?)\n  \}/);
+  assert.ok(match, 'safeExternalUrl helper should exist');
+  const safeExternalUrl = new Function('value', 'location', match[1]);
+  const loc = { href: 'https://stormscope.example/index.html' };
+  assert.equal(safeExternalUrl('https://www.nhc.noaa.gov/gis/', loc), 'https://www.nhc.noaa.gov/gis/');
+  assert.equal(safeExternalUrl('javascript:alert(1)', loc), '#');
+  assert.equal(safeExternalUrl('data:text/html,<script>alert(1)</script>', loc), '#');
+  assert.equal(safeExternalUrl('vbscript:msgbox(1)', loc), '#');
+  assert.equal(safeExternalUrl(null, loc), '#');
+  // Dynamic provider-supplied hrefs must route through the guard.
+  assert.match(app, /link\.href = safeExternalUrl\(properties\.advisoryUrl\)/);
+  assert.match(app, /link\.href = safeExternalUrl\(properties\.sourceUrl\)/);
+  // All feature popups are built as DOM nodes, never HTML strings passed to bindPopup.
+  assert.doesNotMatch(app, /bindPopup\(\s*'[^']*<[^']*'/);
 });
