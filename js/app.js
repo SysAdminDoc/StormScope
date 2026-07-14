@@ -18,7 +18,7 @@
   })();
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.117.0';
+  var APP_VERSION = '0.118.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -5756,11 +5756,62 @@
     return { caches: counts, usage: estimate.usage || null, quota: estimate.quota || null };
   }
 
+  async function startupDiagnosticContext() {
+    var navigationEntries = [];
+    try {
+      if (window.performance && typeof performance.getEntriesByType === 'function') {
+        navigationEntries = performance.getEntriesByType('navigation').map(function (entry) {
+          return {
+            type: entry.type,
+            responseStart: entry.responseStart,
+            domContentLoadedEventEnd: entry.domContentLoadedEventEnd,
+            loadEventEnd: entry.loadEventEnd,
+            duration: entry.duration
+          };
+        });
+      }
+    } catch (_error) { navigationEntries = []; }
+
+    var workerState = {
+      supported: 'serviceWorker' in navigator,
+      controlled: Boolean(navigator.serviceWorker && navigator.serviceWorker.controller),
+      state: navigator.serviceWorker && navigator.serviceWorker.controller
+        ? navigator.serviceWorker.controller.state : null,
+      navigationPreload: { supported: false, enabled: false }
+    };
+    if (workerState.supported && typeof navigator.serviceWorker.getRegistration === 'function') {
+      try {
+        var registration = await navigator.serviceWorker.getRegistration();
+        var worker = navigator.serviceWorker.controller || registration &&
+          (registration.active || registration.waiting || registration.installing);
+        if (worker) workerState.state = worker.state;
+        if (registration && registration.navigationPreload &&
+            typeof registration.navigationPreload.getState === 'function') {
+          workerState.navigationPreload.supported = true;
+          var preload = await registration.navigationPreload.getState();
+          workerState.navigationPreload.enabled = Boolean(preload && preload.enabled);
+        }
+      } catch (_error) { /* Optional diagnostic evidence must not block export. */ }
+    }
+    return {
+      navigationEntries: navigationEntries,
+      camera: {
+        firstBatchMs: cameraLoadMetrics.firstBatchMs,
+        completeMs: cameraLoadMetrics.completeMs,
+        source: cameraLoadMetrics.source,
+        deferred: cameraCatalogDeferred
+      },
+      dataMode: { preference: dataModePreference, enabled: lowDataMode, source: lowDataSource },
+      serviceWorker: workerState
+    };
+  }
+
   async function exportDiagnostics() {
     var report = diagnostics.report({
       appVersion: APP_VERSION,
       corpusGeneration: cameraLoadMetrics.index && cameraLoadMetrics.index.generated_at,
       cameraIngestion: cameraSourceHealth,
+      startup: await startupDiagnosticContext(),
       providers: {
         radar: radarProviderId,
         radarStatus: radarProviderSelection && radarProviderSelection.degradationReason || 'ready',

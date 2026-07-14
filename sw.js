@@ -16,7 +16,7 @@
  */
 'use strict';
 
-var VERSION = 'v90';
+var VERSION = 'v91';
 var RUNTIME_CACHE_VERSION = 'v2';
 var SHELL_CACHE = 'stormscope-shell-' + VERSION;
 var TILE_CACHE = 'stormscope-tiles-' + RUNTIME_CACHE_VERSION;

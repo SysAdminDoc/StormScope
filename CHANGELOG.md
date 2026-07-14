@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.118.0 - 2026-07-14
+
+- Diagnostic exports now include bounded privacy-safe startup, camera-load, data-mode, service-worker/navigation-preload, and dropped-entry evidence without URLs, coordinates, searches, or identifiers. SW v91.
+
 ## v0.117.0 - 2026-07-14
 
 - Enabled fail-soft service-worker navigation preload so online navigations start during worker boot without duplicate fetches while preserving cached-shell recovery. SW v90.
