@@ -634,7 +634,7 @@ def fetch_txdot():
 def fetch_nps():
     try:
         url = 'https://developer.nps.gov/api/v1/webcams?api_key=DEMO_KEY&limit=500'
-        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.107.0'})
+        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.108.0'})
         count = 0
         for cam in data.get('data', []):
             if str(cam.get('status') or '').lower() == 'inactive':
@@ -764,7 +764,7 @@ def _current_jpeg_snapshot(
     request = urllib.request.Request(
         url,
         headers={
-            'User-Agent': 'StormScope/0.107.0',
+            'User-Agent': 'StormScope/0.108.0',
             'Accept': 'image/jpeg,image/*,*/*',
             'Cache-Control': 'no-cache',
         },
@@ -5329,7 +5329,7 @@ def fetch_faa_weathercams_north_dakota():
     headers = {
         'User-Agent': (
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-            'AppleWebKit/537.36 Chrome/130.0 StormScope/0.107.0'
+            'AppleWebKit/537.36 Chrome/130.0 StormScope/0.108.0'
         ),
         'Accept': 'application/json, image/*, */*',
         'Referer': state_page,

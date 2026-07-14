@@ -1,4 +1,5 @@
-[![Version](https://img.shields.io/badge/version-0.107.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.108.0-blue)](CHANGELOG.md)
+[![CI](https://github.com/SysAdminDoc/StormScope/actions/workflows/ci.yml/badge.svg)](https://github.com/SysAdminDoc/StormScope/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
 [![Cameras](https://img.shields.io/badge/cameras-36%2C592-cyan)]()
@@ -117,6 +118,8 @@ python scripts/check.py
 The gate runs the preflight first, then uses Playwright Chromium for the exhaustive smoke and reduced Firefox/WebKit contracts for boot, search, modal cleanup, cached offline shell, and HLS branch behavior. The Windows WebKit port uses an injected native-HLS capability to exercise that branch because the port does not ship the platform media stack.
 
 It validates the camera corpus and deterministic shards, verifies vendored dependency/license hashes, audits every exact Python/Node/browser pin plus expiring supplemental CVE dispositions, runs Python units, lint, JavaScript syntax/contracts and service-worker tests, and enforces a real headless desktop/mobile/modal/offline/cache/accessibility smoke. The smoke requires the first camera shard to render within 2.5 seconds on the local Chromium test profile.
+
+The same deterministic gate protects every push and pull request in GitHub Actions. Browser failures retain the failing page screenshot, HTML, and stack trace for seven days. A read-only weekly audit checks exact pins against OSV/NVD and reports newer direct Python, Node, and vendored releases without changing project files.
 
 Build the one release asset only from a clean committed tree:
 

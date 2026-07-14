@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const { firefox, webkit } = require('@playwright/test');
-const { addNetworkFixtures, serveStatic, waitForApp } = require('./browser-smoke.js');
+const { addNetworkFixtures, serveStatic, waitForApp, writeFailureArtifacts } = require('./browser-smoke.js');
 
 async function exercise(name, engine, baseURL) {
   const browser = await engine.launch({ headless: true });
@@ -49,6 +49,9 @@ async function exercise(name, engine, baseURL) {
     });
     assert.equal(offlineShell.ok, true);
     assert.match(offlineShell.body, /<title>StormScope/);
+  } catch (error) {
+    await writeFailureArtifacts(context, name, error);
+    throw error;
   } finally {
     await context.setOffline(false).catch(() => {});
     await browser.close();

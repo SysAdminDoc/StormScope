@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.108.0 - 2026-07-14
+
+- Added SHA-pinned GitHub Actions CI for every push and pull request. The workflow installs the exact Python, npm, lockfile, and Playwright browser toolchain, runs the same complete local gate, and retains stack traces, page HTML, and screenshots when a browser contract fails.
+- Added a read-only weekly/manual dependency workflow that publishes and retains actionable OSV/NVD, vendored-library, direct npm, and direct Python update reports without modifying repository data. Workflow contract tests enforce read-only permissions, immutable action pins, exact cache keys, and failure-artifact retention. SW v81.
+
 ## v0.107.0 - 2026-07-14
 
 - Made saved-view and private-overlay deletion recoverable through a keyboard-accessible 10-second Undo/Restore action. Restored persisted overlays are atomically written back to IndexedDB before they return to the map; storage failures retain a clearly disclosed session-only copy instead of silently losing authored data.

@@ -1,0 +1,117 @@
+name: Dependency audit
+
+on:
+  schedule:
+    - cron: '17 9 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-audit
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install exact audit inputs
+        run: |
+          python -m pip install --requirement requirements-dev.txt
+          npm install --global npm@11.13.0
+          npm ci
+          mkdir -p test-results/dependency-audit
+
+      - name: Query OSV and NVD for every exact pin
+        id: advisories
+        shell: bash
+        run: |
+          set +e
+          python scripts/dependency_audit.py --online 2>&1 | tee test-results/dependency-audit/advisories.txt
+          echo "status=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Query vendored package releases and advisories
+        id: vendor
+        shell: bash
+        run: |
+          set +e
+          python scripts/vendor_dependencies.py --check-updates 2>&1 | tee test-results/dependency-audit/vendor.txt
+          echo "status=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Query direct npm updates
+        id: npm-updates
+        shell: bash
+        run: |
+          set +e
+          npm outdated 2>&1 | tee test-results/dependency-audit/npm-updates.txt
+          echo "status=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Query direct Python updates
+        id: python-updates
+        shell: bash
+        run: |
+          set +e
+          python - <<'PY' 2>&1 | tee test-results/dependency-audit/python-updates.txt
+          import json
+          import subprocess
+          import sys
+
+          payload = json.loads(subprocess.check_output([
+              sys.executable, '-m', 'pip', 'list', '--outdated', '--not-required', '--format=json'
+          ]))
+          direct = [item for item in payload if item['name'].lower() in {'ruff', 'yt-dlp'}]
+          if direct:
+              for item in direct:
+                  print(f"ATTENTION: {item['name']} {item['version']} -> {item['latest_version']}")
+              raise SystemExit(2)
+          print('Direct Python pins are current.')
+          PY
+          echo "status=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish dependency report
+        env:
+          ADVISORY_STATUS: ${{ steps.advisories.outputs.status }}
+          VENDOR_STATUS: ${{ steps.vendor.outputs.status }}
+          NPM_STATUS: ${{ steps.npm-updates.outputs.status }}
+          PYTHON_STATUS: ${{ steps.python-updates.outputs.status }}
+        shell: bash
+        run: |
+          for report in test-results/dependency-audit/*.txt; do
+            echo "### $(basename "$report" .txt)" >> "$GITHUB_STEP_SUMMARY"
+            echo '```text' >> "$GITHUB_STEP_SUMMARY"
+            cat "$report" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          done
+          if [ "$ADVISORY_STATUS" -ne 0 ] || [ "$VENDOR_STATUS" -ne 0 ] || \
+             [ "$NPM_STATUS" -ne 0 ] || [ "$PYTHON_STATUS" -ne 0 ]; then
+            echo 'Action is required; inspect the report above.' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Retain dependency report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dependency-report-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/dependency-audit
+          if-no-files-found: error
+          retention-days: 14

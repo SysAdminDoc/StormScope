@@ -581,6 +581,21 @@ async function waitForApp(page, requireRadar = true) {
   }
 }
 
+async function writeFailureArtifacts(context, label, error) {
+  const artifactRoot = process.env.STORMSCOPE_TEST_ARTIFACTS;
+  if (!artifactRoot) return;
+  fs.mkdirSync(artifactRoot, { recursive: true });
+  const safeLabel = String(label).replace(/[^a-z0-9_-]+/gi, '-').toLowerCase();
+  fs.writeFileSync(path.join(artifactRoot, `${safeLabel}-error.txt`), String(error && error.stack || error), 'utf8');
+  const pages = context.pages();
+  for (let index = 0; index < pages.length; index += 1) {
+    const page = pages[index];
+    const prefix = path.join(artifactRoot, `${safeLabel}-page-${index + 1}`);
+    await page.screenshot({ path: `${prefix}.png`, fullPage: true }).catch(() => {});
+    await page.content().then(content => fs.writeFileSync(`${prefix}.html`, content, 'utf8')).catch(() => {});
+  }
+}
+
 async function main() {
   const server = http.createServer(serveStatic);
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -1819,6 +1834,9 @@ async function main() {
 
     assert.deepEqual(errors, []);
     console.log('Headless desktop/mobile/modal/offline/cache/accessibility smoke passed.');
+  } catch (error) {
+    await writeFailureArtifacts(context, 'chromium', error);
+    throw error;
   } finally {
     await context.setOffline(false).catch(() => {});
     await browser.close();
@@ -1826,7 +1844,7 @@ async function main() {
   }
 }
 
-module.exports = { addNetworkFixtures, serveStatic, waitForApp };
+module.exports = { addNetworkFixtures, serveStatic, waitForApp, writeFailureArtifacts };
 
 if (require.main === module) {
   main().catch((error) => {
