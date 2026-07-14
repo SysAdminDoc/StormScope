@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.109.0 - 2026-07-14
+
+- Added dry-run and atomic release preparation with prevalidated semver, lockfile, application, service-worker cache, badge, changelog, and User-Agent updates plus rollback if any replace or parity check fails.
+- Restored release and deployment parity at the current version with a deterministic verified source archive, refreshed install screenshots, and accurate public repository metadata. SW v82.
+
 ## v0.108.0 - 2026-07-14
 
 - Added SHA-pinned GitHub Actions CI for every push and pull request. The workflow installs the exact Python, npm, lockfile, and Playwright browser toolchain, runs the same complete local gate, and retains stack traces, page HTML, and screenshots when a browser contract fails.

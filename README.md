@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.108.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.109.0-blue)](CHANGELOG.md)
 [![CI](https://github.com/SysAdminDoc/StormScope/actions/workflows/ci.yml/badge.svg)](https://github.com/SysAdminDoc/StormScope/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
@@ -121,7 +121,16 @@ It validates the camera corpus and deterministic shards, verifies vendored depen
 
 The same deterministic gate protects every push and pull request in GitHub Actions. Browser failures retain the failing page screenshot, HTML, and stack trace for seven days. A read-only weekly audit checks exact pins against OSV/NVD and reports newer direct Python, Node, and vendored releases without changing project files.
 
-Build the one release asset only from a clean committed tree:
+Preview a release-wide version/cache update without changing files, then apply the same validated transaction:
+
+```bash
+python scripts/package_release.py --prepare "$NEXT_VERSION" --date "$RELEASE_DATE" --note "$RELEASE_NOTE" --dry-run
+python scripts/package_release.py --prepare "$NEXT_VERSION" --date "$RELEASE_DATE" --note "$RELEASE_NOTE"
+```
+
+`NEXT_VERSION` must be a newer `X.Y.Z`, `RELEASE_DATE` must be `YYYY-MM-DD`, and `RELEASE_NOTE` is a single changelog bullet (repeat `--note` for more). Preparation prevalidates and then atomically replaces every package/app/badge/User-Agent surface, increments the SW cache, and inserts the dated changelog entry; any failed replace or parity check restores the original bytes.
+
+Build the one release asset only from the resulting clean committed tree:
 
 ```bash
 python scripts/package_release.py --clean
