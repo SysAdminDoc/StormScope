@@ -421,6 +421,20 @@ button:focus-visible {
   margin-bottom: 12px;
 }
 
+/* Group heading inside the layers panel — separates the layer families and the
+   preferences without adding heavy containers. */
+.panel-subhead {
+  margin: 14px 0 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+.panel-subhead:first-of-type { margin-top: 4px; }
+
 .toggle-row {
   display: flex;
   align-items: center;
@@ -714,7 +728,7 @@ button:focus-visible {
 .place-results { display: grid; gap: 3px; margin: 4px 0 0; padding: 0; list-style: none; }
 .place-results:empty { display: none; }
 .place-result { padding: 7px 9px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-inset); color: var(--text); font-size: 12px; cursor: pointer; }
-.place-result:hover, .place-result:focus-visible { border-color: var(--accent); outline: none; }
+.place-result:hover, .place-result:focus-visible, .place-result.active { border-color: var(--accent); background: var(--bg-elevated); outline: none; }
 .place-attribution { margin: 6px 0 0; color: var(--text-dim); font-size: 10px; }
 .place-attribution a { color: inherit; }
 .search-filter-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
@@ -1360,14 +1374,13 @@ button:focus-visible {
   .feed-refresh-indicator {
     animation: none;
   }
-  .camera-marker {
-    transition: none;
-  }
-  .header-btn,
-  .radar-btn,
-  .modal-close-btn,
-  .alert-detail-dismiss {
-    transition: none;
+  /* Neutralize all remaining transitions/animations for users who ask for
+     reduced motion, without removing any functionality. */
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 

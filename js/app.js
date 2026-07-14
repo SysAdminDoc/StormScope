@@ -18,7 +18,7 @@
   })();
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.100.0';
+  var APP_VERSION = '0.101.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -297,6 +297,11 @@
       if (parsed.protocol === 'https:' || parsed.protocol === 'http:') return parsed.href;
     } catch (e) { /* fall through */ }
     return '#';
+  }
+
+  function prefersReducedMotion() {
+    return typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
   function sourceLabel(value) {
@@ -4875,7 +4880,7 @@
       button.disabled = false;
       var lat = position.coords.latitude;
       var lon = position.coords.longitude;
-      map.setView([lat, lon], Math.max(map.getZoom(), 9));
+      map.setView([lat, lon], Math.max(map.getZoom(), 9), { animate: !prefersReducedMotion() });
       clearLocateMarker();
       locateMarker = L.circleMarker([lat, lon], {
         radius: 9, color: '#4dabf7', weight: 3, fillColor: '#4dabf7', fillOpacity: 0.35
@@ -4898,42 +4903,65 @@
   var placeSearchTimer = null;
   var placeSearchAbort = null;
   var placeResults = [];
+  var placeActiveIndex = -1;
+
+  function searchPanelHidden() {
+    return document.getElementById('search-panel').classList.contains('hidden');
+  }
+
+  // Cancels any pending debounce and in-flight geocode request. Called on
+  // teardown (unload, tab hide) and whenever the search surface closes so a
+  // late response can never re-render into a hidden panel or fire a stray
+  // aria-live announcement.
+  function resetPlaceSearch() {
+    clearTimeout(placeSearchTimer);
+    placeSearchTimer = null;
+    if (placeSearchAbort) {
+      placeSearchAbort.abort();
+      placeSearchAbort = null;
+    }
+  }
 
   function clearPlaceResults() {
     placeResults = [];
+    placeActiveIndex = -1;
     document.getElementById('place-results').replaceChildren();
-    document.getElementById('place-query').setAttribute('aria-expanded', 'false');
+    var input = document.getElementById('place-query');
+    input.setAttribute('aria-expanded', 'false');
+    input.removeAttribute('aria-activedescendant');
+  }
+
+  // WAI-ARIA combobox pattern: focus stays in the input; the active option is
+  // tracked via aria-activedescendant rather than moving DOM focus.
+  function setActivePlaceResult(index) {
+    var list = document.getElementById('place-results');
+    var input = document.getElementById('place-query');
+    Array.prototype.forEach.call(list.children, function (child, i) {
+      var active = i === index;
+      child.classList.toggle('active', active);
+      child.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    placeActiveIndex = index;
+    if (index >= 0 && list.children[index]) {
+      input.setAttribute('aria-activedescendant', 'place-result-' + index);
+      list.children[index].scrollIntoView({ block: 'nearest' });
+    } else {
+      input.removeAttribute('aria-activedescendant');
+    }
   }
 
   function selectPlaceResult(result) {
     if (!result) return;
-    map.setView([result.lat, result.lon], Math.max(map.getZoom(), 11));
+    resetPlaceSearch();
+    map.setView([result.lat, result.lon], Math.max(map.getZoom(), 11), { animate: !prefersReducedMotion() });
     document.getElementById('place-status').textContent = tr('place.centered', { place: result.label });
     clearPlaceResults();
   }
 
-  function handlePlaceResultKey(event, index) {
-    var list = document.getElementById('place-results');
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      selectPlaceResult(placeResults[index]);
-    } else if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      var next = list.children[index + 1];
-      if (next) next.focus();
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      if (index === 0) document.getElementById('place-query').focus();
-      else list.children[index - 1].focus();
-    } else if (event.key === 'Escape') {
-      event.preventDefault();
-      clearPlaceResults();
-      document.getElementById('place-query').focus();
-    }
-  }
-
   function renderPlaceResults(results) {
+    if (searchPanelHidden()) return;
     placeResults = results;
+    placeActiveIndex = -1;
     var list = document.getElementById('place-results');
     var input = document.getElementById('place-query');
     list.replaceChildren();
@@ -4941,14 +4969,14 @@
       var item = document.createElement('li');
       item.className = 'place-result';
       item.setAttribute('role', 'option');
+      item.setAttribute('aria-selected', 'false');
       item.id = 'place-result-' + index;
-      item.tabIndex = -1;
       item.textContent = result.label;
       item.addEventListener('click', function () { selectPlaceResult(result); });
-      item.addEventListener('keydown', function (event) { handlePlaceResultKey(event, index); });
       list.appendChild(item);
     });
     input.setAttribute('aria-expanded', results.length ? 'true' : 'false');
+    input.removeAttribute('aria-activedescendant');
     document.getElementById('place-status').textContent = results.length
       ? tr('place.results', { count: localNumber(results.length) })
       : tr('place.noResults');
@@ -4971,6 +4999,7 @@
         renderPlaceResults(StormScopeGeocode.parseNominatim(await fallback.json()));
       } catch (nominatimError) {
         if (nominatimError.name === 'AbortError') return;
+        if (searchPanelHidden()) return;
         clearPlaceResults();
         document.getElementById('place-status').textContent = tr('place.error');
       }
@@ -4994,19 +5023,26 @@
     document.getElementById('btn-locate').addEventListener('click', locateMe);
     document.getElementById('place-query').addEventListener('input', schedulePlaceSearch);
     document.getElementById('place-query').addEventListener('keydown', function (event) {
-      if (event.key === 'ArrowDown' && placeResults.length) {
+      if (event.key === 'ArrowDown') {
+        if (!placeResults.length) return;
         event.preventDefault();
-        document.getElementById('place-results').children[0].focus();
+        setActivePlaceResult(placeActiveIndex + 1 >= placeResults.length ? 0 : placeActiveIndex + 1);
+      } else if (event.key === 'ArrowUp') {
+        if (!placeResults.length) return;
+        event.preventDefault();
+        setActivePlaceResult(placeActiveIndex <= 0 ? placeResults.length - 1 : placeActiveIndex - 1);
       } else if (event.key === 'Enter') {
         event.preventDefault();
         clearTimeout(placeSearchTimer);
-        if (placeResults.length) selectPlaceResult(placeResults[0]);
+        if (placeResults.length) selectPlaceResult(placeResults[placeActiveIndex >= 0 ? placeActiveIndex : 0]);
         else {
           var query = StormScopeGeocode.normalizeQuery(this.value);
           if (query.length >= StormScopeGeocode.MIN_QUERY) runPlaceSearch(query);
         }
       } else if (event.key === 'Escape') {
+        resetPlaceSearch();
         clearPlaceResults();
+        document.getElementById('place-status').textContent = '';
       }
     });
     document.getElementById('open-comparison').addEventListener('click', openMapComparison);
@@ -5642,6 +5678,7 @@
         if (convectiveAbort) convectiveAbort.abort();
         if (watchAbort) watchAbort.abort();
         clearTimeout(alertRefreshTimer);
+        clearTimeout(alertMoveTimer);
         clearTimeout(lightningRefreshTimer);
         clearTimeout(satelliteRefreshTimer);
         clearTimeout(satelliteMoveTimer);
@@ -5650,9 +5687,11 @@
         clearTimeout(usgsGaugeRefreshTimer);
         clearTimeout(usgsGaugeMoveTimer);
         clearTimeout(wildfireRefreshTimer);
+        clearTimeout(wildfireMoveTimer);
         clearTimeout(earthquakeRefreshTimer);
         clearTimeout(convectiveRefreshTimer);
         clearTimeout(watchRefreshTimer);
+        resetPlaceSearch();
         return;
       }
 
@@ -5720,7 +5759,11 @@
       if (wpcFloodAbort) wpcFloodAbort.abort();
       if (usgsGaugeAbort) usgsGaugeAbort.abort();
       if (wildfireAbort) wildfireAbort.abort();
+      if (earthquakeAbort) earthquakeAbort.abort();
+      if (convectiveAbort) convectiveAbort.abort();
+      if (watchAbort) watchAbort.abort();
       if (summaryWildfireAbort) summaryWildfireAbort.abort();
+      resetPlaceSearch();
       if (cameraStore) cameraStore.cancel();
       if (monitorRegistry) monitorRegistry.destroyAll();
       if (localOverlayDatabase) localOverlayDatabase.close();

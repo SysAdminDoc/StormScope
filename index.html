@@ -79,58 +79,29 @@
 
   <div id="layers-panel" class="panel hidden" role="region" aria-label="Map layers">
     <h3>Layers</h3>
+    <h4 class="panel-subhead">Base map</h4>
     <label class="toggle-row">
       <input type="checkbox" id="toggle-radar" checked>
       <span>Weather Radar</span>
-    </label>
-    <label class="toggle-row">
-      <input type="checkbox" id="toggle-cameras" checked>
-      <span>Live Cameras</span>
     </label>
     <label class="toggle-row">
       <input type="checkbox" id="toggle-coverage">
       <span>Radar Coverage</span>
     </label>
     <label class="toggle-row">
+      <input type="checkbox" id="toggle-cameras" checked>
+      <span>Live Cameras</span>
+    </label>
+    <h4 class="panel-subhead">Warnings &amp; watches</h4>
+    <label class="toggle-row">
       <input type="checkbox" id="toggle-alerts" checked>
       <span>NWS Alerts</span>
-    </label>
-    <label class="toggle-row">
-      <input type="checkbox" id="toggle-wpc-outlooks">
-      <span>WPC Rainfall &amp; Flood Outlooks</span>
-    </label>
-    <div class="select-row context-layer-option">
-      <label for="wpc-outlook-day">Outlook day</label>
-      <select id="wpc-outlook-day">
-        <option value="1">Day 1</option>
-        <option value="2">Day 2</option>
-        <option value="3">Day 3</option>
-      </select>
-    </div>
-    <label class="toggle-row">
-      <input type="checkbox" id="toggle-usgs-gauges">
-      <span>USGS Flood Gauges</span>
-    </label>
-    <label class="toggle-row">
-      <input type="checkbox" id="toggle-satellite">
-      <span>GOES GeoColor Satellite</span>
-    </label>
-    <label class="toggle-row">
-      <input type="checkbox" id="toggle-tropical">
-      <span>NHC Tropical Cyclones</span>
-    </label>
-    <label class="toggle-row">
-      <input type="checkbox" id="toggle-lightning">
-      <span>Lightning Density</span>
-    </label>
-    <label class="toggle-row">
-      <input type="checkbox" id="toggle-wildfires">
-      <span>Current Wildfire Perimeters</span>
     </label>
     <label class="toggle-row">
       <input type="checkbox" id="toggle-watches">
       <span>Severe &amp; Tornado Watches</span>
     </label>
+    <h4 class="panel-subhead">Storm outlooks</h4>
     <label class="toggle-row">
       <input type="checkbox" id="toggle-convective">
       <span>SPC Convective Outlooks</span>
@@ -143,6 +114,31 @@
         <option value="3">Day 3</option>
       </select>
     </div>
+    <label class="toggle-row">
+      <input type="checkbox" id="toggle-wpc-outlooks">
+      <span>WPC Rainfall &amp; Flood Outlooks</span>
+    </label>
+    <div class="select-row context-layer-option">
+      <label for="wpc-outlook-day">Outlook day</label>
+      <select id="wpc-outlook-day">
+        <option value="1">Day 1</option>
+        <option value="2">Day 2</option>
+        <option value="3">Day 3</option>
+      </select>
+    </div>
+    <h4 class="panel-subhead">Hazard context</h4>
+    <label class="toggle-row">
+      <input type="checkbox" id="toggle-lightning">
+      <span>Lightning Density</span>
+    </label>
+    <label class="toggle-row">
+      <input type="checkbox" id="toggle-wildfires">
+      <span>Current Wildfire Perimeters</span>
+    </label>
+    <label class="toggle-row">
+      <input type="checkbox" id="toggle-usgs-gauges">
+      <span>USGS Flood Gauges</span>
+    </label>
     <label class="toggle-row">
       <input type="checkbox" id="toggle-earthquakes">
       <span>USGS Earthquakes</span>
@@ -166,6 +162,16 @@
         <option value="month">Past month</option>
       </select>
     </div>
+    <h4 class="panel-subhead">Storms &amp; imagery</h4>
+    <label class="toggle-row">
+      <input type="checkbox" id="toggle-tropical">
+      <span>NHC Tropical Cyclones</span>
+    </label>
+    <label class="toggle-row">
+      <input type="checkbox" id="toggle-satellite">
+      <span>GOES GeoColor Satellite</span>
+    </label>
+    <h4 class="panel-subhead">Radar &amp; display</h4>
     <div class="slider-row">
       <label for="radar-opacity">Radar Opacity</label>
       <input type="range" id="radar-opacity" min="0" max="100" value="65" aria-label="Radar opacity">
@@ -177,6 +183,7 @@
         <option value="metric">Metric (°C, km/h)</option>
       </select>
     </div>
+    <h4 class="panel-subhead">Preferences</h4>
     <div class="select-row">
       <label for="app-locale">Language</label>
       <select id="app-locale">

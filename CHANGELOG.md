@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.101.0 - 2026-07-14
+
+- Audit pass — reliability, accessibility, and UX.
+- Fixed context-layer teardown leaks: the earthquake, convective, and severe-watch fetch controllers are now aborted on `beforeunload` (previously only their timers were cleared), and the place-search debounce timer and in-flight request are cancelled on unload and tab-hide. Added the missing `alertMoveTimer`/`wildfireMoveTimer` clears to the tab-hidden branch.
+- Reworked place/address search to the correct WAI-ARIA combobox pattern: focus stays in the input and the active option is tracked via `aria-activedescendant` (keyboard Up/Down now wrap and highlight without moving DOM focus). A late geocode response can no longer render into a closed search panel or fire a stray screen-reader announcement, and selecting a result aborts any in-flight request so stale results can't reappear.
+- Grouped the layers panel into labeled sections — Base map, Warnings & watches, Storm outlooks, Hazard context, Storms & imagery, Radar & display, Preferences — reducing the flat 13-toggle list to scannable families with semantic headings (EN/ES).
+- Completed reduced-motion support: all remaining transitions/animations are neutralized under `prefers-reduced-motion`, and the locate-me and place-search map recenters skip the pan/zoom animation.
+- Removed a dead duplicate `return` in the service-worker fetch router. SW v74.
+
 ## v0.100.0 - 2026-07-14
 
 - Added keyless place/address geocoding search at the top of the camera search panel (Photon primary, Nominatim fallback — both OpenStreetMap). Debounced type-ahead (≥300 ms) respects provider fair-use limits, returns up to five results as an accessible listbox (arrow/Enter/Escape keyboard navigation), pans and zooms the map on selection, shows OpenStreetMap attribution, and degrades gracefully when both providers fail. Queries are used only for the in-session map view and are never stored, shared, or added to scene links. Added `js/geocode.js` with unit + headless coverage, EN/ES localization, and `photon.komoot.io`/`nominatim.openstreetmap.org` in `connect-src`. SW v73.

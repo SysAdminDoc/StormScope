@@ -604,6 +604,24 @@ async function main() {
     await page.locator('#place-results .place-result').first().waitFor({ state: 'visible' });
     assert.equal(await page.locator('#place-results .place-result').count(), 2);
     assert.match(await page.locator('#place-status').textContent(), /places found/);
+    // Combobox keyboard pattern: focus stays in the input and the active option
+    // is tracked via aria-activedescendant (not DOM focus).
+    await page.locator('#place-query').focus();
+    await page.keyboard.press('ArrowDown');
+    assert.equal(await page.locator('#place-query').getAttribute('aria-activedescendant'), 'place-result-0');
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'place-query');
+    assert.equal(await page.locator('#place-results .place-result.active').count(), 1);
+    await page.keyboard.press('ArrowUp'); // wraps to last
+    assert.equal(await page.locator('#place-query').getAttribute('aria-activedescendant'), 'place-result-1');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => {
+      const center = window._stormscope.getMap().getCenter();
+      return Math.abs(center.lat - 47.6101) < 0.5; // Bellevue (second result)
+    }, { timeout: 5000 });
+    assert.equal(await page.locator('#place-query').getAttribute('aria-activedescendant'), null);
+    // Re-run and select via mouse click to cover that path too.
+    await page.locator('#place-query').fill('Seattle');
+    await page.locator('#place-results .place-result').first().waitFor({ state: 'visible' });
     await page.locator('#place-results .place-result').first().click();
     await page.waitForFunction(() => {
       const center = window._stormscope.getMap().getCenter();
