@@ -18,7 +18,7 @@
   })();
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.101.0';
+  var APP_VERSION = '0.102.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -2742,6 +2742,18 @@
     var scroller = document.getElementById('camera-results-scroll');
     list.replaceChildren();
     var results = currentCameraResults;
+
+    // Helpful empty state once the corpus is loaded and a search/filter matches
+    // nothing — a blank list reads as broken.
+    if (!results.length && allCameras.length && !cameraCatalogDeferred) {
+      var emptyItem = document.createElement('li');
+      emptyItem.className = 'camera-result-empty';
+      emptyItem.textContent = document.getElementById('camera-favorites').checked
+        ? tr('search.noFavorites')
+        : tr('search.noMatches');
+      list.appendChild(emptyItem);
+      return;
+    }
 
     var virtual = StormScopeCameraStore.virtualize(results, {
       scrollTop: scroller.scrollTop,

@@ -1089,6 +1089,13 @@ async function main() {
       const item = document.activeElement && document.activeElement.closest('.camera-result');
       return item && item.getAttribute('aria-posinset') === '1';
     });
+    // Empty state: a query that matches nothing shows helpful guidance, not a blank list.
+    await page.locator('#camera-query').fill('zzzznomatchxyzzz');
+    await page.locator('.camera-result-empty').waitFor({ state: 'visible' });
+    assert.match(await page.locator('.camera-result-empty').textContent(), /No cameras match/);
+    assert.equal(await page.locator('.camera-result').count(), 0);
+    await page.locator('#camera-query').fill('Alabama');
+    await page.locator('.camera-result').first().waitFor({ state: 'visible' });
     await page.locator('#camera-type').selectOption('image');
     await page.waitForFunction(() => {
       const results = window._stormscope.getCameraResults();

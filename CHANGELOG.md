@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.102.0 - 2026-07-14
+
+- Added a helpful empty state to the camera search results: once the corpus is loaded, a query or filter that matches nothing now shows calm guidance ("No cameras match your search…", or a favorites-specific hint when the Favorites-only filter is active) instead of a blank list. EN/ES. SW v75.
+
 ## v0.101.0 - 2026-07-14
 
 - Audit pass — reliability, accessibility, and UX.
