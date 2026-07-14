@@ -103,6 +103,7 @@ function loadWorker(options) {
     self: {
       location: { origin: 'https://example.test' },
       navigator: settings.navigator || {},
+      registration: settings.registration || {},
       addEventListener(type, handler) { handlers[type] = handler; },
       skipWaiting: settings.skipWaiting || (() => Promise.resolve()),
       clients: {
@@ -117,6 +118,7 @@ function loadWorker(options) {
 }
 
 test('activation deletes only stale StormScope caches', async () => {
+  let preloadEnabled = 0;
   const worker = loadWorker({
     cacheNames: [
       'stormscope-shell-v0',
@@ -124,12 +126,23 @@ test('activation deletes only stale StormScope caches', async () => {
       tileCache,
       dataCache,
       'another-app-cache'
-    ]
+    ],
+    registration: { navigationPreload: { enable() { preloadEnabled += 1; return Promise.resolve(); } } }
   });
   let lifetime;
   worker.handlers.activate({ waitUntil(promise) { lifetime = promise; } });
   await lifetime;
   assert.deepEqual(worker.deleted, ['stormscope-shell-v0']);
+  assert.equal(preloadEnabled, 1);
+});
+
+test('activation tolerates unavailable or rejected navigation preload', async () => {
+  for (const registration of [{}, { navigationPreload: { enable: () => Promise.reject(new Error('unsupported')) } }]) {
+    const worker = loadWorker({ registration });
+    let lifetime;
+    worker.handlers.activate({ waitUntil(promise) { lifetime = promise; } });
+    await lifetime;
+  }
 });
 
 test('tile caching rejects lookalike provider hosts', () => {
@@ -474,6 +487,42 @@ test('transient navigation responses fall back to the cached shell without hidin
   });
   assert.equal(await notFoundWorker.context.navigationNetworkFirst(
     request('https://example.test/missing', 'navigate')), notFound);
+});
+
+test('navigation preload is consumed once and retains the offline shell fallback', async () => {
+  const shell = response({ size: 10 });
+  const preloaded = response({ size: 20 });
+  let fetches = 0;
+  const worker = loadWorker({
+    cacheMatch: value => Promise.resolve(value === './index.html' ? shell : undefined),
+    fetch: () => { fetches += 1; return Promise.reject(new Error('unexpected fetch')); }
+  });
+  const navigation = request('https://example.test/', 'navigate');
+  assert.equal(await worker.context.navigationNetworkFirst(navigation, Promise.resolve(preloaded)), preloaded);
+  assert.equal(fetches, 0);
+
+  const transient = response({ ok: false, status: 503 });
+  assert.equal(await worker.context.navigationNetworkFirst(navigation, Promise.resolve(transient)), shell);
+  assert.equal(fetches, 0);
+
+  assert.equal(await worker.context.navigationNetworkFirst(navigation, Promise.reject(new Error('preload failed'))), shell);
+  assert.equal(fetches, 1);
+});
+
+test('navigation fetch routing forwards the event preload response', async () => {
+  const preloaded = response({ size: 20 });
+  let fetches = 0;
+  const worker = loadWorker({
+    fetch: () => { fetches += 1; return Promise.reject(new Error('unexpected fetch')); }
+  });
+  let routed;
+  worker.handlers.fetch({
+    request: request('https://example.test/', 'navigate'),
+    preloadResponse: Promise.resolve(preloaded),
+    respondWith(promise) { routed = promise; }
+  });
+  assert.equal(await routed, preloaded);
+  assert.equal(fetches, 0);
 });
 
 test('opaque tile fallback is returned but never cached', async () => {

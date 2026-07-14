@@ -1665,7 +1665,11 @@ async function main() {
     assert.equal(await invalidScenePage.locator('#fatal-recovery').isHidden(), true);
     await invalidScenePage.close();
 
-    await page.evaluate(() => navigator.serviceWorker.ready);
+    const navigationPreloadState = await page.evaluate(async () => {
+      const registration = await navigator.serviceWorker.ready;
+      return registration.navigationPreload ? registration.navigationPreload.getState() : null;
+    });
+    if (navigationPreloadState) assert.equal(navigationPreloadState.enabled, true);
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.locator('#camera-count').filter({ hasText: '36,592 indexed' }).waitFor({ state: 'visible' });
     const onlineGeneration = await page.evaluate(() => window._stormscope.getCameraLoadMetrics().index.generated_at);

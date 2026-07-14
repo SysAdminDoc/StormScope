@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.117.0 - 2026-07-14
+
+- Enabled fail-soft service-worker navigation preload so online navigations start during worker boot without duplicate fetches while preserving cached-shell recovery. SW v90.
+
 ## v0.116.0 - 2026-07-14
 
 - Alert refreshes now diff and reuse map layers so open details survive polling without LayerGroup churn; service-worker strategy documentation now matches browser-network fallthrough. SW v89.

@@ -16,7 +16,7 @@
  */
 'use strict';
 
-var VERSION = 'v89';
+var VERSION = 'v90';
 var RUNTIME_CACHE_VERSION = 'v2';
 var SHELL_CACHE = 'stormscope-shell-' + VERSION;
 var TILE_CACHE = 'stormscope-tiles-' + RUNTIME_CACHE_VERSION;
@@ -106,7 +106,11 @@ self.addEventListener('activate', function (event) {
         return null;
       }));
     }).then(function () {
-      return self.clients.claim();
+      var preload = self.registration && self.registration.navigationPreload;
+      var enablePreload = preload && typeof preload.enable === 'function'
+        ? preload.enable().catch(function () { return null; })
+        : Promise.resolve(null);
+      return Promise.all([self.clients.claim(), enablePreload]);
     })
   );
 });
@@ -327,8 +331,13 @@ function cachedShellFallback() {
   });
 }
 
-function navigationNetworkFirst(request) {
-  return fetch(request).then(function (response) {
+function navigationNetworkFirst(request, preloadResponse) {
+  var network = preloadResponse ? Promise.resolve(preloadResponse).then(function (response) {
+    return response || fetch(request);
+  }, function () {
+    return fetch(request);
+  }) : fetch(request);
+  return network.then(function (response) {
     if (!isTransientHttpResponse(response)) return response;
     return cachedShellFallback().then(function (cached) { return cached || response; });
   }).catch(function (error) {
@@ -604,7 +613,7 @@ self.addEventListener('fetch', function (event) {
   // Navigations: network-first, offline fallback to cached shell.
   if (request.mode === 'navigate') {
     runtimeCachingPaused = false;
-    event.respondWith(navigationNetworkFirst(request));
+    event.respondWith(navigationNetworkFirst(request, event.preloadResponse));
     return;
   }
 
