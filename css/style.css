@@ -104,6 +104,7 @@ button:focus-visible {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0; /* allow the wordmark to truncate before controls clip */
 }
 
 .logo-icon {
@@ -118,12 +119,16 @@ button:focus-visible {
   font-weight: 700;
   letter-spacing: 0.5px;
   color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .header-right {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0; /* controls always stay fully visible and tappable */
 }
 
 .status-chip {
@@ -1448,9 +1453,19 @@ button:focus-visible {
     display: none;
   }
 
+  /* On narrow headers the constant "Online" chip crowds the controls and can
+     clip a button; keep only the actionable offline state visible. */
+  #connection-state:not(.offline) {
+    display: none;
+  }
+
   .status-chip {
     min-height: 26px;
     padding: 3px 7px;
+  }
+
+  .header-right {
+    gap: 4px;
   }
 
   .search-panel {

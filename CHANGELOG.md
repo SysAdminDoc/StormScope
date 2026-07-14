@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.103.0 - 2026-07-14
+
+- Fixed the header overflowing and clipping a control on narrow phones (≤360 px): the constant "Online" connection chip is now hidden on mobile (the actionable Offline state still shows), and the header is made width-robust so the wordmark truncates before any control clips — all four header buttons stay fully visible and tappable down to 320 px. SW v76.
+
 ## v0.102.0 - 2026-07-14
 
 - Added a helpful empty state to the camera search results: once the corpus is loaded, a query or filter that matches nothing now shows calm guidance ("No cameras match your search…", or a favorites-specific hint when the Favorites-only filter is active) instead of a blank list. EN/ES. SW v75.
