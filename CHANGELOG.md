@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.98.0 - 2026-07-14
+
+- Added an optional, default-off SPC convective (categorical) outlook layer from the keyless NOAA `SPC_wx_outlks` ArcGIS service, with a Day 1/2/3 selector. Categorical risk polygons (general thunderstorm → marginal → slight → enhanced → moderate → high) use official SPC colors, transfer-limit pagination, issue/valid times, freshness/attribution, last-good recovery, and DOM-only popups that state the guidance is not a warning. The layer participates in shareable scenes and workflow profiles and reuses the already-allowlisted `mapservices.weather.noaa.gov` origin (no CSP change). Added `js/convective-outlooks.js` with unit coverage, EN/ES localization, and headless day-switch coverage. SW v71.
+
 ## v0.97.0 - 2026-07-14
 
 - Added an optional, default-off USGS earthquakes layer from the keyless static GeoJSON summary feeds (`Access-Control-Allow-Origin: *`). Selectable magnitude (significant/M4.5+/M2.5+/M1.0+/all) and period (hour/day/week/month) drive magnitude-scaled, magnitude-colored markers with DOM-only popups (place, magnitude, depth, time, official USGS event link scheme-guarded to http/https). Freshness, attribution, and independent abort-on-teardown match the other context layers; the layer participates in shareable scenes and workflow profiles. Added `js/earthquakes.js` with unit coverage, EN/ES localization, a hostile-content headless regression, and `earthquake.usgs.gov` in `connect-src`. SW v70.

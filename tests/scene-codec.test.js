@@ -9,7 +9,7 @@ function scene(overrides = {}) {
     map: { lat: 39.123456, lon: -98.654321, zoom: 7 },
     layers: {
       radar: true, cameras: true, coverage: false, alerts: true,
-      lightning: false, wildfires: true, satellite: false, tropical: true, wpcOutlooks: true, usgsGauges: false, earthquakes: false
+      lightning: false, wildfires: true, satellite: false, tropical: true, wpcOutlooks: true, usgsGauges: false, earthquakes: false, convective: false
     },
     radar: { opacity: 0.72, palette: 'colorblind', speed: 400, frameTime: 1783796400000 },
     alertSeverity: 'severe',
@@ -27,7 +27,7 @@ test('versioned scene token round-trips every documented public field', () => {
     map: { lat: 39.12346, lon: -98.65432, zoom: 7 },
     layers: {
       radar: true, cameras: true, coverage: false, alerts: true,
-      lightning: false, wildfires: true, satellite: false, tropical: true, wpcOutlooks: true, usgsGauges: false, earthquakes: false
+      lightning: false, wildfires: true, satellite: false, tropical: true, wpcOutlooks: true, usgsGauges: false, earthquakes: false, convective: false
     },
     radar: { opacity: 0.72, palette: 'colorblind', speed: 400, frameTime: 1783796400000 },
     alertSeverity: 'severe',
@@ -62,6 +62,7 @@ test('decodes legacy scene tokens with appended layers disabled and Day 1 select
   assert.equal(decoded.layers.wpcOutlooks, false);
   assert.equal(decoded.layers.usgsGauges, false);
   assert.equal(decoded.layers.earthquakes, false);
+  assert.equal(decoded.layers.convective, false);
   assert.equal(decoded.layers.wildfires, true);
   assert.equal(decoded.outlookDay, 1);
 });
@@ -75,7 +76,7 @@ test('invalid, oversized, future, and old scene URLs fail closed', () => {
   assert.throws(() => codec.encode(scene({ radar: { opacity: 1, palette: 'animated', speed: 800, frameTime: null } })), /palette/);
   assert.throws(() => codec.encode(scene({ radar: { opacity: 1, palette: 'standard', speed: 123, frameTime: null } })), /speed/);
   const excessiveLayerBits = Buffer.from(JSON.stringify({
-    v: 1, m: [0, 0, 1], l: 2048, r: [50, 0, 0, null], a: 0, f: ['', '', 0, 0, 0, 0], c: null
+    v: 1, m: [0, 0, 1], l: 4096, r: [50, 0, 0, null], a: 0, f: ['', '', 0, 0, 0, 0], c: null
   }), 'utf8').toString('base64url');
   assert.throws(() => codec.decode('1.' + excessiveLayerBits), /shape/);
   assert.equal(codec.fromHash('#unrelated=value'), null);

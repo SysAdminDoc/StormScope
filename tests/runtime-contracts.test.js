@@ -295,6 +295,21 @@ test('official context layers are optional, attributed, and cannot obscure warni
   assert.match(app, /StormScopeContextLayers\.buildWildfireQueries/);
 });
 
+test('SPC convective outlooks are an optional, attributed, keyless layer wired end to end', () => {
+  assert.match(html, /js\/convective-outlooks\.js/);
+  assert.match(serviceWorker, /\.\/js\/convective-outlooks\.js/);
+  assert.match(html, /<input[^>]*type="checkbox"[^>]*id="toggle-convective"[^>]*>/);
+  assert.match(html, /id="convective-day"/);
+  assert.match(html, /id="convective-status"[^>]*role="status"/);
+  assert.match(app, /function refreshConvectiveOutlooks/);
+  assert.match(app, /function disableConvectiveOutlooks/);
+  assert.match(app, /StormScopeConvectiveOutlooks\.fetchAllPages/);
+  assert.match(app, /convective: document\.getElementById\('toggle-convective'\)\.checked/);
+  // Host already CSP-allowed; no new connect-src origin required.
+  const csp = html.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)"/)[1];
+  assert.match(csp, /https:\/\/mapservices\.weather\.noaa\.gov/);
+});
+
 test('USGS earthquakes are an optional, attributed, keyless layer wired end to end', () => {
   assert.match(html, /js\/earthquakes\.js/);
   assert.match(serviceWorker, /\.\/js\/earthquakes\.js/);

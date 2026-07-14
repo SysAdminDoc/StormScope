@@ -246,6 +246,26 @@ async function addNetworkFixtures(page, metrics, options) {
       });
       return;
     }
+    if (url.startsWith('https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/SPC_wx_outlks/MapServer/') && url.includes('/query')) {
+      const offset = Number(new URL(url).searchParams.get('resultOffset') || 0);
+      await route.fulfill({
+        contentType: 'application/geo+json', headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ type: 'FeatureCollection', exceededTransferLimit: false, features: [
+          { type: 'Feature', geometry: { type: 'Polygon', coordinates: [[[-100 + offset, 37], [-96 + offset, 37], [-96 + offset, 41], [-100 + offset, 41], [-100 + offset, 37]]] },
+            properties: { objectid: offset + 1, label: 'ENH', dn: 5, issue: Date.now() - 3600000, valid: Date.now() - 1800000, expire: Date.now() + 3600000, idp_source: 'SPC' } },
+          { type: 'Feature', geometry: { type: 'Polygon', coordinates: [[[-99, 38], [-97, 38], [-97, 40], [-99, 40], [-99, 38]]] },
+            properties: { objectid: offset + 2, label: 'MRGL', dn: 3 } }
+        ] })
+      });
+      return;
+    }
+    if (url.startsWith('https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/SPC_wx_outlks/MapServer/')) {
+      await route.fulfill({
+        contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ editingInfo: { dataLastEditDate: Date.now() - 1800000 } })
+      });
+      return;
+    }
     if (url.startsWith('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/')) {
       await route.fulfill({
         contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' },
@@ -595,10 +615,10 @@ async function main() {
     const scrubber = page.locator('#radar-scrubber');
     assert.ok(Number(await scrubber.getAttribute('max')) > 0, 'radar timeline should expose multiple frames');
     assert.deepEqual(await page.evaluate(() => window._stormscope.getContextState()), {
-      satellite: false, lightning: false, wildfires: false, tropical: false, wpcOutlooks: false, usgsGauges: false, earthquakes: false, satelliteStatus: 'off',
+      satellite: false, lightning: false, wildfires: false, tropical: false, wpcOutlooks: false, usgsGauges: false, earthquakes: false, convective: false, satelliteStatus: 'off',
       lightningStatus: 'off', wildfireStatus: 'off', tropicalStatus: 'off', tropicalCount: 0,
       wpcStatus: 'off', wpcCount: 0, wpcDay: 1, gaugeStatus: 'off', gaugeCount: 0,
-      earthquakeStatus: 'off', earthquakeCount: 0, satelliteZ: '315',
+      earthquakeStatus: 'off', earthquakeCount: 0, convectiveStatus: 'off', convectiveCount: 0, convectiveDay: 1, satelliteZ: '315',
       localOverlays: 0, rasterZ: '325', vectorZ: '390', localOverlayZ: '380', tropicalZ: '395', warningZ: '400', cameraZ: '600'
     });
     await page.getByRole('button', { name: 'Toggle layers panel' }).click();
@@ -700,10 +720,10 @@ async function main() {
     assert.match(await hostilePopup.locator('.incident-camera-status').textContent(), /nearby camera/);
     assert.ok(await hostilePopup.locator('.incident-camera-map').count() > 0);
     assert.deepEqual(await page.evaluate(() => window._stormscope.getContextState()), {
-      satellite: true, lightning: true, wildfires: true, tropical: true, wpcOutlooks: true, usgsGauges: true, earthquakes: false, satelliteStatus: 'ready',
+      satellite: true, lightning: true, wildfires: true, tropical: true, wpcOutlooks: true, usgsGauges: true, earthquakes: false, convective: false, satelliteStatus: 'ready',
       lightningStatus: 'ready', wildfireStatus: 'ready', tropicalStatus: 'ready', tropicalCount: 1,
       wpcStatus: 'ready', wpcCount: 2, wpcDay: 1, gaugeStatus: 'ready', gaugeCount: 1,
-      earthquakeStatus: 'off', earthquakeCount: 0, satelliteZ: '315',
+      earthquakeStatus: 'off', earthquakeCount: 0, convectiveStatus: 'off', convectiveCount: 0, convectiveDay: 1, satelliteZ: '315',
       localOverlays: 0, rasterZ: '325', vectorZ: '390', localOverlayZ: '380', tropicalZ: '395', warningZ: '400', cameraZ: '600'
     });
 
@@ -740,6 +760,25 @@ async function main() {
     assert.equal(await page.evaluate(() => window.__quakeHref), false);
     await page.locator('#toggle-earthquakes').uncheck();
     assert.equal((await page.evaluate(() => window._stormscope.getContextState())).earthquakes, false);
+
+    // SPC convective outlooks: toggle on, verify count/status/day, then switch day.
+    await page.evaluate(() => window._stormscope.getMap().closePopup());
+    await page.locator('.leaflet-popup-content').waitFor({ state: 'hidden' }).catch(() => {});
+    await page.locator('#toggle-convective').check();
+    await page.locator('#convective-status').filter({ hasText: '2 SPC risk areas' }).waitFor({ state: 'visible' });
+    const convectiveState = await page.evaluate(() => window._stormscope.getContextState());
+    assert.equal(convectiveState.convective, true);
+    assert.equal(convectiveState.convectiveStatus, 'ready');
+    assert.equal(convectiveState.convectiveCount, 2);
+    assert.equal(convectiveState.convectiveDay, 1);
+    await page.locator('#convective-day').selectOption('2');
+    await page.waitForFunction(() => window._stormscope.getContextState().convectiveDay === 2);
+    await page.locator('#convective-day').selectOption('1'); // restore default for later assertions
+    await page.locator('#toggle-convective').uncheck();
+    const convectiveOff = await page.evaluate(() => window._stormscope.getContextState());
+    assert.equal(convectiveOff.convective, false);
+    assert.equal(convectiveOff.convectiveDay, 1);
+
     const tropicalPopupOpened = await page.evaluate(() => {
       let opened = false;
       window._stormscope.getMap().eachLayer(layer => {
@@ -856,10 +895,10 @@ async function main() {
     await page.locator('#lightning-status').filter({ hasText: 'Official data unavailable' }).waitFor({ state: 'visible' });
     await page.locator('#wildfire-status').filter({ hasText: '2 wildfire perimeters' }).waitFor({ state: 'visible' });
     assert.deepEqual(await page.evaluate(() => window._stormscope.getContextState()), {
-      satellite: false, lightning: false, wildfires: true, tropical: false, wpcOutlooks: false, usgsGauges: false, earthquakes: false, satelliteStatus: 'off',
+      satellite: false, lightning: false, wildfires: true, tropical: false, wpcOutlooks: false, usgsGauges: false, earthquakes: false, convective: false, satelliteStatus: 'off',
       lightningStatus: 'error', wildfireStatus: 'ready', tropicalStatus: 'off', tropicalCount: 0,
       wpcStatus: 'off', wpcCount: 0, wpcDay: 2, gaugeStatus: 'off', gaugeCount: 0,
-      earthquakeStatus: 'off', earthquakeCount: 0, satelliteZ: '315',
+      earthquakeStatus: 'off', earthquakeCount: 0, convectiveStatus: 'off', convectiveCount: 0, convectiveDay: 1, satelliteZ: '315',
       localOverlays: 0, rasterZ: '325', vectorZ: '390', localOverlayZ: '380', tropicalZ: '395', warningZ: '400', cameraZ: '600'
     });
     await page.locator('#toggle-lightning').uncheck();
@@ -1224,7 +1263,7 @@ async function main() {
     const sharedScene = {
       map: { lat: 39.75, lon: -98.25, zoom: 6 },
       layers: { radar: true, cameras: true, coverage: false, alerts: true, lightning: false, wildfires: false, satellite: false, tropical: false,
-        wpcOutlooks: false, usgsGauges: false, earthquakes: false },
+        wpcOutlooks: false, usgsGauges: false, earthquakes: false, convective: false },
       radar: { opacity: 0.48, palette: 'contrast', speed: 400, frameTime: sceneFixture.frameTime },
       alertSeverity: 'severe',
       cameraFilters: {

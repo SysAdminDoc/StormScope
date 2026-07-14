@@ -128,6 +128,18 @@
       <span>Current Wildfire Perimeters</span>
     </label>
     <label class="toggle-row">
+      <input type="checkbox" id="toggle-convective">
+      <span>SPC Convective Outlooks</span>
+    </label>
+    <div class="select-row context-layer-option">
+      <label for="convective-day">Convective outlook day</label>
+      <select id="convective-day">
+        <option value="1">Day 1</option>
+        <option value="2">Day 2</option>
+        <option value="3">Day 3</option>
+      </select>
+    </div>
+    <label class="toggle-row">
       <input type="checkbox" id="toggle-earthquakes">
       <span>USGS Earthquakes</span>
     </label>
@@ -227,6 +239,7 @@
       <div><i class="lightning-swatch" aria-hidden="true"></i><span id="lightning-status" role="status" aria-live="polite">Lightning off</span><a href="https://nowcoast.noaa.gov/" target="_blank" rel="noopener noreferrer">NOAA</a></div>
       <div><i class="wildfire-swatch" aria-hidden="true"></i><span id="wildfire-status" role="status" aria-live="polite">Wildfires off</span><a href="https://www.arcgis.com/home/item.html?id=d1c32af3212341869b3c810f1a215824" target="_blank" rel="noopener noreferrer">NIFC</a></div>
       <div><i class="earthquake-swatch" aria-hidden="true"></i><span id="earthquake-status" role="status" aria-live="polite">Earthquakes off</span><a href="https://earthquake.usgs.gov/earthquakes/map/" target="_blank" rel="noopener noreferrer">USGS</a></div>
+      <div><i class="convective-swatch" aria-hidden="true"></i><span id="convective-status" role="status" aria-live="polite">Convective outlooks off</span><a href="https://www.spc.noaa.gov/products/outlook/" target="_blank" rel="noopener noreferrer">SPC</a><p class="context-limitation">Severe-storm risk guidance—not a warning.</p></div>
     </div>
     <section class="local-overlays-panel" aria-labelledby="local-overlays-heading">
       <div class="local-overlays-heading-row">
@@ -473,6 +486,7 @@
   <script src="js/context-layers.js"></script>
   <script src="js/tropical-cyclones.js"></script>
   <script src="js/flood-outlooks.js"></script>
+  <script src="js/convective-outlooks.js"></script>
   <script src="js/local-overlays.js"></script>
   <script src="js/earthquakes.js"></script>
   <script src="js/diagnostics.js"></script>

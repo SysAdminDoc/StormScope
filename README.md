@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.97.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.98.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
 [![Cameras](https://img.shields.io/badge/cameras-36%2C592-cyan)]()
@@ -28,6 +28,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 - **Shareable Map Scenes** — Copy or share a bounded versioned link containing the map, public layers, radar frame/presentation, alerts, camera filters, and active camera without exposing favorites or private local state
 - **NHC Tropical Cyclones** — Optional official advisory centers, forecast points/tracks/cones, and coastal watches/warnings with explicit partial/no-active states and nearby cameras
 - **WPC Flood Outlooks & Gauges** — Selected Day 1–3 excessive-rainfall and five-day significant-river outlooks remain independent; viewport gauges appear only after a USGS observation is joined to matching official NOAA NWPS flood thresholds
+- **SPC Convective Outlooks** — Optional, default-off Day 1–3 categorical severe-storm risk polygons (general thunderstorm through high) from the keyless NOAA SPC ArcGIS service, with official colors, issue/valid times, and DOM-only popups that distinguish risk guidance from warnings
 - **USGS Earthquakes** — Optional, default-off layer from the keyless USGS GeoJSON feeds with selectable magnitude and period, magnitude-scaled markers, and DOM-only popups showing place, magnitude, depth, time, and the official event link
 - **Private Local Overlays** — Strict bounded GeoJSON/GPX imports render with fixed safe styling, remain session-only by default, persist in IndexedDB only after Keep locally, export canonically, and never enter shared scene links or network requests
 - **Connection-Aware Data Usage** — Automatic mode honors Save-Data by pausing the camera corpus, radar animation/preload, and frequent still refreshes; Standard and Low overrides work in every browser, with explicit catalog and feed starts
