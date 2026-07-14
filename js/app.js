@@ -18,7 +18,7 @@
   })();
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.94.0';
+  var APP_VERSION = '0.95.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -2879,6 +2879,7 @@
   }
 
   function trapFocus(e) {
+    if (e.key !== 'Tab') return;
     var modal = document.querySelector('.modal:not(.hidden) .modal-content');
     if (!modal) return;
     var focusable = getFocusableElements(modal);
@@ -2886,17 +2887,24 @@
     var first = focusable[0];
     var last = focusable[focusable.length - 1];
 
-    if (e.key === 'Tab') {
-      if (e.shiftKey) {
-        if (document.activeElement === first) {
-          e.preventDefault();
-          last.focus();
-        }
-      } else {
-        if (document.activeElement === last) {
-          e.preventDefault();
-          first.focus();
-        }
+    // If focus has escaped the modal — e.g. the focused control was removed by a
+    // feed re-render/retry (replaceChildren) and focus fell back to <body> — a
+    // plain first/last check never matches, so pull focus back into the modal.
+    if (!modal.contains(document.activeElement)) {
+      e.preventDefault();
+      first.focus();
+      return;
+    }
+
+    if (e.shiftKey) {
+      if (document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      }
+    } else {
+      if (document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
       }
     }
   }

@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.95.0 - 2026-07-14
+
+- Hardened modal focus containment: `trapFocus` now detects when focus has escaped the open modal (for example when a live-feed re-render removes the focused control and focus falls back to `<body>`) and pulls it back into the modal on the next Tab, so keyboard and screen-reader users can no longer reach the inert background of the camera, comparison, or monitor modals. SW v68.
+
 ## v0.94.0 - 2026-07-14
 
 - Hardened cross-origin privacy: every direct camera media element (HLS `video`, MJPEG/image `img`, and the multi-camera monitor's image/HLS players) plus the radar tile pixel sampler now set `referrerPolicy='no-referrer'`, matching the existing iframe policy so the document origin and path never leak to DOT/FAA/USGS/relay hosts.

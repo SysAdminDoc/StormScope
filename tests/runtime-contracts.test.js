@@ -323,6 +323,18 @@ test('virtual camera results expose roving keyboard collection semantics', () =>
   assert.match(app, /aria-setsize/);
 });
 
+test('focus trap recovers focus that escaped the modal and inerts the background', () => {
+  const match = app.match(/function trapFocus\(e\) \{([\s\S]*?)\n  \}/);
+  assert.ok(match, 'trapFocus should exist');
+  const body = match[1];
+  // Escaped-focus recovery: when the focused node is removed (feed re-render) and
+  // focus falls back to <body>, any Tab must pull focus back into the modal.
+  assert.match(body, /!modal\.contains\(document\.activeElement\)/);
+  // Comparison and monitor modals inert the background like the camera modal.
+  const inertCalls = [...app.matchAll(/setModalBackgroundInert\(true, modal\)/g)];
+  assert.ok(inertCalls.length >= 2, 'comparison and monitor modals must inert the background');
+});
+
 test('a JS frame-guard breaks out of cross-origin framing', () => {
   const match = app.match(/function preventFraming\(\) \{([\s\S]*?)\n  \}\)\(\);/);
   assert.ok(match, 'preventFraming guard should exist and run immediately');
