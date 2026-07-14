@@ -295,6 +295,18 @@ test('official context layers are optional, attributed, and cannot obscure warni
   assert.match(app, /StormScopeContextLayers\.buildWildfireQueries/);
 });
 
+test('SPC severe & tornado watches are an optional, attributed, keyless layer wired end to end', () => {
+  assert.match(html, /js\/severe-watches\.js/);
+  assert.match(serviceWorker, /\.\/js\/severe-watches\.js/);
+  assert.match(html, /<input[^>]*type="checkbox"[^>]*id="toggle-watches"[^>]*>/);
+  assert.match(html, /id="watch-status"[^>]*role="status"/);
+  assert.match(app, /function refreshSevereWatches/);
+  assert.match(app, /function disableSevereWatches/);
+  assert.match(app, /StormScopeSevereWatches\.fetchAllPages/);
+  assert.match(app, /watches: document\.getElementById\('toggle-watches'\)\.checked/);
+  assert.match(app, /link\.href = safeExternalUrl\(properties\.officialUrl\)/);
+});
+
 test('SPC convective outlooks are an optional, attributed, keyless layer wired end to end', () => {
   assert.match(html, /js\/convective-outlooks\.js/);
   assert.match(serviceWorker, /\.\/js\/convective-outlooks\.js/);

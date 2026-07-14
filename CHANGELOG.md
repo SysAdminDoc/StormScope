@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.99.0 - 2026-07-14
+
+- Added an optional, default-off SPC severe & tornado watch layer from the keyless NOAA `watch_warn_adv` ArcGIS service, filtered to Tornado Watch and Severe Thunderstorm Watch product types. These are watch AREAS (a region under threat), distinct from the CAP warnings already shown. Already-expired and non-severe watches are dropped, tornado watches render above severe-thunderstorm watches below the CAP warnings, insecure (non-HTTPS) official URLs are nulled, and DOM-only popups link the official SPC watch. Freshness/attribution, transfer-limit pagination, a 2-minute refresh, and last-good recovery match the other context layers; the layer participates in shareable scenes and workflow profiles and reuses the already-allowlisted `mapservices.weather.noaa.gov` origin. Added `js/severe-watches.js` with unit + headless coverage and EN/ES. SW v72.
+
 ## v0.98.0 - 2026-07-14
 
 - Added an optional, default-off SPC convective (categorical) outlook layer from the keyless NOAA `SPC_wx_outlks` ArcGIS service, with a Day 1/2/3 selector. Categorical risk polygons (general thunderstorm → marginal → slight → enhanced → moderate → high) use official SPC colors, transfer-limit pagination, issue/valid times, freshness/attribution, last-good recovery, and DOM-only popups that state the guidance is not a warning. The layer participates in shareable scenes and workflow profiles and reuses the already-allowlisted `mapservices.weather.noaa.gov` origin (no CSP change). Added `js/convective-outlooks.js` with unit coverage, EN/ES localization, and headless day-switch coverage. SW v71.

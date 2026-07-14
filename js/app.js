@@ -18,7 +18,7 @@
   })();
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.98.0';
+  var APP_VERSION = '0.99.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -182,6 +182,14 @@
   var convectiveCount = 0;
   var convectiveStatusState = 'off';
   var convectiveAttributionAdded = false;
+  var watchLayer = null;
+  var watchAbort = null;
+  var watchGeneration = 0;
+  var watchRefreshTimer = null;
+  var watchFetchedAt = null;
+  var watchCount = 0;
+  var watchStatusState = 'off';
+  var watchAttributionAdded = false;
   var summaryWildfireStatus = 'idle';
   var summaryWildfireCount = 0;
   var summaryWildfireUpdatedAt = null;
@@ -196,19 +204,19 @@
   var WORKFLOW_PRESETS = Object.freeze({
     severe: {
       center: { lat: 39.5, lon: -98.5 }, zoom: 5,
-      layers: { radar: true, cameras: true, coverage: true, alerts: true, satellite: false, lightning: true, wildfires: false, tropical: true, wpcOutlooks: true, usgsGauges: false, earthquakes: false, convective: false },
+      layers: { radar: true, cameras: true, coverage: true, alerts: true, satellite: false, lightning: true, wildfires: false, tropical: true, wpcOutlooks: true, usgsGauges: false, earthquakes: false, convective: false, watches: false },
       opacity: { radar: 0.7 }, radar: { palette: 'colorblind', speed: 800 }, alertSeverity: 'severe',
       cameraFilters: { query: '', state: '', source: '', type: '', sort: 'distance', healthy: true, favorites: false }, dataMode: 'auto', outlookDay: 1
     },
     wildfire: {
       center: { lat: 39, lon: -112 }, zoom: 5,
-      layers: { radar: false, cameras: true, coverage: false, alerts: true, satellite: true, lightning: false, wildfires: true, tropical: false, wpcOutlooks: false, usgsGauges: false, earthquakes: false, convective: false },
+      layers: { radar: false, cameras: true, coverage: false, alerts: true, satellite: true, lightning: false, wildfires: true, tropical: false, wpcOutlooks: false, usgsGauges: false, earthquakes: false, convective: false, watches: false },
       opacity: { radar: 0.55 }, radar: { palette: 'standard', speed: 0 }, alertSeverity: 'moderate',
       cameraFilters: { query: '', state: '', source: '', type: '', sort: 'distance', healthy: true, favorites: false }, dataMode: 'auto', outlookDay: 1
     },
     travel: {
       center: { lat: 38.5, lon: -96 }, zoom: 5,
-      layers: { radar: true, cameras: true, coverage: false, alerts: true, satellite: false, lightning: false, wildfires: false, tropical: false, wpcOutlooks: false, usgsGauges: false, earthquakes: false, convective: false },
+      layers: { radar: true, cameras: true, coverage: false, alerts: true, satellite: false, lightning: false, wildfires: false, tropical: false, wpcOutlooks: false, usgsGauges: false, earthquakes: false, convective: false, watches: false },
       opacity: { radar: 0.55 }, radar: { palette: 'colorblind', speed: 0 }, alertSeverity: 'moderate',
       cameraFilters: { query: '', state: '', source: '', type: '', sort: 'distance', healthy: true, favorites: false }, dataMode: 'auto', outlookDay: 1
     }
@@ -2155,6 +2163,124 @@
     renderConvectiveStatus();
   }
 
+  // ── SPC severe & tornado watches ──
+
+  function renderWatchStatus() {
+    if (watchStatusState === 'off') {
+      setContextStatusElement('watch-status', tr('context.watchesOff'), 'off');
+      return;
+    }
+    if (watchStatusState === 'loading') {
+      setContextStatusElement('watch-status', tr('context.loading'), 'loading');
+      return;
+    }
+    if (watchStatusState === 'error') {
+      setContextStatusElement('watch-status', tr(watchLayer ? 'context.refreshFailed' : 'context.unavailable'), 'error');
+      return;
+    }
+    var provider = StormScopeSevereWatches.provider;
+    var fresh = StormScopeSevereWatches.freshness(watchFetchedAt, provider.staleMs);
+    setContextStatusElement('watch-status', tr('context.watchStatus', {
+      count: localNumber(watchCount),
+      freshness: tr(fresh.state === 'stale' ? 'context.stale' : 'context.fresh'),
+      time: watchFetchedAt ? localTime(watchFetchedAt) : tr('weather.unknown')
+    }), 'ready');
+  }
+
+  function watchPopup(feature) {
+    var properties = feature.properties || {};
+    var container = document.createElement('div');
+    container.className = 'context-popup';
+    var title = document.createElement('strong');
+    title.textContent = tr('context.watch.' + properties.watchKind);
+    container.appendChild(title);
+    if (properties.issuedAt) {
+      var issued = document.createElement('span');
+      issued.textContent = tr('context.watchIssued', { time: contextTimestamp(properties.issuedAt) });
+      container.appendChild(issued);
+    }
+    if (properties.expiresAt) {
+      var expires = document.createElement('span');
+      expires.textContent = tr('context.watchExpires', { time: contextTimestamp(properties.expiresAt) });
+      container.appendChild(expires);
+    }
+    if (properties.officialUrl) {
+      var link = document.createElement('a');
+      link.href = safeExternalUrl(properties.officialUrl);
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = tr('context.watchSource');
+      container.appendChild(link);
+    }
+    return container;
+  }
+
+  function scheduleWatchRefresh() {
+    clearTimeout(watchRefreshTimer);
+    watchRefreshTimer = null;
+    if (!document.getElementById('toggle-watches').checked) return;
+    watchRefreshTimer = setTimeout(refreshSevereWatches, StormScopeSevereWatches.provider.refreshMs);
+  }
+
+  async function refreshSevereWatches() {
+    if (!document.getElementById('toggle-watches').checked || document.hidden) return;
+    if (watchAbort) watchAbort.abort();
+    watchAbort = new AbortController();
+    var generation = ++watchGeneration;
+    var signal = watchAbort.signal;
+    watchStatusState = 'loading';
+    renderWatchStatus();
+    try {
+      var provider = StormScopeSevereWatches.provider;
+      var collection = await StormScopeSevereWatches.fetchAllPages(function (url, options) {
+        return fetch(url, options);
+      }, signal);
+      if (generation !== watchGeneration) return;
+      var nextLayer = L.geoJSON(collection, {
+        pane: 'contextVectorPane',
+        style: function (feature) { return StormScopeSevereWatches.style(feature.properties.watchKind); },
+        onEachFeature: function (feature, layer) {
+          layer.bindPopup(function () { return watchPopup(feature); }, { autoPan: false, maxWidth: 360, maxHeight: 360 });
+        }
+      }).addTo(map);
+      if (watchLayer) map.removeLayer(watchLayer);
+      watchLayer = nextLayer;
+      if (!watchAttributionAdded) {
+        map.attributionControl.addAttribution('<a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>');
+        watchAttributionAdded = true;
+      }
+      watchFetchedAt = Date.now();
+      watchCount = collection.features.length;
+      watchStatusState = 'ready';
+      renderWatchStatus();
+    } catch (error) {
+      if (error.name === 'AbortError') return;
+      if (generation !== watchGeneration) return;
+      watchStatusState = 'error';
+      renderWatchStatus();
+    } finally {
+      if (generation === watchGeneration) scheduleWatchRefresh();
+    }
+  }
+
+  function disableSevereWatches() {
+    watchGeneration += 1;
+    if (watchAbort) watchAbort.abort();
+    clearTimeout(watchRefreshTimer);
+    watchRefreshTimer = null;
+    if (watchLayer) map.removeLayer(watchLayer);
+    watchLayer = null;
+    if (watchAttributionAdded) {
+      var provider = StormScopeSevereWatches.provider;
+      map.attributionControl.removeAttribution('<a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>');
+      watchAttributionAdded = false;
+    }
+    watchCount = 0;
+    watchFetchedAt = null;
+    watchStatusState = 'off';
+    renderWatchStatus();
+  }
+
   function centerTileCoordinate(zoom) {
     var center = map.getCenter();
     var scale = Math.pow(2, zoom);
@@ -2770,7 +2896,8 @@
         wpcOutlooks: document.getElementById('toggle-wpc-outlooks').checked,
         usgsGauges: document.getElementById('toggle-usgs-gauges').checked,
         earthquakes: document.getElementById('toggle-earthquakes').checked,
-        convective: document.getElementById('toggle-convective').checked
+        convective: document.getElementById('toggle-convective').checked,
+        watches: document.getElementById('toggle-watches').checked
       },
       opacity: { radar: radarOpacity }
     };
@@ -2933,6 +3060,11 @@
       document.getElementById('toggle-convective').checked = layers.convective;
       if (layers.convective) refreshConvectiveOutlooks();
       else disableConvectiveOutlooks();
+    }
+    if (typeof layers.watches === 'boolean') {
+      document.getElementById('toggle-watches').checked = layers.watches;
+      if (layers.watches) refreshSevereWatches();
+      else disableSevereWatches();
     }
     if (snapshot.opacity && typeof snapshot.opacity.radar === 'number') {
       radarOpacity = snapshot.opacity.radar;
@@ -3601,7 +3733,7 @@
     radarRefreshTimer = null;
     [alertRefreshTimer, alertMoveTimer, lightningRefreshTimer, satelliteRefreshTimer, satelliteMoveTimer,
       tropicalRefreshTimer, wpcRefreshTimer, usgsGaugeRefreshTimer, usgsGaugeMoveTimer,
-      wildfireRefreshTimer, wildfireMoveTimer, earthquakeRefreshTimer, convectiveRefreshTimer].forEach(clearTimeout);
+      wildfireRefreshTimer, wildfireMoveTimer, earthquakeRefreshTimer, convectiveRefreshTimer, watchRefreshTimer].forEach(clearTimeout);
     if (alertAbort) alertAbort.abort();
     if (lightningAbort) lightningAbort.abort();
     if (satelliteAbort) satelliteAbort.abort();
@@ -3612,6 +3744,7 @@
     if (wildfireAbort) wildfireAbort.abort();
     if (earthquakeAbort) earthquakeAbort.abort();
     if (convectiveAbort) convectiveAbort.abort();
+    if (watchAbort) watchAbort.abort();
   }
 
   function resumeOperationalWorkAfterComparison() {
@@ -3630,6 +3763,7 @@
     if (document.getElementById('toggle-wildfires').checked) refreshWildfires();
     if (document.getElementById('toggle-earthquakes').checked) refreshEarthquakes();
     if (document.getElementById('toggle-convective').checked) refreshConvectiveOutlooks();
+    if (document.getElementById('toggle-watches').checked) refreshSevereWatches();
   }
 
   function ensureMapComparison() {
@@ -4877,6 +5011,11 @@
       else disableUsgsGauges();
       scheduleLastViewSave();
     });
+    document.getElementById('toggle-watches').addEventListener('change', function () {
+      if (this.checked) refreshSevereWatches();
+      else disableSevereWatches();
+      scheduleLastViewSave();
+    });
     document.getElementById('toggle-convective').addEventListener('change', function () {
       if (this.checked) refreshConvectiveOutlooks();
       else disableConvectiveOutlooks();
@@ -5385,6 +5524,7 @@
         if (wildfireAbort) wildfireAbort.abort();
         if (earthquakeAbort) earthquakeAbort.abort();
         if (convectiveAbort) convectiveAbort.abort();
+        if (watchAbort) watchAbort.abort();
         clearTimeout(alertRefreshTimer);
         clearTimeout(lightningRefreshTimer);
         clearTimeout(satelliteRefreshTimer);
@@ -5396,6 +5536,7 @@
         clearTimeout(wildfireRefreshTimer);
         clearTimeout(earthquakeRefreshTimer);
         clearTimeout(convectiveRefreshTimer);
+        clearTimeout(watchRefreshTimer);
         return;
       }
 
@@ -5418,6 +5559,7 @@
       if (document.getElementById('toggle-wildfires').checked) refreshWildfires();
       if (document.getElementById('toggle-earthquakes').checked) refreshEarthquakes();
       if (document.getElementById('toggle-convective').checked) refreshConvectiveOutlooks();
+      if (document.getElementById('toggle-watches').checked) refreshSevereWatches();
     });
 
     window.addEventListener('online', function () {
@@ -5431,6 +5573,7 @@
       if (document.getElementById('toggle-wildfires').checked) refreshWildfires();
       if (document.getElementById('toggle-earthquakes').checked) refreshEarthquakes();
       if (document.getElementById('toggle-convective').checked) refreshConvectiveOutlooks();
+      if (document.getElementById('toggle-watches').checked) refreshSevereWatches();
     });
     window.addEventListener('offline', updateConnectionState);
     window.addEventListener('beforeunload', function () {
@@ -5449,6 +5592,7 @@
       clearTimeout(wildfireMoveTimer);
       clearTimeout(earthquakeRefreshTimer);
       clearTimeout(convectiveRefreshTimer);
+      clearTimeout(watchRefreshTimer);
       setRadarPlaying(false);
       if (radarAbort) radarAbort.abort();
       if (weatherAbort) weatherAbort.abort();
@@ -5666,6 +5810,7 @@
         gaugeStatus: usgsGaugeStatusState, gaugeCount: usgsGaugeCount,
         earthquakeStatus: earthquakeStatusState, earthquakeCount: earthquakeCount,
         convectiveStatus: convectiveStatusState, convectiveCount: convectiveCount, convectiveDay: convectiveDay,
+        watches: Boolean(watchLayer), watchStatus: watchStatusState, watchCount: watchCount,
         localOverlays: localOverlayRecords.length,
         rasterZ: map.getPane('contextRasterPane').style.zIndex,
         satelliteZ: map.getPane('satellitePane').style.zIndex,

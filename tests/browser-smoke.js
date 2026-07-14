@@ -246,6 +246,19 @@ async function addNetworkFixtures(page, metrics, options) {
       });
       return;
     }
+    if (url.startsWith('https://mapservices.weather.noaa.gov/eventdriven/rest/services/WWA/watch_warn_adv/MapServer/1/query')) {
+      const future = Date.now() + 3 * 60 * 60 * 1000;
+      await route.fulfill({
+        contentType: 'application/geo+json', headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ type: 'FeatureCollection', exceededTransferLimit: false, features: [
+          { type: 'Feature', geometry: { type: 'Polygon', coordinates: [[[-101, 36], [-97, 36], [-97, 40], [-101, 40], [-101, 36]]] },
+            properties: { objectid: 1, prod_type: 'Tornado Watch', issuance: Date.now() - 1800000, expiration: future, url: 'https://www.spc.noaa.gov/products/watch/ww0042.html' } },
+          { type: 'Feature', geometry: { type: 'Polygon', coordinates: [[[-95, 37], [-91, 37], [-91, 41], [-95, 41], [-95, 37]]] },
+            properties: { objectid: 2, prod_type: 'Severe Thunderstorm Watch', expiration: future, url: 'http://insecure.example/x' } }
+        ] })
+      });
+      return;
+    }
     if (url.startsWith('https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/SPC_wx_outlks/MapServer/') && url.includes('/query')) {
       const offset = Number(new URL(url).searchParams.get('resultOffset') || 0);
       await route.fulfill({
@@ -618,7 +631,7 @@ async function main() {
       satellite: false, lightning: false, wildfires: false, tropical: false, wpcOutlooks: false, usgsGauges: false, earthquakes: false, convective: false, satelliteStatus: 'off',
       lightningStatus: 'off', wildfireStatus: 'off', tropicalStatus: 'off', tropicalCount: 0,
       wpcStatus: 'off', wpcCount: 0, wpcDay: 1, gaugeStatus: 'off', gaugeCount: 0,
-      earthquakeStatus: 'off', earthquakeCount: 0, convectiveStatus: 'off', convectiveCount: 0, convectiveDay: 1, satelliteZ: '315',
+      earthquakeStatus: 'off', earthquakeCount: 0, convectiveStatus: 'off', convectiveCount: 0, convectiveDay: 1, watches: false, watchStatus: 'off', watchCount: 0, satelliteZ: '315',
       localOverlays: 0, rasterZ: '325', vectorZ: '390', localOverlayZ: '380', tropicalZ: '395', warningZ: '400', cameraZ: '600'
     });
     await page.getByRole('button', { name: 'Toggle layers panel' }).click();
@@ -723,7 +736,7 @@ async function main() {
       satellite: true, lightning: true, wildfires: true, tropical: true, wpcOutlooks: true, usgsGauges: true, earthquakes: false, convective: false, satelliteStatus: 'ready',
       lightningStatus: 'ready', wildfireStatus: 'ready', tropicalStatus: 'ready', tropicalCount: 1,
       wpcStatus: 'ready', wpcCount: 2, wpcDay: 1, gaugeStatus: 'ready', gaugeCount: 1,
-      earthquakeStatus: 'off', earthquakeCount: 0, convectiveStatus: 'off', convectiveCount: 0, convectiveDay: 1, satelliteZ: '315',
+      earthquakeStatus: 'off', earthquakeCount: 0, convectiveStatus: 'off', convectiveCount: 0, convectiveDay: 1, watches: false, watchStatus: 'off', watchCount: 0, satelliteZ: '315',
       localOverlays: 0, rasterZ: '325', vectorZ: '390', localOverlayZ: '380', tropicalZ: '395', warningZ: '400', cameraZ: '600'
     });
 
@@ -778,6 +791,17 @@ async function main() {
     const convectiveOff = await page.evaluate(() => window._stormscope.getContextState());
     assert.equal(convectiveOff.convective, false);
     assert.equal(convectiveOff.convectiveDay, 1);
+
+    // SPC severe & tornado watches: toggle on; only active watches load (expired
+    // and non-severe dropped by the module), the insecure official URL is nulled.
+    await page.locator('#toggle-watches').check();
+    await page.locator('#watch-status').filter({ hasText: '2 active watches' }).waitFor({ state: 'visible' });
+    const watchState = await page.evaluate(() => window._stormscope.getContextState());
+    assert.equal(watchState.watches, true);
+    assert.equal(watchState.watchStatus, 'ready');
+    assert.equal(watchState.watchCount, 2);
+    await page.locator('#toggle-watches').uncheck();
+    assert.equal((await page.evaluate(() => window._stormscope.getContextState())).watches, false);
 
     const tropicalPopupOpened = await page.evaluate(() => {
       let opened = false;
@@ -898,7 +922,7 @@ async function main() {
       satellite: false, lightning: false, wildfires: true, tropical: false, wpcOutlooks: false, usgsGauges: false, earthquakes: false, convective: false, satelliteStatus: 'off',
       lightningStatus: 'error', wildfireStatus: 'ready', tropicalStatus: 'off', tropicalCount: 0,
       wpcStatus: 'off', wpcCount: 0, wpcDay: 2, gaugeStatus: 'off', gaugeCount: 0,
-      earthquakeStatus: 'off', earthquakeCount: 0, convectiveStatus: 'off', convectiveCount: 0, convectiveDay: 1, satelliteZ: '315',
+      earthquakeStatus: 'off', earthquakeCount: 0, convectiveStatus: 'off', convectiveCount: 0, convectiveDay: 1, watches: false, watchStatus: 'off', watchCount: 0, satelliteZ: '315',
       localOverlays: 0, rasterZ: '325', vectorZ: '390', localOverlayZ: '380', tropicalZ: '395', warningZ: '400', cameraZ: '600'
     });
     await page.locator('#toggle-lightning').uncheck();
@@ -1263,7 +1287,7 @@ async function main() {
     const sharedScene = {
       map: { lat: 39.75, lon: -98.25, zoom: 6 },
       layers: { radar: true, cameras: true, coverage: false, alerts: true, lightning: false, wildfires: false, satellite: false, tropical: false,
-        wpcOutlooks: false, usgsGauges: false, earthquakes: false, convective: false },
+        wpcOutlooks: false, usgsGauges: false, earthquakes: false, convective: false, watches: false },
       radar: { opacity: 0.48, palette: 'contrast', speed: 400, frameTime: sceneFixture.frameTime },
       alertSeverity: 'severe',
       cameraFilters: {
