@@ -19,7 +19,7 @@ NODE_MIN = (18, 0, 0)
 NPM_MIN = (9, 0, 0)
 CURL_MIN = (8, 0, 0)
 RUFF_VERSION = (0, 15, 20)
-YT_DLP_VERSION = (2026, 6, 9)
+YT_DLP_VERSION = (2026, 7, 4)
 PLAYWRIGHT_VERSION = "1.61.1"
 
 
@@ -155,7 +155,7 @@ def collect_results() -> list[Result]:
             "yt-dlp",
             ("yt-dlp", "yt-dlp.exe"),
             ["--version"],
-            "==2026.6.9",
+            "==2026.7.4",
             lambda value: padded(value) == padded(YT_DLP_VERSION),
         ),
     ])
@@ -180,4 +180,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

@@ -29,6 +29,7 @@ def main() -> int:
     run(sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py", "-v")
     run(sys.executable, "-m", "ruff", "check", "scripts", "tests")
     run(sys.executable, "scripts/vendor_dependencies.py")
+    run(sys.executable, "scripts/dependency_audit.py")
     run("node", "--check", "js/app.js")
     run("node", "--check", "sw.js")
     if node_tests:

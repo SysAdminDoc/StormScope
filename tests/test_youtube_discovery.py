@@ -18,6 +18,15 @@ import discover_youtube_cameras as youtube  # noqa: E402
 
 
 class YouTubeLocationExtractionTests(unittest.TestCase):
+    def test_ytdlp_metadata_command_is_non_writing_and_video_id_bounded(self) -> None:
+        command = youtube.ytdlp_metadata_command("3ieUramhCCI")
+        self.assertEqual("yt-dlp", command[0])
+        self.assertTrue(set(youtube.YT_DLP_METADATA_FLAGS).issubset(command))
+        self.assertFalse(youtube.YT_DLP_SHORTCUT_FLAGS.intersection(command))
+        self.assertEqual("https://www.youtube.com/watch?v=3ieUramhCCI", command[-1])
+        with self.assertRaises(ValueError):
+            youtube.ytdlp_metadata_command("https://example.test/not-a-video")
+
     def test_generic_skyline_view_is_not_a_location(self) -> None:
         self.assertEqual(youtube.extract_location_queries("Skyline View", ""), [])
 

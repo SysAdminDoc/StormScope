@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.103.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.104.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
 [![Cameras](https://img.shields.io/badge/cameras-36%2C592-cyan)]()
@@ -106,7 +106,7 @@ npx playwright install chromium firefox webkit
 python scripts/preflight.py
 ```
 
-The preflight reports every actual version and install path before work starts. Supported versions are Python `>=3.10,<4`, Node.js `>=18`, npm `>=9`, curl `>=8`, Ruff `0.15.20`, yt-dlp `2026.6.9`, and Playwright `1.61.1` with its pinned Chromium, Firefox, and WebKit engines installed. Python tools are exact-pinned in `requirements-dev.txt`; Node tooling is exact-locked by `package-lock.json` and declares npm `11.13.0` as the development package manager.
+The preflight reports every actual version and install path before work starts. Supported versions are Python `>=3.10,<4`, Node.js `>=18`, npm `>=9`, curl `>=8`, Ruff `0.15.20`, yt-dlp `2026.7.4`, and Playwright `1.61.1` with its pinned Chromium, Firefox, and WebKit engines installed. Python tools are exact-pinned in `requirements-dev.txt`; Node tooling is exact-locked by `package-lock.json` and declares npm `11.13.0` as the development package manager.
 
 Run the complete local regression gate before changing or publishing the app:
 
@@ -116,7 +116,7 @@ python scripts/check.py
 
 The gate runs the preflight first, then uses Playwright Chromium for the exhaustive smoke and reduced Firefox/WebKit contracts for boot, search, modal cleanup, cached offline shell, and HLS branch behavior. The Windows WebKit port uses an injected native-HLS capability to exercise that branch because the port does not ship the platform media stack.
 
-It validates the camera corpus and deterministic shards, verifies vendored dependency/license hashes plus expiring supplemental CVE dispositions, runs Python units, lint, JavaScript syntax/contracts and service-worker tests, and enforces a real headless desktop/mobile/modal/offline/cache/accessibility smoke. The smoke requires the first camera shard to render within 2.5 seconds on the local Chromium test profile.
+It validates the camera corpus and deterministic shards, verifies vendored dependency/license hashes, audits every exact Python/Node/browser pin plus expiring supplemental CVE dispositions, runs Python units, lint, JavaScript syntax/contracts and service-worker tests, and enforces a real headless desktop/mobile/modal/offline/cache/accessibility smoke. The smoke requires the first camera shard to render within 2.5 seconds on the local Chromium test profile.
 
 Build the one release asset only from a clean committed tree:
 
@@ -139,6 +139,14 @@ python scripts/vendor_dependencies.py --rebuild
 ```
 
 The pinned package/tarball/file/license inventory is `vendor/dependencies.json`. Update that manifest deliberately before an upgrade; a newer version or advisory exits the audit with status 2, while any byte or license mismatch exits with status 1.
+
+Run the live all-pin advisory audit against OSV and independently confirm every reviewed CVE in NVD:
+
+```bash
+python scripts/dependency_audit.py --online
+```
+
+The normal regression gate runs the same exact-pin inventory and expiring disposition checks offline. The live mode exits with status 2 for any undispositioned advisory and status 1 for malformed/expired reviews, NVD mismatches, or inventory drift. Reviewed tooling advisories live in `config/dependency-advisories.json`; vendored dispositions remain beside their hash/license provenance in `vendor/dependencies.json`.
 
 ## Tech Stack
 

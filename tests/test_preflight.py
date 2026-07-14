@@ -14,7 +14,7 @@ class PreflightTests(unittest.TestCase):
     def test_version_parser_handles_common_tool_output(self) -> None:
         self.assertEqual((24, 16, 0), preflight.version_tuple("v24.16.0"))
         self.assertEqual((3, 11, 9), preflight.version_tuple("Python 3.11.9"))
-        self.assertEqual((2026, 6, 9), preflight.version_tuple("2026.06.09"))
+        self.assertEqual((2026, 7, 4), preflight.version_tuple("2026.07.04"))
 
     def test_supported_version_ranges_are_explicit(self) -> None:
         self.assertTrue(preflight.in_range((3, 10), preflight.PYTHON_MIN, preflight.PYTHON_MAX))
@@ -25,4 +25,3 @@ class PreflightTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

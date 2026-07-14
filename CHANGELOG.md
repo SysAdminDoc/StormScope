@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.104.0 - 2026-07-14
+
+- Upgraded the exact yt-dlp development pin to 2026.7.4, which contains the fix for GHSA-6v4j-43gg-vj32/CVE-2026-55404. StormScope's extractor command is now built through a tested metadata-only contract that rejects non-video IDs and forbids all shortcut-writing flags implicated by the advisory.
+- Added an all-pin dependency audit covering exact Python requirements, the complete Node lock, and vendored browser libraries. The normal gate validates inventory plus expiring reviewed dispositions offline; `--online` queries OSV for every pin and independently verifies reviewed CVEs against NVD. Added deterministic policy/inventory/OSV/NVD regressions. SW v77.
+
 ## v0.103.0 - 2026-07-14
 
 - Fixed the header overflowing and clipping a control on narrow phones (≤360 px): the constant "Online" connection chip is now hidden on mobile (the actionable Offline state still shows), and the header is made width-robust so the wordmark truncates before any control clips — all four header buttons stay fully visible and tappable down to 320 px. SW v76.

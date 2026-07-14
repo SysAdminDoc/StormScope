@@ -70,11 +70,13 @@ YOUTUBE_SEARCH_URL = "https://www.youtube.com/results"
 YOUTUBEI_SEARCH_URL = "https://www.youtube.com/youtubei/v1/search?prettyPrint=false"
 YOUTUBEI_PLAYER_URL = "https://www.youtube.com/youtubei/v1/player?prettyPrint=false"
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+YT_DLP_METADATA_FLAGS = ("--dump-json", "--skip-download", "--no-playlist", "--no-warnings")
+YT_DLP_SHORTCUT_FLAGS = frozenset({"--write-link", "--write-url-link", "--write-desktop-link"})
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 "
-    "StormScope/0.103.0"
+    "StormScope/0.104.0"
 )
 
 US_STATES = {
@@ -555,15 +557,17 @@ def curl_json_post(url: str, body: dict[str, Any], *, timeout: int = 30) -> dict
     return json.loads(raw.decode("utf-8", "replace"))
 
 
+def ytdlp_metadata_command(video_id: str) -> list[str]:
+    if not re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
+        raise ValueError("yt-dlp metadata command requires an exact YouTube video ID")
+    cmd = ["yt-dlp", *YT_DLP_METADATA_FLAGS, f"https://www.youtube.com/watch?v={video_id}"]
+    if YT_DLP_SHORTCUT_FLAGS.intersection(cmd):
+        raise RuntimeError("shortcut-writing flags are forbidden for metadata extraction")
+    return cmd
+
+
 def run_ytdlp_metadata(video_id: str, *, timeout: int = 75) -> dict[str, Any]:
-    cmd = [
-        "yt-dlp",
-        "--dump-json",
-        "--skip-download",
-        "--no-playlist",
-        "--no-warnings",
-        f"https://www.youtube.com/watch?v={video_id}",
-    ]
+    cmd = ytdlp_metadata_command(video_id)
     proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
     if proc.returncode != 0:
         err = (proc.stderr or proc.stdout).strip()
