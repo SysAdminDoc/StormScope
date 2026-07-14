@@ -79,34 +79,47 @@
 
   <div id="layers-panel" class="panel hidden" role="region" aria-label="Map layers">
     <h3>Layers</h3>
-    <h4 class="panel-subhead">Base map</h4>
-    <label class="toggle-row">
+    <div class="layer-filter-toolbar">
+      <label for="layer-filter-query" class="visually-hidden">Search layers</label>
+      <input id="layer-filter-query" type="search" placeholder="Search layers and settings" autocomplete="off" spellcheck="false">
+      <div class="layer-filter-actions">
+        <label class="layer-active-filter">
+          <input id="layer-filter-active" type="checkbox">
+          <span>Active only</span>
+        </label>
+        <span id="layer-filter-count" role="status" aria-live="polite" aria-atomic="true">Showing 13 of 13 layers</span>
+        <button id="layer-filter-clear" type="button" disabled>Clear filters</button>
+      </div>
+    </div>
+    <p id="layer-filter-empty" class="layer-filter-empty" role="status" hidden>No layers match. Clear filters to show all layers.</p>
+    <h4 class="panel-subhead" data-layer-section="base">Base map</h4>
+    <label class="toggle-row" data-layer-id="radar">
       <input type="checkbox" id="toggle-radar" checked>
       <span>Weather Radar</span>
     </label>
-    <label class="toggle-row">
+    <label class="toggle-row" data-layer-id="coverage">
       <input type="checkbox" id="toggle-coverage">
       <span>Radar Coverage</span>
     </label>
-    <label class="toggle-row">
+    <label class="toggle-row" data-layer-id="cameras">
       <input type="checkbox" id="toggle-cameras" checked>
       <span>Live Cameras</span>
     </label>
-    <h4 class="panel-subhead">Warnings &amp; watches</h4>
-    <label class="toggle-row">
+    <h4 class="panel-subhead" data-layer-section="warnings">Warnings &amp; watches</h4>
+    <label class="toggle-row" data-layer-id="alerts">
       <input type="checkbox" id="toggle-alerts" checked>
       <span>NWS Alerts</span>
     </label>
-    <label class="toggle-row">
+    <label class="toggle-row" data-layer-id="watches">
       <input type="checkbox" id="toggle-watches">
       <span>Severe &amp; Tornado Watches</span>
     </label>
-    <h4 class="panel-subhead">Storm outlooks</h4>
-    <label class="toggle-row">
+    <h4 class="panel-subhead" data-layer-section="outlooks">Storm outlooks</h4>
+    <label class="toggle-row" data-layer-id="convective">
       <input type="checkbox" id="toggle-convective">
       <span>SPC Convective Outlooks</span>
     </label>
-    <div class="select-row context-layer-option">
+    <div class="select-row context-layer-option" data-layer-id="convective">
       <label for="convective-day">Convective outlook day</label>
       <select id="convective-day">
         <option value="1">Day 1</option>
@@ -114,11 +127,11 @@
         <option value="3">Day 3</option>
       </select>
     </div>
-    <label class="toggle-row">
+    <label class="toggle-row" data-layer-id="wpcOutlooks">
       <input type="checkbox" id="toggle-wpc-outlooks">
       <span>WPC Rainfall &amp; Flood Outlooks</span>
     </label>
-    <div class="select-row context-layer-option">
+    <div class="select-row context-layer-option" data-layer-id="wpcOutlooks">
       <label for="wpc-outlook-day">Outlook day</label>
       <select id="wpc-outlook-day">
         <option value="1">Day 1</option>
@@ -126,24 +139,24 @@
         <option value="3">Day 3</option>
       </select>
     </div>
-    <h4 class="panel-subhead">Hazard context</h4>
-    <label class="toggle-row">
+    <h4 class="panel-subhead" data-layer-section="hazards">Hazard context</h4>
+    <label class="toggle-row" data-layer-id="lightning">
       <input type="checkbox" id="toggle-lightning">
       <span>Lightning Density</span>
     </label>
-    <label class="toggle-row">
+    <label class="toggle-row" data-layer-id="wildfires">
       <input type="checkbox" id="toggle-wildfires">
       <span>Current Wildfire Perimeters</span>
     </label>
-    <label class="toggle-row">
+    <label class="toggle-row" data-layer-id="usgsGauges">
       <input type="checkbox" id="toggle-usgs-gauges">
       <span>USGS Flood Gauges</span>
     </label>
-    <label class="toggle-row">
+    <label class="toggle-row" data-layer-id="earthquakes">
       <input type="checkbox" id="toggle-earthquakes">
       <span>USGS Earthquakes</span>
     </label>
-    <div class="select-row context-layer-option">
+    <div class="select-row context-layer-option" data-layer-id="earthquakes">
       <label for="earthquake-magnitude">Earthquake magnitude</label>
       <select id="earthquake-magnitude">
         <option value="significant">Significant</option>
@@ -153,7 +166,7 @@
         <option value="all">All</option>
       </select>
     </div>
-    <div class="select-row context-layer-option">
+    <div class="select-row context-layer-option" data-layer-id="earthquakes">
       <label for="earthquake-period">Earthquake period</label>
       <select id="earthquake-period">
         <option value="hour">Past hour</option>
@@ -162,17 +175,17 @@
         <option value="month">Past month</option>
       </select>
     </div>
-    <h4 class="panel-subhead">Storms &amp; imagery</h4>
-    <label class="toggle-row">
+    <h4 class="panel-subhead" data-layer-section="storms">Storms &amp; imagery</h4>
+    <label class="toggle-row" data-layer-id="tropical">
       <input type="checkbox" id="toggle-tropical">
       <span>NHC Tropical Cyclones</span>
     </label>
-    <label class="toggle-row">
+    <label class="toggle-row" data-layer-id="satellite">
       <input type="checkbox" id="toggle-satellite">
       <span>GOES GeoColor Satellite</span>
     </label>
     <h4 class="panel-subhead">Radar &amp; display</h4>
-    <div class="slider-row">
+    <div class="slider-row" data-layer-id="radar">
       <label for="radar-opacity">Radar Opacity</label>
       <input type="range" id="radar-opacity" min="0" max="100" value="65" aria-label="Radar opacity">
     </div>
@@ -208,7 +221,7 @@
       </select>
     </div>
     <div id="low-data-status" class="context-status" role="status" aria-live="polite">Standard data mode.</div>
-    <div class="select-row">
+    <div class="select-row" data-layer-id="radar">
       <label for="radar-speed">Radar playback</label>
       <select id="radar-speed">
         <option value="0">Manual only</option>
@@ -217,7 +230,7 @@
         <option value="400">2× speed</option>
       </select>
     </div>
-    <div class="select-row">
+    <div class="select-row" data-layer-id="radar">
       <label for="radar-palette">Radar presentation</label>
       <select id="radar-palette">
         <option value="standard">Standard</option>
@@ -225,7 +238,7 @@
         <option value="contrast">High contrast</option>
       </select>
     </div>
-    <div class="select-row">
+    <div class="select-row" data-layer-id="alerts">
       <label for="alert-severity">Minimum alert severity</label>
       <select id="alert-severity">
         <option value="all">All alerts</option>

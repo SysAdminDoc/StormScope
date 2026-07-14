@@ -4,6 +4,7 @@ const path = require('node:path');
 const test = require('node:test');
 
 const registry = require('../js/layer-registry.js');
+const i18n = require('../js/i18n.js');
 const source = fs.readFileSync(path.join(__dirname, '..', 'js', 'layer-registry.js'), 'utf8');
 const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 
@@ -38,7 +39,18 @@ test('registry has one immutable descriptor for every stable scene layer', () =>
   registry.descriptors.forEach((descriptor) => {
     assert.ok(Object.isFrozen(descriptor));
     assert.ok(Object.isFrozen(descriptor.controls));
+    assert.ok(Object.isFrozen(descriptor.searchKeys));
+    assert.match(descriptor.labelKey, /^layers\./);
+    assert.match(descriptor.groupLabelKey, /^layers\.group/);
     assert.equal(registry.get(descriptor.id), descriptor);
+    for (const locale of i18n.supportedLocales) {
+      assert.ok(i18n.catalogs[locale][descriptor.labelKey], `${locale} is missing ${descriptor.labelKey}`);
+      assert.ok(i18n.catalogs[locale][descriptor.groupLabelKey], `${locale} is missing ${descriptor.groupLabelKey}`);
+      descriptor.searchKeys.forEach((key) => assert.ok(i18n.catalogs[locale][key], `${locale} is missing ${key}`));
+      descriptor.controls.forEach((control) => {
+        assert.ok(i18n.catalogs[locale][control.labelKey], `${locale} is missing ${control.labelKey}`);
+      });
+    }
   });
   assert.throws(() => registry.get('missing'), /unknown layer/);
 });
@@ -85,18 +97,28 @@ test('registry captures and applies layer controls for scene and workflow state'
 });
 
 test('descriptor validation rejects incomplete, duplicate, or unsafe metadata', () => {
-  const descriptor = { id: 'one', toggleId: 'toggle-one', defaultEnabled: false };
+  const descriptor = {
+    id: 'one', toggleId: 'toggle-one', defaultEnabled: false,
+    labelKey: 'layers.one', groupId: 'base', groupLabelKey: 'layers.groupBase'
+  };
   assert.equal(registry.validateDescriptors([descriptor]), true);
   assert.throws(() => registry.validateDescriptors([{ toggleId: 'toggle-one', defaultEnabled: false }]), /id is invalid/);
+  assert.throws(() => registry.validateDescriptors([{
+    id: 'one', toggleId: 'toggle-one', defaultEnabled: false
+  }]), /navigation metadata/);
   assert.throws(() => registry.validateDescriptors([descriptor, descriptor]), /duplicate layer id/);
   assert.throws(() => registry.validateDescriptors([
-    descriptor, { id: 'two', toggleId: 'toggle-one', defaultEnabled: false }
+    descriptor, {
+      id: 'two', toggleId: 'toggle-one', defaultEnabled: false,
+      labelKey: 'layers.two', groupId: 'base', groupLabelKey: 'layers.groupBase'
+    }
   ]), /duplicate layer toggle/);
   assert.throws(() => registry.validateDescriptors([{
     id: 'one', toggleId: 'toggle-one', defaultEnabled: false,
+    labelKey: 'layers.one', groupId: 'base', groupLabelKey: 'layers.groupBase',
     controls: [{
       key: 'value', controlId: 'control-one', type: 'choice', choices: ['ok'], defaultValue: 'ok',
-      scenePath: 'constructor.prototype', profilePath: 'value'
+      scenePath: 'constructor.prototype', profilePath: 'value', labelKey: 'layers.value'
     }]
   }]), /control is invalid/);
 });

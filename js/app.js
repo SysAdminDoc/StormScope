@@ -18,7 +18,7 @@
   })();
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.120.0';
+  var APP_VERSION = '0.121.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -3321,6 +3321,7 @@
       try { localStorage.setItem('stormscope-weather-units', weatherUnits); } catch (error) { /* optional */ }
       if (activeCamera) fetchWeather(activeCamera.lat, activeCamera.lon, activeCamera);
     }
+    renderLayerNavigation();
   }
 
   function setSavedStateStatus(message, error) {
@@ -4788,6 +4789,81 @@
 
   // ── UI Bindings ──
 
+  function normalizeLayerFilterText(value) {
+    return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase(appLocale).trim();
+  }
+
+  function layerFilterText(descriptor) {
+    var keys = [descriptor.labelKey, descriptor.groupLabelKey]
+      .concat(descriptor.searchKeys)
+      .concat(descriptor.controls.map(function (control) { return control.labelKey; }));
+    return normalizeLayerFilterText(keys.map(function (key) { return tr(key); }).join(' '));
+  }
+
+  function renderLayerNavigation() {
+    var queryInput = document.getElementById('layer-filter-query');
+    var activeInput = document.getElementById('layer-filter-active');
+    if (!queryInput || !activeInput) return;
+    var query = normalizeLayerFilterText(queryInput.value);
+    var activeOnly = activeInput.checked;
+    var visibleCount = 0;
+    var visibleGroups = Object.create(null);
+
+    StormScopeLayerRegistry.descriptors.forEach(function (descriptor) {
+      var toggle = document.getElementById(descriptor.toggleId);
+      var visible = (!query || layerFilterText(descriptor).indexOf(query) !== -1) &&
+        (!activeOnly || Boolean(toggle && toggle.checked));
+      document.querySelectorAll('[data-layer-id="' + descriptor.id + '"]').forEach(function (element) {
+        element.hidden = !visible;
+      });
+      if (visible) {
+        visibleCount += 1;
+        visibleGroups[descriptor.groupId] = true;
+      }
+    });
+
+    document.querySelectorAll('[data-layer-section]').forEach(function (heading) {
+      heading.hidden = !visibleGroups[heading.dataset.layerSection];
+    });
+    document.getElementById('layer-filter-count').textContent = tr('layers.filterCount', {
+      count: localNumber(visibleCount), total: localNumber(StormScopeLayerRegistry.descriptors.length)
+    });
+    document.getElementById('layer-filter-clear').disabled = !query && !activeOnly;
+    document.getElementById('layer-filter-empty').hidden = visibleCount !== 0;
+  }
+
+  function clearLayerNavigation() {
+    document.getElementById('layer-filter-query').value = '';
+    document.getElementById('layer-filter-active').checked = false;
+    renderLayerNavigation();
+  }
+
+  function initLayerNavigation() {
+    var panel = document.getElementById('layers-panel');
+    var queryInput = document.getElementById('layer-filter-query');
+    var activeInput = document.getElementById('layer-filter-active');
+    var clearButton = document.getElementById('layer-filter-clear');
+    var toggleIds = Object.create(null);
+    StormScopeLayerRegistry.descriptors.forEach(function (descriptor) { toggleIds[descriptor.toggleId] = true; });
+    queryInput.addEventListener('input', renderLayerNavigation);
+    activeInput.addEventListener('change', renderLayerNavigation);
+    clearButton.addEventListener('click', function () {
+      clearLayerNavigation();
+      queryInput.focus();
+    });
+    queryInput.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && (queryInput.value || activeInput.checked)) {
+        event.preventDefault();
+        event.stopPropagation();
+        clearLayerNavigation();
+      }
+    });
+    panel.addEventListener('change', function (event) {
+      if (toggleIds[event.target.id]) renderLayerNavigation();
+    });
+    renderLayerNavigation();
+  }
+
   var TOP_LEVEL_PANELS = Object.freeze([
     Object.freeze({ panel: 'search-panel', toggle: 'btn-search' }),
     Object.freeze({ panel: 'situation-panel', toggle: 'btn-summary' }),
@@ -5074,6 +5150,7 @@
   }
 
   function bindUI() {
+    initLayerNavigation();
     document.getElementById('wake-lock-monitoring').addEventListener('change', function () {
       wakeLockController.setEnabled(this.checked, true);
     });
@@ -5192,6 +5269,7 @@
       appLocale = StormScopeI18n.setLocale(this.value);
       try { localStorage.setItem(StormScopeI18n.STORAGE_KEY, appLocale); } catch (error) { /* optional */ }
       StormScopeI18n.localizeDocument(document);
+      renderLayerNavigation();
       updateConnectionState();
       updateRadarScrubber();
       applyRadarPalette();

@@ -82,6 +82,42 @@ async function assertOnlyTopLevelSurface(page, expected, label) {
   await assertEveryControlReachable(page, expected, label);
 }
 
+async function exerciseLayerNavigation(page, options) {
+  const before = await page.evaluate(() => window._stormscope.getLayerRegistryState().enabled);
+  const query = page.locator('#layer-filter-query');
+  const clear = page.locator('#layer-filter-clear');
+  const count = page.locator('#layer-filter-count');
+  const groupQuery = options.locale === 'es' ? 'Contexto de peligros' : 'Hazard context';
+
+  await query.fill(groupQuery);
+  assert.match(await count.textContent(), /\b4\b/);
+  assert.equal(await page.locator('[data-layer-id="lightning"]').first().isVisible(), true);
+  assert.equal(await page.locator('[data-layer-id="earthquakes"]').first().isVisible(), true);
+  assert.equal(await page.locator('[data-layer-id="radar"]').first().isVisible(), false);
+
+  if (options.detailed) {
+    await query.fill(options.locale === 'es' ? 'magnitud' : 'magnitude');
+    assert.match(await count.textContent(), /\b1\b/);
+    assert.equal(await page.locator('#earthquake-magnitude').isVisible(), true);
+    assert.equal(await page.locator('#earthquake-status').isVisible(), true, 'provider status must remain reachable while filtering');
+
+    await query.fill('no-layer-can-match-this');
+    assert.match(await count.textContent(), /\b0\b/);
+    assert.equal(await page.locator('#layer-filter-empty').isVisible(), true);
+    await clear.click();
+
+    await page.locator('#layer-filter-active').check();
+    const activeCount = Object.values(before).filter(Boolean).length;
+    assert.match(await count.textContent(), new RegExp('\\b' + activeCount + '\\b'));
+  }
+
+  await clear.click();
+  assert.equal(await query.inputValue(), '');
+  assert.equal(await page.locator('#layer-filter-active').isChecked(), false);
+  assert.deepEqual(await page.evaluate(() => window._stormscope.getLayerRegistryState().enabled), before,
+    'layer navigation must not change enabled state');
+}
+
 async function exerciseNarrowPanelState(page, options) {
   const label = `${options.width}px ${options.locale} ${options.theme} ${options.offline ? 'offline' : 'online'}`;
   await page.context().setOffline(options.offline);
@@ -95,6 +131,7 @@ async function exerciseNarrowPanelState(page, options) {
   await page.locator('#app-locale').selectOption(alternateLocale);
   await page.locator('#app-locale').selectOption(options.locale);
   await page.locator('#app-theme').selectOption(options.theme);
+  if (options.width === 320) await exerciseLayerNavigation(page, { locale: options.locale, detailed: false });
   await assertOnlyTopLevelSurface(page, '#layers-panel', `${label} layers after alert re-render`);
 
   await page.locator('#btn-search').click();
@@ -1453,6 +1490,7 @@ async function main() {
 
     await page.getByRole('button', { name: 'Toggle layers panel' }).click();
     assert.equal(await page.locator('#saved-views optgroup[label="Workflow presets"] option').count(), 3);
+    await exerciseLayerNavigation(page, { locale: 'en', detailed: true });
     await page.locator('#radar-palette').selectOption('contrast');
     await page.locator('#radar-speed').selectOption('400');
     await page.locator('#alert-severity').selectOption('severe');

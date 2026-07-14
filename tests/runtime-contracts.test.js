@@ -209,6 +209,29 @@ test('operational layer identity, controls, and lifecycle ownership use one loca
   assert.match(app, /StormScopeLayerRegistry\.lifecycleDescriptors\(\)\.forEach/);
 });
 
+test('layer navigation is searchable, active-only, localized, and state-preserving', () => {
+  assert.match(html, /id="layer-filter-query"[^>]*type="search"/);
+  assert.match(html, /id="layer-filter-active"[^>]*type="checkbox"/);
+  assert.match(html, /id="layer-filter-count"[^>]*role="status"[^>]*aria-live="polite"/);
+  assert.match(html, /id="layer-filter-clear"[^>]*disabled/);
+  assert.match(html, /id="layer-filter-empty"[^>]*role="status"[^>]*hidden/);
+  assert.match(html, /data-layer-section="hazards"/);
+  assert.match(html, /data-layer-id="earthquakes"/);
+  assert.match(css, /\.layer-filter-toolbar[\s\S]*position: sticky/);
+  assert.match(app, /function renderLayerNavigation\(\)/);
+  assert.match(app, /layerFilterText\(descriptor\)\.indexOf\(query\)/);
+  assert.match(app, /!activeOnly \|\| Boolean\(toggle && toggle\.checked\)/);
+  assert.match(app, /event\.key === 'Escape'/);
+  assert.doesNotMatch(app.slice(app.indexOf('function renderLayerNavigation()'), app.indexOf('function clearLayerNavigation()')),
+    /\.checked\s*=/);
+  for (const locale of ['en', 'es']) {
+    for (const key of ['layers.searchLabel', 'layers.searchPlaceholder', 'layers.activeOnly', 'layers.filterCount',
+      'layers.clearFilters', 'layers.noMatches']) {
+      assert.ok(i18n.catalogs[locale][key], `${locale} catalog should define ${key}`);
+    }
+  }
+});
+
 test('incident camera proximity loads before the app and remains available offline', () => {
   const spatialPosition = html.indexOf('js/spatial-query.js');
   const appPosition = html.indexOf('js/app.js');

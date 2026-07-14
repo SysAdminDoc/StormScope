@@ -7,44 +7,81 @@
   if (root) root.StormScopeLayerRegistry = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   var RAW_DESCRIPTORS = [
-    { id: 'radar', toggleId: 'toggle-radar', defaultEnabled: true },
-    { id: 'cameras', toggleId: 'toggle-cameras', defaultEnabled: true },
-    { id: 'coverage', toggleId: 'toggle-coverage', defaultEnabled: false },
-    { id: 'alerts', toggleId: 'toggle-alerts', defaultEnabled: true, lifecycleId: 'alerts' },
-    { id: 'lightning', toggleId: 'toggle-lightning', defaultEnabled: false, lifecycleId: 'lightning' },
-    { id: 'wildfires', toggleId: 'toggle-wildfires', defaultEnabled: false, lifecycleId: 'wildfires' },
-    { id: 'satellite', toggleId: 'toggle-satellite', defaultEnabled: false, lifecycleId: 'satellite' },
-    { id: 'tropical', toggleId: 'toggle-tropical', defaultEnabled: false, lifecycleId: 'tropical' },
+    {
+      id: 'radar', toggleId: 'toggle-radar', defaultEnabled: true,
+      labelKey: 'layers.radar', groupId: 'base', groupLabelKey: 'layers.groupBase',
+      searchKeys: ['layers.opacity', 'radar.playback', 'radar.presentation']
+    },
+    {
+      id: 'cameras', toggleId: 'toggle-cameras', defaultEnabled: true,
+      labelKey: 'layers.cameras', groupId: 'base', groupLabelKey: 'layers.groupBase'
+    },
+    {
+      id: 'coverage', toggleId: 'toggle-coverage', defaultEnabled: false,
+      labelKey: 'layers.coverage', groupId: 'base', groupLabelKey: 'layers.groupBase'
+    },
+    {
+      id: 'alerts', toggleId: 'toggle-alerts', defaultEnabled: true, lifecycleId: 'alerts',
+      labelKey: 'layers.alerts', groupId: 'warnings', groupLabelKey: 'layers.groupWarnings',
+      searchKeys: ['alerts.minimum']
+    },
+    {
+      id: 'lightning', toggleId: 'toggle-lightning', defaultEnabled: false, lifecycleId: 'lightning',
+      labelKey: 'layers.lightning', groupId: 'hazards', groupLabelKey: 'layers.groupHazards'
+    },
+    {
+      id: 'wildfires', toggleId: 'toggle-wildfires', defaultEnabled: false, lifecycleId: 'wildfires',
+      labelKey: 'layers.wildfires', groupId: 'hazards', groupLabelKey: 'layers.groupHazards'
+    },
+    {
+      id: 'satellite', toggleId: 'toggle-satellite', defaultEnabled: false, lifecycleId: 'satellite',
+      labelKey: 'layers.satellite', groupId: 'storms', groupLabelKey: 'layers.groupStorms'
+    },
+    {
+      id: 'tropical', toggleId: 'toggle-tropical', defaultEnabled: false, lifecycleId: 'tropical',
+      labelKey: 'layers.tropical', groupId: 'storms', groupLabelKey: 'layers.groupStorms'
+    },
     {
       id: 'wpcOutlooks', toggleId: 'toggle-wpc-outlooks', defaultEnabled: false, lifecycleId: 'wpc-outlooks',
+      labelKey: 'layers.wpcOutlooks', groupId: 'outlooks', groupLabelKey: 'layers.groupOutlooks',
       controls: [{
         key: 'outlookDay', controlId: 'wpc-outlook-day', type: 'integer', minimum: 1, maximum: 3,
-        scenePath: 'outlookDay', profilePath: 'outlookDay', defaultValue: 1
+        scenePath: 'outlookDay', profilePath: 'outlookDay', defaultValue: 1, labelKey: 'layers.wpcDay'
       }]
     },
-    { id: 'usgsGauges', toggleId: 'toggle-usgs-gauges', defaultEnabled: false, lifecycleId: 'usgs-gauges' },
+    {
+      id: 'usgsGauges', toggleId: 'toggle-usgs-gauges', defaultEnabled: false, lifecycleId: 'usgs-gauges',
+      labelKey: 'layers.usgsGauges', groupId: 'hazards', groupLabelKey: 'layers.groupHazards'
+    },
     {
       id: 'earthquakes', toggleId: 'toggle-earthquakes', defaultEnabled: false, lifecycleId: 'earthquakes',
+      labelKey: 'layers.earthquakes', groupId: 'hazards', groupLabelKey: 'layers.groupHazards',
       controls: [
         {
           key: 'magnitude', controlId: 'earthquake-magnitude', type: 'choice',
           choices: ['significant', '4.5', '2.5', '1.0', 'all'],
-          scenePath: 'earthquake.magnitude', profilePath: 'earthquake.magnitude', defaultValue: '2.5'
+          scenePath: 'earthquake.magnitude', profilePath: 'earthquake.magnitude', defaultValue: '2.5',
+          labelKey: 'layers.earthquakeMagnitude'
         },
         {
           key: 'period', controlId: 'earthquake-period', type: 'choice', choices: ['hour', 'day', 'week', 'month'],
-          scenePath: 'earthquake.period', profilePath: 'earthquake.period', defaultValue: 'day'
+          scenePath: 'earthquake.period', profilePath: 'earthquake.period', defaultValue: 'day',
+          labelKey: 'layers.earthquakePeriod'
         }
       ]
     },
     {
       id: 'convective', toggleId: 'toggle-convective', defaultEnabled: false, lifecycleId: 'convective',
+      labelKey: 'layers.convective', groupId: 'outlooks', groupLabelKey: 'layers.groupOutlooks',
       controls: [{
         key: 'convectiveDay', controlId: 'convective-day', type: 'integer', minimum: 1, maximum: 3,
-        scenePath: 'convectiveDay', profilePath: 'convectiveDay', defaultValue: 1
+        scenePath: 'convectiveDay', profilePath: 'convectiveDay', defaultValue: 1, labelKey: 'layers.convectiveDay'
       }]
     },
-    { id: 'watches', toggleId: 'toggle-watches', defaultEnabled: false, lifecycleId: 'watches' }
+    {
+      id: 'watches', toggleId: 'toggle-watches', defaultEnabled: false, lifecycleId: 'watches',
+      labelKey: 'layers.watches', groupId: 'warnings', groupLabelKey: 'layers.groupWarnings'
+    }
   ];
 
   var ID_PATTERN = /^[A-Za-z][A-Za-z0-9_-]*$/;
@@ -68,6 +105,14 @@
         throw new TypeError('layer descriptor id is invalid');
       }
       if (!ID_PATTERN.test(descriptor.toggleId || '')) throw new TypeError(descriptor.id + ' toggle id is invalid');
+      if (!ID_PATTERN.test(descriptor.groupId || '') || !validPath(descriptor.labelKey) ||
+          !validPath(descriptor.groupLabelKey)) {
+        throw new TypeError(descriptor.id + ' navigation metadata is invalid');
+      }
+      if (descriptor.searchKeys != null && (!Array.isArray(descriptor.searchKeys) ||
+          !descriptor.searchKeys.every(validPath))) {
+        throw new TypeError(descriptor.id + ' search keys are invalid');
+      }
       if (typeof descriptor.defaultEnabled !== 'boolean') throw new TypeError(descriptor.id + ' default must be boolean');
       if (ids.has(descriptor.id)) throw new TypeError('duplicate layer id: ' + descriptor.id);
       if (toggles.has(descriptor.toggleId)) throw new TypeError('duplicate layer toggle: ' + descriptor.toggleId);
@@ -80,7 +125,7 @@
       }
       (descriptor.controls || []).forEach(function (control) {
         if (!control || !ID_PATTERN.test(control.key || '') || !ID_PATTERN.test(control.controlId || '') ||
-            !validPath(control.scenePath) || !validPath(control.profilePath) ||
+            !validPath(control.scenePath) || !validPath(control.profilePath) || !validPath(control.labelKey) ||
             ['integer', 'choice'].indexOf(control.type) === -1) {
           throw new TypeError(descriptor.id + ' control is invalid');
         }
@@ -104,13 +149,15 @@
       sceneKey: descriptor.id,
       profileKey: descriptor.id,
       lifecycleId: null,
-      controls: []
+      controls: [],
+      searchKeys: []
     }, descriptor);
     copy.controls = Object.freeze(copy.controls.map(function (control) {
       var next = Object.assign({}, control);
       if (next.choices) next.choices = Object.freeze(next.choices.slice());
       return Object.freeze(next);
     }));
+    copy.searchKeys = Object.freeze(copy.searchKeys.slice());
     return Object.freeze(copy);
   }
 

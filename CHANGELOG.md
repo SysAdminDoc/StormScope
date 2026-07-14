@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.121.0 - 2026-07-14
+
+- Added sticky localized layer search, section and parameter matching, active-only navigation, live result counts, one-action reset, and accessible empty states across desktop and mobile. SW v94.
+
 ## v0.120.0 - 2026-07-14
 
 - Centralized layer identity, defaults, scene/workflow controls, and lifecycle ownership in a validated offline registry, including WPC, earthquake, and convective round-trips. SW v93.
