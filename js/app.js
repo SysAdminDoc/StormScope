@@ -18,7 +18,7 @@
   })();
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.110.0';
+  var APP_VERSION = '0.111.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -60,6 +60,8 @@
   var cameraIconCache = Object.create(null);
   var cameraObservations = Object.create(null);
   var cameraStore = null;
+  var cameraSourceHealth = null;
+  var cameraSourceHealthState = 'loading';
   var cameraLoadMetrics = { startedAt: 0, firstBatchMs: null, completeMs: null, source: null, index: null };
   var cameraLoadProcessed = 0;
   var cameraCatalogDeferred = false;
@@ -2622,6 +2624,23 @@
     scheduleSearchRender();
   }
 
+  function refreshCameraSourceHealth() {
+    if (!cameraStore) return;
+    if (!cameraSourceHealth) cameraSourceHealthState = 'loading';
+    renderCameraSourceHealth();
+    cameraStore.loadSourceHealth().then(function (health) {
+      cameraSourceHealth = health;
+      cameraSourceHealthState = 'ready';
+      renderCameraSourceHealth();
+    }).catch(function (error) {
+      if (error && error.name === 'AbortError') return;
+      cameraSourceHealth = cameraStore.getSourceHealth();
+      cameraSourceHealthState = cameraSourceHealth ? 'ready' : 'unavailable';
+      diagnostics.capture(error, 'camera-source-health');
+      renderCameraSourceHealth();
+    });
+  }
+
   function showDeferredCameraCatalog(index) {
     cameraCatalogDeferred = true;
     var container = document.getElementById('camera-catalog-deferred');
@@ -2643,7 +2662,9 @@
     cameraLoadMetrics.firstBatchMs = null;
     cameraLoadProcessed = 0;
     try {
-      var result = await cameraStore.resume({ onProgress: handleCameraLoadProgress });
+      var resumePromise = cameraStore.resume({ onProgress: handleCameraLoadProgress });
+      refreshCameraSourceHealth();
+      var result = await resumePromise;
       cameraLoadMetrics.completeMs = performance.now() - cameraLoadMetrics.startedAt;
       cameraLoadMetrics.source = result.source;
       cameraLoadMetrics.index = result.index;
@@ -2691,9 +2712,15 @@
       cameraLoadMetrics = { startedAt: performance.now(), firstBatchMs: null, completeMs: null, source: null, index: null };
       cameraStore = new StormScopeCameraStore.CameraStore({
         indexUrl: 'data/cameras.index.json',
-        monolithUrl: 'data/cameras.json'
+        monolithUrl: 'data/cameras.json',
+        sourceHealthUrl: 'data/source-health.json'
       });
-      var result = await cameraStore.load({ deferShards: dataPolicy.deferCameraCatalog, onProgress: handleCameraLoadProgress });
+      var cameraLoadPromise = cameraStore.load({
+        deferShards: dataPolicy.deferCameraCatalog,
+        onProgress: handleCameraLoadProgress
+      });
+      refreshCameraSourceHealth();
+      var result = await cameraLoadPromise;
       cameraLoadMetrics.completeMs = performance.now() - cameraLoadMetrics.startedAt;
       cameraLoadMetrics.source = result.source;
       cameraLoadMetrics.index = result.index;
@@ -2854,6 +2881,7 @@
     }
 
     var filters = cameraSearchFilters();
+    renderCameraSourceHealth();
     var center = map.getCenter();
     var results = cameraStore.search(filters, {
       sortBy: document.getElementById('camera-sort').value,
@@ -3406,6 +3434,47 @@
       degraded: localNumber(index.health_totals.degraded || 0),
       unverified: localNumber(index.health_totals.unknown || 0)
     });
+  }
+
+  function renderCameraSourceHealth() {
+    var element = document.getElementById('camera-source-health');
+    if (!element) return;
+    if (!cameraSourceHealth) {
+      element.dataset.status = cameraSourceHealthState;
+      element.textContent = tr(cameraSourceHealthState === 'loading'
+        ? 'camera.sourceHealthLoading'
+        : 'camera.sourceHealthUnavailable');
+      return;
+    }
+    var source = document.getElementById('camera-source').value;
+    var summary = StormScopeCameraStore.summarizeSourceHealth(cameraSourceHealth, source);
+    if (!summary) {
+      element.dataset.status = 'unavailable';
+      element.textContent = tr('camera.sourceHealthUnavailable');
+      return;
+    }
+    var scope = source
+      ? tr('camera.sourceHealthSelected', { source: tr('source.' + source) })
+      : tr('camera.sourceHealthAll');
+    var delta = summary.coverageDelta > 0
+      ? '+' + localNumber(summary.coverageDelta)
+      : localNumber(summary.coverageDelta);
+    element.dataset.status = summary.failed
+      ? 'failed'
+      : summary.retained ? 'retained' : summary.fresh ? 'fresh' : 'unknown';
+    element.textContent = tr('camera.sourceHealthSummary', {
+      scope: scope,
+      fresh: localNumber(summary.fresh),
+      retained: localNumber(summary.retained),
+      failed: localNumber(summary.failed),
+      unknown: localNumber(summary.unknown),
+      cameras: localNumber(summary.cameras),
+      delta: delta
+    }) + (summary.lastAttemptAt ? tr('camera.sourceHealthAttempt', {
+      time: StormScopeI18n.formatDateTime(new Date(summary.lastAttemptAt), {
+        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+      }, appLocale)
+    }) : '');
   }
 
   function refreshCameraLoadLabels() {
@@ -5073,6 +5142,7 @@
       if (radarFrames.length) updateRadarTimeDisplay();
       if (cameraDataTimestamp) updateDataFreshness();
       refreshCameraLoadLabels();
+      renderCameraSourceHealth();
       refreshCameraMarkerLabels();
       refreshSavedViews(document.getElementById('saved-views').value);
       updateMonitorSelectionUi();
@@ -5633,6 +5703,7 @@
     var report = diagnostics.report({
       appVersion: APP_VERSION,
       corpusGeneration: cameraLoadMetrics.index && cameraLoadMetrics.index.generated_at,
+      cameraIngestion: cameraSourceHealth,
       providers: {
         radar: radarProviderId,
         radarStatus: radarProviderSelection && radarProviderSelection.degradationReason || 'ready',

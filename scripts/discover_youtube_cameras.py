@@ -76,7 +76,7 @@ YT_DLP_SHORTCUT_FLAGS = frozenset({"--write-link", "--write-url-link", "--write-
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 "
-    "StormScope/0.110.0"
+    "StormScope/0.111.0"
 )
 
 US_STATES = {

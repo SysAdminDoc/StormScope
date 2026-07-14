@@ -331,7 +331,7 @@
     <div class="search-filter-grid">
       <label>State or country<input id="camera-state" type="text" list="camera-states" placeholder="All"></label>
       <datalist id="camera-states"></datalist>
-      <label>Source<select id="camera-source"><option value="">All</option><option value="angelcam">AngelCam</option><option value="dot">DOT</option><option value="faa">FAA</option><option value="hazcams">Hazcams</option><option value="noaa">NOAA/NWS</option><option value="nps">NPS</option><option value="state_park">State Park</option><option value="usgs">USGS</option><option value="nrao">NRAO</option><option value="smithsonian">Smithsonian</option><option value="university">University</option><option value="mwra">MWRA</option><option value="earthcam">EarthCam</option><option value="ipcamlive">IPCamLive</option><option value="rtspme">RTSP.me</option><option value="youtube">YouTube</option><option value="livebeaches">LiveBeaches</option></select></label>
+      <label>Source<select id="camera-source" aria-describedby="camera-source-health"><option value="">All</option><option value="angelcam">AngelCam</option><option value="dot">DOT</option><option value="faa">FAA</option><option value="hazcams">Hazcams</option><option value="noaa">NOAA/NWS</option><option value="nps">NPS</option><option value="state_park">State Park</option><option value="usgs">USGS</option><option value="nrao">NRAO</option><option value="smithsonian">Smithsonian</option><option value="university">University</option><option value="mwra">MWRA</option><option value="earthcam">EarthCam</option><option value="ipcamlive">IPCamLive</option><option value="rtspme">RTSP.me</option><option value="youtube">YouTube</option><option value="livebeaches">LiveBeaches</option></select></label>
       <label>Feed type<select id="camera-type"><option value="">All</option><option value="image">Image</option><option value="hls">HLS video</option><option value="mjpeg">MJPEG</option><option value="embed">Embed</option><option value="youtube">YouTube</option></select></label>
       <label>Sort<select id="camera-sort"><option value="name">Name</option><option value="distance">Distance from map center</option></select></label>
     </div>
@@ -339,6 +339,7 @@
       <label><input id="camera-healthy" type="checkbox"> Healthy only</label>
       <label><input id="camera-favorites" type="checkbox"> Favorites only</label>
     </div>
+    <div id="camera-source-health" class="camera-source-health" data-status="loading" data-i18n="camera.sourceHealthLoading">Loading refresh health…</div>
     <div id="camera-results-status" class="camera-results-status" role="status" aria-live="polite"></div>
     <div class="monitor-actions">
       <span id="monitor-selection-status" role="status" aria-live="polite">0 of 4 selected</span>

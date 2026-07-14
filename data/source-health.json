@@ -1,0 +1,1731 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-12T20:46:37Z",
+  "providers": [
+    {
+      "name": "Alaska (511)",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [
+        "dot"
+      ],
+      "previous_camera_source_counts": {
+        "dot": 123
+      },
+      "camera_source_counts": {
+        "dot": 123
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 123,
+      "final_count": 123,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Alaska Volcano Observatory / U.S. Geological Survey",
+      "family": "verified-curated",
+      "status": "unknown",
+      "camera_sources": [
+        "usgs"
+      ],
+      "previous_camera_source_counts": {
+        "usgs": 3
+      },
+      "camera_source_counts": {
+        "usgs": 3
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 3,
+      "final_count": 3,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "American Samoa (Clipper Oil/IPCamLive)",
+      "family": "hosted-camera",
+      "status": "unknown",
+      "camera_sources": [
+        "ipcamlive"
+      ],
+      "previous_camera_source_counts": {
+        "ipcamlive": 1
+      },
+      "camera_source_counts": {
+        "ipcamlive": 1
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 1,
+      "final_count": 1,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Arizona (AZ511)",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [
+        "dot"
+      ],
+      "previous_camera_source_counts": {
+        "dot": 644
+      },
+      "camera_source_counts": {
+        "dot": 644
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 644,
+      "final_count": 644,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Arkansas (Cobblestone/RTSP.me)",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [
+        "rtspme"
+      ],
+      "previous_camera_source_counts": {
+        "rtspme": 1
+      },
+      "camera_source_counts": {
+        "rtspme": 1
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 1,
+      "final_count": 1,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Arkansas (Hazcams weather network)",
+      "family": "hosted-camera",
+      "status": "unknown",
+      "camera_sources": [
+        "hazcams"
+      ],
+      "previous_camera_source_counts": {
+        "hazcams": 17
+      },
+      "camera_source_counts": {
+        "hazcams": 17
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 17,
+      "final_count": 17,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Austin TX",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [],
+      "previous_camera_source_counts": {},
+      "camera_source_counts": {},
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 0,
+      "final_count": 0,
+      "coverage_delta": 0,
+      "coverage_delta_percent": null,
+      "failure_class": null
+    },
+    {
+      "name": "Caltrans (California)",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [],
+      "previous_camera_source_counts": {},
+      "camera_source_counts": {},
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 0,
+      "final_count": 0,
+      "coverage_delta": 0,
+      "coverage_delta_percent": null,
+      "failure_class": null
+    },
+    {
+      "name": "Colorado DOT (live)",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [],
+      "previous_camera_source_counts": {},
+      "camera_source_counts": {},
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 0,
+      "final_count": 0,
+      "coverage_delta": 0,
+      "coverage_delta_percent": null,
+      "failure_class": null
+    },
+    {
+      "name": "Connecticut (CT511)",
+      "family": "traveler-mapicons",
+      "status": "unknown",
+      "camera_sources": [],
+      "previous_camera_source_counts": {},
+      "camera_source_counts": {},
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 0,
+      "final_count": 0,
+      "coverage_delta": 0,
+      "coverage_delta_percent": null,
+      "failure_class": null
+    },
+    {
+      "name": "Connecticut AngelCam verified",
+      "family": "verified-curated",
+      "status": "unknown",
+      "camera_sources": [
+        "angelcam"
+      ],
+      "previous_camera_source_counts": {
+        "angelcam": 4
+      },
+      "camera_source_counts": {
+        "angelcam": 4
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 4,
+      "final_count": 4,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Delaware (Cape May-Lewes Ferry)",
+      "family": "verified-curated",
+      "status": "unknown",
+      "camera_sources": [
+        "dot"
+      ],
+      "previous_camera_source_counts": {
+        "dot": 6
+      },
+      "camera_source_counts": {
+        "dot": 6
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 6,
+      "final_count": 6,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Delaware (live HLS)",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [
+        "dot"
+      ],
+      "previous_camera_source_counts": {
+        "dot": 314
+      },
+      "camera_source_counts": {
+        "dot": 314
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 314,
+      "final_count": 314,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "FAA WeatherCams / North Dakota airports",
+      "family": "hosted-camera",
+      "status": "unknown",
+      "camera_sources": [],
+      "previous_camera_source_counts": {},
+      "camera_source_counts": {},
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 0,
+      "final_count": 0,
+      "coverage_delta": 0,
+      "coverage_delta_percent": null,
+      "failure_class": null
+    },
+    {
+      "name": "Florida (ArcGIS)",
+      "family": "geospatial-api",
+      "status": "unknown",
+      "camera_sources": [],
+      "previous_camera_source_counts": {},
+      "camera_source_counts": {},
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 0,
+      "final_count": 0,
+      "coverage_delta": 0,
+      "coverage_delta_percent": null,
+      "failure_class": null
+    },
+    {
+      "name": "Florida (FL511)",
+      "family": "traveler-mapicons",
+      "status": "unknown",
+      "camera_sources": [],
+      "previous_camera_source_counts": {},
+      "camera_source_counts": {},
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 0,
+      "final_count": 0,
+      "coverage_delta": 0,
+      "coverage_delta_percent": null,
+      "failure_class": null
+    },
+    {
+      "name": "Georgia DOT (DataTables)",
+      "family": "traveler-datatables",
+      "status": "unknown",
+      "camera_sources": [],
+      "previous_camera_source_counts": {},
+      "camera_source_counts": {},
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 0,
+      "final_count": 0,
+      "coverage_delta": 0,
+      "coverage_delta_percent": null,
+      "failure_class": null
+    },
+    {
+      "name": "Guam (GNTF/IPCamLive)",
+      "family": "hosted-camera",
+      "status": "unknown",
+      "camera_sources": [
+        "ipcamlive"
+      ],
+      "previous_camera_source_counts": {
+        "ipcamlive": 1
+      },
+      "camera_source_counts": {
+        "ipcamlive": 1
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 1,
+      "final_count": 1,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Hawaii USGS verified",
+      "family": "verified-curated",
+      "status": "unknown",
+      "camera_sources": [],
+      "previous_camera_source_counts": {},
+      "camera_source_counts": {},
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 0,
+      "final_count": 0,
+      "coverage_delta": 0,
+      "coverage_delta_percent": null,
+      "failure_class": null
+    },
+    {
+      "name": "Idaho (ID511)",
+      "family": "traveler-mapicons",
+      "status": "unknown",
+      "camera_sources": [],
+      "previous_camera_source_counts": {},
+      "camera_source_counts": {},
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 0,
+      "final_count": 0,
+      "coverage_delta": 0,
+      "coverage_delta_percent": null,
+      "failure_class": null
+    },
+    {
+      "name": "Illinois DOT",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [],
+      "previous_camera_source_counts": {},
+      "camera_source_counts": {},
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 0,
+      "final_count": 0,
+      "coverage_delta": 0,
+      "coverage_delta_percent": null,
+      "failure_class": null
+    },
+    {
+      "name": "Iowa DOT",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [
+        "dot"
+      ],
+      "previous_camera_source_counts": {
+        "dot": 1123
+      },
+      "camera_source_counts": {
+        "dot": 1123
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 1123,
+      "final_count": 1123,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Kansas (KanDrive)",
+      "family": "traveler-cars-graphql",
+      "status": "unknown",
+      "camera_sources": [
+        "dot"
+      ],
+      "previous_camera_source_counts": {
+        "dot": 518
+      },
+      "camera_source_counts": {
+        "dot": 518
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 518,
+      "final_count": 518,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Kentucky NPS verified",
+      "family": "verified-curated",
+      "status": "unknown",
+      "camera_sources": [
+        "nps"
+      ],
+      "previous_camera_source_counts": {
+        "nps": 1
+      },
+      "camera_source_counts": {
+        "nps": 1
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 1,
+      "final_count": 1,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Kentucky Transportation Cabinet (KYTC)",
+      "family": "verified-curated",
+      "status": "unknown",
+      "camera_sources": [
+        "dot"
+      ],
+      "previous_camera_source_counts": {
+        "dot": 29
+      },
+      "camera_source_counts": {
+        "dot": 29
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 29,
+      "final_count": 29,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Louisiana (LA511)",
+      "family": "traveler-mapicons",
+      "status": "unknown",
+      "camera_sources": [],
+      "previous_camera_source_counts": {},
+      "camera_source_counts": {},
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 0,
+      "final_count": 0,
+      "coverage_delta": 0,
+      "coverage_delta_percent": null,
+      "failure_class": null
+    },
+    {
+      "name": "Maine Ferry verified",
+      "family": "verified-curated",
+      "status": "unknown",
+      "camera_sources": [
+        "dot"
+      ],
+      "previous_camera_source_counts": {
+        "dot": 1
+      },
+      "camera_source_counts": {
+        "dot": 1
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 1,
+      "final_count": 1,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Maine NPS verified",
+      "family": "verified-curated",
+      "status": "unknown",
+      "camera_sources": [
+        "nps"
+      ],
+      "previous_camera_source_counts": {
+        "nps": 1
+      },
+      "camera_source_counts": {
+        "nps": 1
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 1,
+      "final_count": 1,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Maryland (CHART)",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [
+        "dot"
+      ],
+      "previous_camera_source_counts": {
+        "dot": 514
+      },
+      "camera_source_counts": {
+        "dot": 514
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 514,
+      "final_count": 514,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Massachusetts MWRA",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [
+        "mwra"
+      ],
+      "previous_camera_source_counts": {
+        "mwra": 2
+      },
+      "camera_source_counts": {
+        "mwra": 2
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 2,
+      "final_count": 2,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Massachusetts NPS verified",
+      "family": "verified-curated",
+      "status": "unknown",
+      "camera_sources": [
+        "nps"
+      ],
+      "previous_camera_source_counts": {
+        "nps": 11
+      },
+      "camera_source_counts": {
+        "nps": 11
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 11,
+      "final_count": 11,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Michigan DOT",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [],
+      "previous_camera_source_counts": {},
+      "camera_source_counts": {},
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 0,
+      "final_count": 0,
+      "coverage_delta": 0,
+      "coverage_delta_percent": null,
+      "failure_class": null
+    },
+    {
+      "name": "Minnesota 511 (MnDOT IRIS)",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [
+        "dot"
+      ],
+      "previous_camera_source_counts": {
+        "dot": 1687
+      },
+      "camera_source_counts": {
+        "dot": 1687
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 1687,
+      "final_count": 1687,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Minnesota USGS verified",
+      "family": "verified-curated",
+      "status": "unknown",
+      "camera_sources": [
+        "usgs"
+      ],
+      "previous_camera_source_counts": {
+        "usgs": 12
+      },
+      "camera_source_counts": {
+        "usgs": 12
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 12,
+      "final_count": 12,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Mississippi (MDOT Traffic)",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [
+        "dot"
+      ],
+      "previous_camera_source_counts": {
+        "dot": 158
+      },
+      "camera_source_counts": {
+        "dot": 158
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 158,
+      "final_count": 158,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Mississippi State University",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [
+        "university"
+      ],
+      "previous_camera_source_counts": {
+        "university": 1
+      },
+      "camera_source_counts": {
+        "university": 1
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 1,
+      "final_count": 1,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Missouri DOT",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [],
+      "previous_camera_source_counts": {},
+      "camera_source_counts": {},
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 0,
+      "final_count": 0,
+      "coverage_delta": 0,
+      "coverage_delta_percent": null,
+      "failure_class": null
+    },
+    {
+      "name": "Montana (Iteris)",
+      "family": "geospatial-iteris",
+      "status": "unknown",
+      "camera_sources": [],
+      "previous_camera_source_counts": {},
+      "camera_source_counts": {},
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 0,
+      "final_count": 0,
+      "coverage_delta": 0,
+      "coverage_delta_percent": null,
+      "failure_class": null
+    },
+    {
+      "name": "Montana NPS verified",
+      "family": "verified-curated",
+      "status": "unknown",
+      "camera_sources": [
+        "nps"
+      ],
+      "previous_camera_source_counts": {
+        "nps": 9
+      },
+      "camera_source_counts": {
+        "nps": 9
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 9,
+      "final_count": 9,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Nebraska (511 Nebraska)",
+      "family": "traveler-cars-graphql",
+      "status": "unknown",
+      "camera_sources": [
+        "dot"
+      ],
+      "previous_camera_source_counts": {
+        "dot": 347
+      },
+      "camera_source_counts": {
+        "dot": 347
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 347,
+      "final_count": 347,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Nevada (NV511)",
+      "family": "traveler-mapicons",
+      "status": "unknown",
+      "camera_sources": [],
+      "previous_camera_source_counts": {},
+      "camera_source_counts": {},
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 0,
+      "final_count": 0,
+      "coverage_delta": 0,
+      "coverage_delta_percent": null,
+      "failure_class": null
+    },
+    {
+      "name": "New England 511 (ME/NH/VT)",
+      "family": "traveler-datatables",
+      "status": "unknown",
+      "camera_sources": [
+        "dot"
+      ],
+      "previous_camera_source_counts": {
+        "dot": 404
+      },
+      "camera_source_counts": {
+        "dot": 404
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 404,
+      "final_count": 404,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "New Hampshire university cameras",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [
+        "university"
+      ],
+      "previous_camera_source_counts": {
+        "university": 2
+      },
+      "camera_source_counts": {
+        "university": 2
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 2,
+      "final_count": 2,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "New Jersey Turnpike Authority",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [
+        "dot"
+      ],
+      "previous_camera_source_counts": {
+        "dot": 129
+      },
+      "camera_source_counts": {
+        "dot": 129
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 129,
+      "final_count": 129,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "New Mexico DOT",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [
+        "dot"
+      ],
+      "previous_camera_source_counts": {
+        "dot": 174
+      },
+      "camera_source_counts": {
+        "dot": 174
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 174,
+      "final_count": 174,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "New Mexico NPS verified",
+      "family": "verified-curated",
+      "status": "unknown",
+      "camera_sources": [
+        "nps"
+      ],
+      "previous_camera_source_counts": {
+        "nps": 1
+      },
+      "camera_source_counts": {
+        "nps": 1
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 1,
+      "final_count": 1,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "New Mexico NRAO",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [
+        "nrao"
+      ],
+      "previous_camera_source_counts": {
+        "nrao": 1
+      },
+      "camera_source_counts": {
+        "nrao": 1
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 1,
+      "final_count": 1,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "New Mexico NWS",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [
+        "noaa"
+      ],
+      "previous_camera_source_counts": {
+        "noaa": 3
+      },
+      "camera_source_counts": {
+        "noaa": 3
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 3,
+      "final_count": 3,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "New Mexico USGS",
+      "family": "verified-curated",
+      "status": "unknown",
+      "camera_sources": [
+        "usgs"
+      ],
+      "previous_camera_source_counts": {
+        "usgs": 3
+      },
+      "camera_source_counts": {
+        "usgs": 3
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 3,
+      "final_count": 3,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "North Carolina (DriveNC)",
+      "family": "traveler-mapicons",
+      "status": "unknown",
+      "camera_sources": [
+        "dot"
+      ],
+      "previous_camera_source_counts": {
+        "dot": 1114
+      },
+      "camera_source_counts": {
+        "dot": 1114
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 1114,
+      "final_count": 1114,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "North Dakota (NDDOT)",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [
+        "dot"
+      ],
+      "previous_camera_source_counts": {
+        "dot": 186
+      },
+      "camera_source_counts": {
+        "dot": 186
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 186,
+      "final_count": 186,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "North Dakota NPS verified",
+      "family": "verified-curated",
+      "status": "unknown",
+      "camera_sources": [
+        "nps"
+      ],
+      "previous_camera_source_counts": {
+        "nps": 1
+      },
+      "camera_source_counts": {
+        "nps": 1
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 1,
+      "final_count": 1,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "NPS Webcams",
+      "family": "verified-curated",
+      "status": "unknown",
+      "camera_sources": [],
+      "previous_camera_source_counts": {},
+      "camera_source_counts": {},
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 0,
+      "final_count": 0,
+      "coverage_delta": 0,
+      "coverage_delta_percent": null,
+      "failure_class": null
+    },
+    {
+      "name": "NYC DOT",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [],
+      "previous_camera_source_counts": {},
+      "camera_source_counts": {},
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 0,
+      "final_count": 0,
+      "coverage_delta": 0,
+      "coverage_delta_percent": null,
+      "failure_class": null
+    },
+    {
+      "name": "Oklahoma (OKTraffic)",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [
+        "dot"
+      ],
+      "previous_camera_source_counts": {
+        "dot": 360
+      },
+      "camera_source_counts": {
+        "dot": 360
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 360,
+      "final_count": 360,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Oregon (ODOT TripCheck)",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [
+        "dot"
+      ],
+      "previous_camera_source_counts": {
+        "dot": 1125
+      },
+      "camera_source_counts": {
+        "dot": 1125
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 1125,
+      "final_count": 1125,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Pennsylvania (PA511)",
+      "family": "traveler-mapicons",
+      "status": "unknown",
+      "camera_sources": [],
+      "previous_camera_source_counts": {},
+      "camera_source_counts": {},
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 0,
+      "final_count": 0,
+      "coverage_delta": 0,
+      "coverage_delta_percent": null,
+      "failure_class": null
+    },
+    {
+      "name": "Puerto Rico (ACT/ITS)",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [
+        "dot"
+      ],
+      "previous_camera_source_counts": {
+        "dot": 19
+      },
+      "camera_source_counts": {
+        "dot": 19
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 19,
+      "final_count": 19,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Puerto Rico NSF NEON / PhenoCam",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [],
+      "previous_camera_source_counts": {},
+      "camera_source_counts": {},
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 0,
+      "final_count": 0,
+      "coverage_delta": 0,
+      "coverage_delta_percent": null,
+      "failure_class": null
+    },
+    {
+      "name": "Rhode Island (RIDOT)",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [
+        "dot"
+      ],
+      "previous_camera_source_counts": {
+        "dot": 139
+      },
+      "camera_source_counts": {
+        "dot": 139
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 139,
+      "final_count": 139,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Rhode Island URI Quadcams",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [
+        "ipcamlive"
+      ],
+      "previous_camera_source_counts": {
+        "ipcamlive": 4
+      },
+      "camera_source_counts": {
+        "ipcamlive": 4
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 4,
+      "final_count": 4,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Smithsonian National Zoo",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [
+        "smithsonian"
+      ],
+      "previous_camera_source_counts": {
+        "smithsonian": 6
+      },
+      "camera_source_counts": {
+        "smithsonian": 6
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 6,
+      "final_count": 6,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "South Carolina (SkyVDN)",
+      "family": "geospatial-stream",
+      "status": "unknown",
+      "camera_sources": [
+        "dot"
+      ],
+      "previous_camera_source_counts": {
+        "dot": 731
+      },
+      "camera_source_counts": {
+        "dot": 731
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 731,
+      "final_count": 731,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "South Dakota (Iteris)",
+      "family": "geospatial-iteris",
+      "status": "unknown",
+      "camera_sources": [
+        "dot"
+      ],
+      "previous_camera_source_counts": {
+        "dot": 141
+      },
+      "camera_source_counts": {
+        "dot": 141
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 141,
+      "final_count": 141,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Tennessee Clarksville IPCamLive",
+      "family": "hosted-camera",
+      "status": "unknown",
+      "camera_sources": [
+        "ipcamlive"
+      ],
+      "previous_camera_source_counts": {
+        "ipcamlive": 13
+      },
+      "camera_source_counts": {
+        "ipcamlive": 13
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 13,
+      "final_count": 13,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Tennessee DOT (SmartWay)",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [
+        "dot"
+      ],
+      "previous_camera_source_counts": {
+        "dot": 635
+      },
+      "camera_source_counts": {
+        "dot": 635
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 635,
+      "final_count": 635,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "Tennessee NPS verified",
+      "family": "verified-curated",
+      "status": "unknown",
+      "camera_sources": [
+        "nps"
+      ],
+      "previous_camera_source_counts": {
+        "nps": 2
+      },
+      "camera_source_counts": {
+        "nps": 2
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 2,
+      "final_count": 2,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "TxDOT (statewide)",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [],
+      "previous_camera_source_counts": {},
+      "camera_source_counts": {},
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 0,
+      "final_count": 0,
+      "coverage_delta": 0,
+      "coverage_delta_percent": null,
+      "failure_class": null
+    },
+    {
+      "name": "Utah DOT",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [],
+      "previous_camera_source_counts": {},
+      "camera_source_counts": {},
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 0,
+      "final_count": 0,
+      "coverage_delta": 0,
+      "coverage_delta_percent": null,
+      "failure_class": null
+    },
+    {
+      "name": "Virginia (VDOT 511)",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [
+        "dot"
+      ],
+      "previous_camera_source_counts": {
+        "dot": 1672
+      },
+      "camera_source_counts": {
+        "dot": 1672
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 1672,
+      "final_count": 1672,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "West Virginia (WV511)",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [
+        "dot"
+      ],
+      "previous_camera_source_counts": {
+        "dot": 120
+      },
+      "camera_source_counts": {
+        "dot": 120
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 120,
+      "final_count": 120,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "West Virginia Canaan IPCamLive",
+      "family": "hosted-camera",
+      "status": "unknown",
+      "camera_sources": [
+        "ipcamlive"
+      ],
+      "previous_camera_source_counts": {
+        "ipcamlive": 3
+      },
+      "camera_source_counts": {
+        "ipcamlive": 3
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 3,
+      "final_count": 3,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "West Virginia NPS verified",
+      "family": "verified-curated",
+      "status": "unknown",
+      "camera_sources": [
+        "nps"
+      ],
+      "previous_camera_source_counts": {
+        "nps": 1
+      },
+      "camera_source_counts": {
+        "nps": 1
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 1,
+      "final_count": 1,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    },
+    {
+      "name": "West Virginia State Park",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [],
+      "previous_camera_source_counts": {},
+      "camera_source_counts": {},
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 0,
+      "final_count": 0,
+      "coverage_delta": 0,
+      "coverage_delta_percent": null,
+      "failure_class": null
+    },
+    {
+      "name": "Wisconsin (WI511)",
+      "family": "traveler-mapicons",
+      "status": "unknown",
+      "camera_sources": [],
+      "previous_camera_source_counts": {},
+      "camera_source_counts": {},
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 0,
+      "final_count": 0,
+      "coverage_delta": 0,
+      "coverage_delta_percent": null,
+      "failure_class": null
+    },
+    {
+      "name": "WSDOT (Washington)",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [],
+      "previous_camera_source_counts": {},
+      "camera_source_counts": {},
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 0,
+      "final_count": 0,
+      "coverage_delta": 0,
+      "coverage_delta_percent": null,
+      "failure_class": null
+    },
+    {
+      "name": "Wyoming DOT",
+      "family": "first-party-feed",
+      "status": "unknown",
+      "camera_sources": [],
+      "previous_camera_source_counts": {},
+      "camera_source_counts": {},
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 0,
+      "final_count": 0,
+      "coverage_delta": 0,
+      "coverage_delta_percent": null,
+      "failure_class": null
+    },
+    {
+      "name": "Wyoming NPS verified",
+      "family": "verified-curated",
+      "status": "unknown",
+      "camera_sources": [
+        "nps"
+      ],
+      "previous_camera_source_counts": {
+        "nps": 8
+      },
+      "camera_source_counts": {
+        "nps": 8
+      },
+      "last_attempt_at": null,
+      "last_success_at": null,
+      "fetched_count": 0,
+      "retained_count": 0,
+      "replaced_count": 0,
+      "previous_count": 8,
+      "final_count": 8,
+      "coverage_delta": 0,
+      "coverage_delta_percent": 0.0,
+      "failure_class": null
+    }
+  ],
+  "totals": {
+    "fresh": 0,
+    "retained": 0,
+    "failed": 0,
+    "unknown": 78,
+    "cameras": 12525,
+    "retained_cameras": 0,
+    "coverage_delta": 0
+  }
+}

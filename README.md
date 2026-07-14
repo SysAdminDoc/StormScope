@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-0.110.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.111.0-blue)](CHANGELOG.md)
 [![CI](https://github.com/SysAdminDoc/StormScope/actions/workflows/ci.yml/badge.svg)](https://github.com/SysAdminDoc/StormScope/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-web-brightgreen)]()
@@ -25,6 +25,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 - **Locate Me** — A header control centers the map on your device location (browser Geolocation, permission-gated) with a transient marker; coordinates are session-only and never stored, shared, or added to scene links
 - **Place & Address Search** — Keyless OpenStreetMap geocoding (Photon with Nominatim fallback) with debounced type-ahead, an accessible results listbox, and OSM attribution; selecting a result pans the map, and queries are session-only
 - **Fast Camera Discovery** — Progressive state shards make the map interactive before the full corpus loads; accessible search, health/source/type filters, health-first name/distance sorting, and a virtualized result list stay synchronized with the map without reclustering on scroll; Arrow/Page/Home/End navigation crosses unrendered slices
+- **Camera Refresh Health** — A schema-validated, redacted source-health artifact distinguishes fresh adapter results, retained last-known-good rows, failures, and unknown pre-history; the Search panel scopes counts to its source filter and diagnostic exports include only bounded operational fields
 - **Visible Feed Provenance** — Every camera viewer distinguishes provider frame time, StormScope verification, expiring device-local playback evidence, provider/source, feed type, cadence, and degraded reason without relying on hover text
 - **Local Favorites and Workflow Profiles** — Named schema-v3 profiles restore map, layers, radar presentation, alert threshold, camera filters, weather units, and data mode; three immutable presets and validated portable migration/import/export work without an account
 - **Shareable Map Scenes** — Copy or share a bounded versioned link containing the map, public layers, radar frame/presentation, alerts, camera filters, and active camera without exposing favorites or private local state
@@ -211,7 +212,7 @@ Run the data fetcher to pull fresh camera data from all state DOT APIs:
 python scripts/fetch_cameras.py
 ```
 
-This queries 30+ live sources and transactionally merges DOT/NPS results into `data/cameras.json`. Ordered typed adapters in `scripts/providers/` isolate shared MapIcons, DataTables/WKT, Iteris GeoJSON, and CARS GraphQL protocols behind an injected runtime; one-off collectors retain the same adapter/result boundary. Provider failures retain their last-known-good rows, curated sources are preserved, schema and coverage gates run before replacement, and the previous valid dataset is saved as `data/cameras.json.bak`. Use `--provider Oklahoma`, `--provider Delaware`, `--provider "West Virginia"`, or `--provider "Puerto Rico"` for a bounded provider-only refresh; selection remains case-insensitive and unambiguous. HLS feeds must advance across two media-playlist probes, while ACT images must expose current provider timestamps and advancing frames. Restore the rollback copy with:
+This queries 30+ live sources and transactionally merges DOT/NPS results into `data/cameras.json`. Ordered typed adapters in `scripts/providers/` isolate shared MapIcons, DataTables/WKT, Iteris GeoJSON, and CARS GraphQL protocols behind an injected runtime; one-off collectors retain the same adapter/result boundary. Provider failures retain their last-known-good rows, curated sources are preserved, schema and coverage gates run before replacement, and the previous valid dataset is saved as `data/cameras.json.bak`. Every attempted adapter also updates `data/source-health.json` with bounded failure classes, fresh/retained/replaced counts, coverage change, and attempt/success times; raw provider errors and URLs never enter that artifact. Use `--provider Oklahoma`, `--provider Delaware`, `--provider "West Virginia"`, or `--provider "Puerto Rico"` for a bounded provider-only refresh; selection remains case-insensitive and unambiguous. HLS feeds must advance across two media-playlist probes, while ACT images must expose current provider timestamps and advancing frames. Restore the rollback copy with:
 
 ```bash
 python scripts/fetch_cameras.py --rollback

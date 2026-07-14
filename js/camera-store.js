@@ -7,6 +7,12 @@
   'use strict';
 
   var HEALTH_RANK = { healthy: 0, unknown: 1, degraded: 2, offline: 3 };
+  var SOURCE_HEALTH_STATUSES = ['fresh', 'retained', 'failed', 'unknown'];
+  var SOURCE_HEALTH_FAILURE_CLASSES = new Set([
+    'authentication_required', 'confirmed_dead', 'empty_snapshot', 'incomplete_snapshot',
+    'location_ambiguous', 'placeholder', 'provider_error', 'rate_limited',
+    'scheduled_offline', 'transient_network', 'unsupported_embed'
+  ]);
   var globalObject = typeof globalThis !== 'undefined' ? globalThis : {};
 
   function abortError() {
@@ -168,6 +174,184 @@
     return response.json();
   }
 
+  function sourceHealthTimestamp(value, nullable) {
+    if (nullable && value == null) return null;
+    if (typeof value !== 'string' || !value || value.length > 40 ||
+        !/(?:Z|[+-]\d{2}:\d{2})$/i.test(value) || !Number.isFinite(Date.parse(value))) {
+      throw new Error('Camera source-health timestamp is invalid');
+    }
+    return value;
+  }
+
+  function sourceHealthCount(value, label) {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new Error('Camera source-health count is invalid: ' + label);
+    }
+    return value;
+  }
+
+  function validateSourceHealth(value) {
+    if (!value || value.schema_version !== 1 || !Array.isArray(value.providers) || value.providers.length > 256) {
+      throw new Error('Camera source-health artifact is invalid');
+    }
+    var generatedAt = sourceHealthTimestamp(value.generated_at, false);
+    var names = new Set();
+    var totals = { fresh: 0, retained: 0, failed: 0, unknown: 0 };
+    var providers = value.providers.map(function (record) {
+      if (!record || typeof record !== 'object' || Array.isArray(record)) {
+        throw new Error('Camera source-health provider is invalid');
+      }
+      var name = typeof record.name === 'string' ? record.name.trim() : '';
+      var family = typeof record.family === 'string' ? record.family.trim() : '';
+      if (!name || name.length > 160 || names.has(name) || !family || family.length > 64 ||
+          SOURCE_HEALTH_STATUSES.indexOf(record.status) === -1) {
+        throw new Error('Camera source-health provider metadata is invalid');
+      }
+      names.add(name);
+      var cameraSources = Array.isArray(record.camera_sources) ? record.camera_sources.slice() : [];
+      if (cameraSources.length > 32 || cameraSources.some(function (source) {
+        return typeof source !== 'string' || !/^[a-z][a-z0-9_]{0,31}$/.test(source);
+      }) || cameraSources.join('\n') !== Array.from(new Set(cameraSources)).sort().join('\n')) {
+        throw new Error('Camera source-health source taxonomy is invalid');
+      }
+      function sourceCounts(field) {
+        var raw = record[field];
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw) || Object.keys(raw).some(function (source) {
+          return cameraSources.indexOf(source) === -1 || !Number.isSafeInteger(raw[source]) || raw[source] < 0;
+        })) {
+          throw new Error('Camera source-health source counts are invalid');
+        }
+        return Object.freeze(Object.keys(raw).sort().reduce(function (result, source) {
+          result[source] = raw[source];
+          return result;
+        }, {}));
+      }
+      var previousCameraSourceCounts = sourceCounts('previous_camera_source_counts');
+      var cameraSourceCounts = sourceCounts('camera_source_counts');
+      if (cameraSources.some(function (source) {
+        return !Object.hasOwn(previousCameraSourceCounts, source) && !Object.hasOwn(cameraSourceCounts, source);
+      })) {
+        throw new Error('Camera source-health taxonomy does not match source counts');
+      }
+      var previousCount = sourceHealthCount(record.previous_count, name + '.previous_count');
+      var finalCount = sourceHealthCount(record.final_count, name + '.final_count');
+      var fetchedCount = sourceHealthCount(record.fetched_count, name + '.fetched_count');
+      var retainedCount = sourceHealthCount(record.retained_count, name + '.retained_count');
+      var replacedCount = sourceHealthCount(record.replaced_count, name + '.replaced_count');
+      var coverageDelta = record.coverage_delta;
+      if (!Number.isSafeInteger(coverageDelta) || coverageDelta !== finalCount - previousCount ||
+          retainedCount > finalCount || replacedCount > previousCount) {
+        throw new Error('Camera source-health coverage counts are inconsistent');
+      }
+      if (Object.values(previousCameraSourceCounts).reduce(function (sum, count) { return sum + count; }, 0) !== previousCount ||
+          Object.values(cameraSourceCounts).reduce(function (sum, count) { return sum + count; }, 0) !== finalCount) {
+        throw new Error('Camera source-health source counts do not match provider totals');
+      }
+      var expectedPercent = previousCount ? Math.round(coverageDelta * 10000 / previousCount) / 100 : null;
+      if (record.coverage_delta_percent !== expectedPercent) {
+        throw new Error('Camera source-health coverage percentage is inconsistent');
+      }
+      var failureClass = record.failure_class == null ? null : record.failure_class;
+      if (failureClass !== null && !SOURCE_HEALTH_FAILURE_CLASSES.has(failureClass)) {
+        throw new Error('Camera source-health failure class is invalid');
+      }
+      if ((record.status === 'fresh' && failureClass !== null) ||
+          ((record.status === 'retained' || record.status === 'failed') && failureClass === null) ||
+          (record.status === 'retained' && (!finalCount || retainedCount !== finalCount)) ||
+          (record.status === 'failed' && (finalCount || retainedCount))) {
+        throw new Error('Camera source-health status is inconsistent');
+      }
+      var lastAttemptAt = sourceHealthTimestamp(record.last_attempt_at, true);
+      var lastSuccessAt = sourceHealthTimestamp(record.last_success_at, true);
+      if (record.status === 'unknown' && (lastAttemptAt !== null || lastSuccessAt !== null || fetchedCount ||
+          retainedCount || replacedCount || failureClass !== null)) {
+        throw new Error('Camera source-health unknown status implies refresh history');
+      }
+      totals[record.status] += 1;
+      return Object.freeze({
+        name: name,
+        family: family,
+        status: record.status,
+        camera_sources: Object.freeze(cameraSources),
+        previous_camera_source_counts: previousCameraSourceCounts,
+        camera_source_counts: cameraSourceCounts,
+        last_attempt_at: lastAttemptAt,
+        last_success_at: lastSuccessAt,
+        fetched_count: fetchedCount,
+        retained_count: retainedCount,
+        replaced_count: replacedCount,
+        previous_count: previousCount,
+        final_count: finalCount,
+        coverage_delta: coverageDelta,
+        coverage_delta_percent: expectedPercent,
+        failure_class: failureClass
+      });
+    });
+    if (providers.map(function (record) { return record.name; }).join('\n') !==
+        providers.map(function (record) { return record.name; }).sort(function (left, right) {
+          return left.localeCompare(right, undefined, { sensitivity: 'base' });
+        }).join('\n')) {
+      throw new Error('Camera source-health providers are not sorted');
+    }
+    var rawTotals = value.totals;
+    if (!rawTotals || typeof rawTotals !== 'object' || Array.isArray(rawTotals)) {
+      throw new Error('Camera source-health totals are invalid');
+    }
+    SOURCE_HEALTH_STATUSES.forEach(function (status) {
+      if (rawTotals[status] !== totals[status]) throw new Error('Camera source-health status totals are inconsistent');
+    });
+    var cameras = sourceHealthCount(rawTotals.cameras, 'totals.cameras');
+    var retainedCameras = sourceHealthCount(rawTotals.retained_cameras, 'totals.retained_cameras');
+    if (!Number.isSafeInteger(rawTotals.coverage_delta) ||
+        cameras !== providers.reduce(function (sum, record) { return sum + record.final_count; }, 0) ||
+        retainedCameras !== providers.reduce(function (sum, record) { return sum + record.retained_count; }, 0) ||
+        rawTotals.coverage_delta !== providers.reduce(function (sum, record) { return sum + record.coverage_delta; }, 0)) {
+      throw new Error('Camera source-health totals do not match providers');
+    }
+    return Object.freeze({
+      schema_version: 1,
+      generated_at: generatedAt,
+      providers: Object.freeze(providers),
+      totals: Object.freeze(Object.assign({}, totals, {
+        cameras: cameras,
+        retained_cameras: retainedCameras,
+        coverage_delta: rawTotals.coverage_delta
+      }))
+    });
+  }
+
+  function summarizeSourceHealth(value, source) {
+    if (!value || !Array.isArray(value.providers)) return null;
+    var selected = lower(source).trim();
+    var providers = value.providers.filter(function (record) {
+      return !selected || record.camera_sources.indexOf(selected) !== -1;
+    });
+    if (!providers.length) return null;
+    var summary = {
+      providerCount: providers.length,
+      fresh: 0,
+      retained: 0,
+      failed: 0,
+      unknown: 0,
+      cameras: 0,
+      retainedCameras: 0,
+      coverageDelta: 0,
+      lastAttemptAt: null
+    };
+    providers.forEach(function (record) {
+      summary[record.status] += 1;
+      var finalCount = selected ? record.camera_source_counts[selected] || 0 : record.final_count;
+      var previousCount = selected ? record.previous_camera_source_counts[selected] || 0 : record.previous_count;
+      summary.cameras += finalCount;
+      summary.retainedCameras += record.status === 'retained' ? finalCount : 0;
+      summary.coverageDelta += finalCount - previousCount;
+      if (record.last_attempt_at && (!summary.lastAttemptAt || record.last_attempt_at > summary.lastAttemptAt)) {
+        summary.lastAttemptAt = record.last_attempt_at;
+      }
+    });
+    return summary;
+  }
+
   function isSha256(value) {
     return typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
   }
@@ -214,18 +398,23 @@
     if (!this.fetch) throw new Error('CameraStore requires fetch');
     this.indexUrl = options.indexUrl || 'data/cameras.index.json';
     this.monolithUrl = options.monolithUrl || 'data/cameras.json';
+    this.sourceHealthUrl = options.sourceHealthUrl || 'data/source-health.json';
     this.onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
     this.sha256 = options.sha256 || defaultSha256;
     this._cameras = [];
     this._index = null;
     this._controller = null;
+    this._sourceHealthController = null;
+    this._sourceHealth = null;
     this._requestId = 0;
   }
 
   CameraStore.prototype.cancel = function () {
     this._requestId += 1;
     if (this._controller) this._controller.abort();
+    if (this._sourceHealthController) this._sourceHealthController.abort();
     this._controller = null;
+    this._sourceHealthController = null;
   };
 
   CameraStore.prototype._assertActive = function (requestId, signal) {
@@ -428,6 +617,24 @@
     return this._cameras.slice();
   };
 
+  CameraStore.prototype.loadSourceHealth = async function () {
+    if (this._sourceHealthController) this._sourceHealthController.abort();
+    var controller = new AbortController();
+    this._sourceHealthController = controller;
+    try {
+      var value = await this._fetchJson(this.sourceHealthUrl, controller.signal);
+      if (controller.signal.aborted) throw abortError();
+      this._sourceHealth = validateSourceHealth(value);
+      return this._sourceHealth;
+    } finally {
+      if (this._sourceHealthController === controller) this._sourceHealthController = null;
+    }
+  };
+
+  CameraStore.prototype.getSourceHealth = function () {
+    return this._sourceHealth;
+  };
+
   CameraStore.prototype.search = function (filters, sortOptions) {
     return searchCameras(this._cameras, filters, sortOptions);
   };
@@ -438,6 +645,8 @@
     calculateVirtualWindow: calculateVirtualWindow,
     distanceKm: distanceKm,
     nearestVerifiedCameras: nearestVerifiedCameras,
+    summarizeSourceHealth: summarizeSourceHealth,
+    validateSourceHealth: validateSourceHealth,
     filterCameras: filterCameras,
     searchCameras: searchCameras,
     sortCameras: sortCameras,

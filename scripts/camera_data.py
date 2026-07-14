@@ -249,6 +249,13 @@ def validate_camera_data(
         provider = camera.get("provider")
         if provider is not None and (not isinstance(provider, str) or not provider.strip()):
             errors.append(f"{label}: provider must be non-empty text")
+        ingestion_source = camera.get("ingestion_source")
+        if ingestion_source is not None and (
+            not isinstance(ingestion_source, str)
+            or not ingestion_source.strip()
+            or len(ingestion_source) > 160
+        ):
+            errors.append(f"{label}: ingestion_source must be bounded non-empty text")
 
         status = camera.get("status")
         if status not in (None, ""):

@@ -7,6 +7,7 @@ import unittest
 import urllib.error
 import urllib.parse
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,6 +15,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 import fetch_cameras  # noqa: E402
 import camera_data  # noqa: E402
+import source_health  # noqa: E402
 from fetch_cameras import ProviderResult, merge_provider_results  # noqa: E402
 
 
@@ -270,6 +272,15 @@ class FetchMergeTests(unittest.TestCase):
             path = Path(temporary) / "cameras.json"
             original = [camera(1, "https://dot.test/old.jpg", provider="Provider A")]
             path.write_text(json.dumps(original), encoding="utf-8")
+            health_path = Path(temporary) / "source-health.json"
+            source_health.write_source_health(
+                health_path,
+                source_health.seed_source_health(
+                    original,
+                    [SimpleNamespace(name="Provider A", family="test")],
+                    "2026-07-12T00:00:00Z",
+                ),
+            )
 
             def fetch_provider():
                 def add_concurrent(current):
@@ -287,6 +298,7 @@ class FetchMergeTests(unittest.TestCase):
 
             with (
                 mock.patch.object(fetch_cameras, "OUTPUT", path),
+                mock.patch.object(fetch_cameras, "SOURCE_HEALTH_OUTPUT", health_path),
                 mock.patch.object(fetch_cameras, "provider_fetchers", return_value=[("Provider A", fetch_provider)]),
             ):
                 self.assertEqual(0, fetch_cameras.main([]))
@@ -305,6 +317,39 @@ class FetchMergeTests(unittest.TestCase):
                 by_url["https://dot.test/fresh.jpg"]["source_url"],
             )
             self.assertEqual("unknown", by_url["https://curated.test/concurrent.jpg"]["health"])
+            refresh = source_health.load_source_health(health_path)["providers"][0]
+            self.assertEqual("fresh", refresh["status"])
+            self.assertEqual(1, refresh["fetched_count"])
+            self.assertEqual(1, refresh["replaced_count"])
+
+    def test_all_provider_failure_records_retention_without_changing_the_dataset(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "cameras.json"
+            original = [camera(1, "https://dot.test/old.jpg", provider="Provider A")]
+            path.write_text(json.dumps(original), encoding="utf-8")
+            health_path = Path(temporary) / "source-health.json"
+            source_health.write_source_health(
+                health_path,
+                source_health.seed_source_health(
+                    original,
+                    [SimpleNamespace(name="Provider A", family="test")],
+                    "2026-07-12T00:00:00Z",
+                ),
+            )
+
+            with (
+                mock.patch.object(fetch_cameras, "OUTPUT", path),
+                mock.patch.object(fetch_cameras, "SOURCE_HEALTH_OUTPUT", health_path),
+                mock.patch.object(fetch_cameras, "provider_fetchers", return_value=[("Provider A", lambda: 0)]),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "all providers failed"):
+                    fetch_cameras.main([])
+
+            self.assertEqual(original, json.loads(path.read_text(encoding="utf-8")))
+            refresh = source_health.load_source_health(health_path)["providers"][0]
+            self.assertEqual("retained", refresh["status"])
+            self.assertEqual(1, refresh["retained_count"])
+            self.assertEqual("empty_snapshot", refresh["failure_class"])
 
     def test_hls_verification_requires_an_advancing_media_playlist(self):
         with (

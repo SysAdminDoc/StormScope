@@ -16,6 +16,49 @@
       .slice(0, 2000);
   }
 
+  function diagnosticCount(value) {
+    var count = Math.floor(Number(value));
+    return Number.isSafeInteger(count) && count >= 0 ? count : 0;
+  }
+
+  function cameraIngestionSummary(value) {
+    if (!value || value.schema_version !== 1 || !Array.isArray(value.providers)) {
+      return { available: false };
+    }
+    var statuses = ['fresh', 'retained', 'failed', 'unknown'];
+    var failures = [
+      'authentication_required', 'confirmed_dead', 'empty_snapshot', 'incomplete_snapshot',
+      'location_ambiguous', 'placeholder', 'provider_error', 'rate_limited',
+      'scheduled_offline', 'transient_network', 'unsupported_embed'
+    ];
+    var providers = value.providers.slice(0, 256).map(function (record) {
+      record = record || {};
+      return {
+        name: redact(record.name).slice(0, 160),
+        family: redact(record.family).slice(0, 64),
+        status: statuses.indexOf(record.status) === -1 ? 'unknown' : record.status,
+        last_attempt_at: typeof record.last_attempt_at === 'string' && Number.isFinite(Date.parse(record.last_attempt_at))
+          ? record.last_attempt_at : null,
+        last_success_at: typeof record.last_success_at === 'string' && Number.isFinite(Date.parse(record.last_success_at))
+          ? record.last_success_at : null,
+        fetched_count: diagnosticCount(record.fetched_count),
+        retained_count: diagnosticCount(record.retained_count),
+        replaced_count: diagnosticCount(record.replaced_count),
+        previous_count: diagnosticCount(record.previous_count),
+        final_count: diagnosticCount(record.final_count),
+        coverage_delta: Number.isSafeInteger(record.coverage_delta) ? record.coverage_delta : 0,
+        failure_class: failures.indexOf(record.failure_class) === -1 ? null : record.failure_class
+      };
+    });
+    return {
+      available: true,
+      schema_version: 1,
+      generated_at: typeof value.generated_at === 'string' && Number.isFinite(Date.parse(value.generated_at))
+        ? value.generated_at : null,
+      providers: providers
+    };
+  }
+
   function create(storage) {
     storage = storage || (typeof localStorage !== 'undefined' ? localStorage : null);
     var errors = [];
@@ -61,6 +104,7 @@
         exported_at: new Date().toISOString(),
         app_version: String(context.appVersion || 'unknown'),
         corpus_generation: context.corpusGeneration || null,
+        camera_ingestion: cameraIngestionSummary(context.cameraIngestion),
         providers: context.providers || {},
         local_overlays: {
           count: Math.max(0, Math.floor(Number(context.localOverlays && context.localOverlays.count) || 0)),
@@ -74,5 +118,11 @@
     return Object.freeze({ capture: capture, getErrors: function () { return errors.slice(); }, install: install, report: report });
   }
 
-  return Object.freeze({ STORAGE_KEY: STORAGE_KEY, MAX_ERRORS: MAX_ERRORS, create: create, redact: redact });
+  return Object.freeze({
+    STORAGE_KEY: STORAGE_KEY,
+    MAX_ERRORS: MAX_ERRORS,
+    cameraIngestionSummary: cameraIngestionSummary,
+    create: create,
+    redact: redact
+  });
 }));

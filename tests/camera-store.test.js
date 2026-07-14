@@ -72,13 +72,91 @@ function camera(id, overrides) {
   }, overrides || {});
 }
 
+function sourceHealth(overrides) {
+  const provider = Object.assign({
+    name: 'Provider A',
+    family: 'test',
+    status: 'fresh',
+    camera_sources: ['dot'],
+    previous_camera_source_counts: { dot: 2 },
+    camera_source_counts: { dot: 3 },
+    last_attempt_at: '2026-07-14T18:00:00Z',
+    last_success_at: '2026-07-14T18:00:00Z',
+    fetched_count: 3,
+    retained_count: 0,
+    replaced_count: 2,
+    previous_count: 2,
+    final_count: 3,
+    coverage_delta: 1,
+    coverage_delta_percent: 50,
+    failure_class: null
+  }, overrides || {});
+  return {
+    schema_version: 1,
+    generated_at: '2026-07-14T18:00:00Z',
+    providers: [provider],
+    totals: {
+      fresh: provider.status === 'fresh' ? 1 : 0,
+      retained: provider.status === 'retained' ? 1 : 0,
+      failed: provider.status === 'failed' ? 1 : 0,
+      unknown: provider.status === 'unknown' ? 1 : 0,
+      cameras: provider.final_count,
+      retained_cameras: provider.retained_count,
+      coverage_delta: provider.coverage_delta
+    }
+  };
+}
+
 test('exports the same camera-store API as a browser global', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'js', 'camera-store.js'), 'utf8');
   const context = { globalThis: { fetch: async () => response([]) } };
   vm.runInNewContext(source, context);
   assert.equal(typeof context.globalThis.StormScopeCameraStore.CameraStore, 'function');
   assert.equal(typeof context.globalThis.StormScopeCameraStore.filterCameras, 'function');
+  assert.equal(typeof context.globalThis.StormScopeCameraStore.validateSourceHealth, 'function');
   assert.doesNotThrow(() => new context.globalThis.StormScopeCameraStore.CameraStore());
+});
+
+test('source-health validation strips unknown detail and summarizes the selected camera source', () => {
+  const fixture = sourceHealth({ debug_url: 'https://secret.example/token' });
+  const validated = cameraStore.validateSourceHealth(fixture);
+  assert.equal(validated.providers[0].debug_url, undefined);
+  assert.deepEqual(cameraStore.summarizeSourceHealth(validated, 'dot'), {
+    providerCount: 1,
+    fresh: 1,
+    retained: 0,
+    failed: 0,
+    unknown: 0,
+    cameras: 3,
+    retainedCameras: 0,
+    coverageDelta: 1,
+    lastAttemptAt: '2026-07-14T18:00:00Z'
+  });
+  assert.equal(cameraStore.summarizeSourceHealth(validated, 'youtube'), null);
+
+  const invalid = sourceHealth({ coverage_delta: 9 });
+  invalid.totals.coverage_delta = 9;
+  assert.throws(() => cameraStore.validateSourceHealth(invalid), /coverage counts/);
+});
+
+test('source-health loading is independent from camera generation loading and cancellable', async () => {
+  let release;
+  const fixture = sourceHealth();
+  const store = new cameraStore.CameraStore({
+    fetch: async url => {
+      if (url.endsWith('source-health.json')) return new Promise(resolve => { release = resolve; });
+      return response([]);
+    }
+  });
+  const loading = store.loadSourceHealth();
+  store.cancel();
+  release(response(fixture));
+  await assert.rejects(loading, error => error.name === 'AbortError');
+  assert.equal(store.getSourceHealth(), null);
+
+  const healthyStore = new cameraStore.CameraStore({ fetch: async () => response(fixture) });
+  assert.equal((await healthyStore.loadSourceHealth()).totals.cameras, 3);
+  assert.equal(healthyStore.getSourceHealth().providers[0].name, 'Provider A');
 });
 
 test('loads bounded shards progressively and reports cumulative progress', async () => {

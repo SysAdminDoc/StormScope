@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.111.0 - 2026-07-14
+
+- Added schema-validated per-ingestion-source camera refresh health with explicit fresh, retained, failed, and unknown states; bounded attempt/success timestamps and coverage counts; source-filtered EN/ES UI; redacted diagnostics; offline last-known-good caching; and deterministic Python/JavaScript/browser regression coverage. SW v84.
+
 ## v0.110.0 - 2026-07-14
 
 - Surfaced bounded, provider-authored NWS Impact-Based Warning details near alert headlines, including damage threats, official headlines, hail/wind values, storm motion, detection sources, and Wireless Emergency Alert handling, with accessible EN/ES labels and malformed/oversized parameter rejection. SW v83.

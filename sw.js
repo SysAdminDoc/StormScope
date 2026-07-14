@@ -5,15 +5,16 @@
  *   - Navigations: network-first, fall back to cached index.html when offline.
  *   - Radar tiles (RainViewer) + basemap tiles (CARTO): cache-first with a
  *     bounded LRU cache so repeat visits reuse already-fetched frames offline.
- *   - Camera dataset (data/cameras.json): stale-while-revalidate — instant load
- *     from cache, refreshed in the background.
+ *   - Camera index/source health: network-first with last-known-good fallback;
+ *     immutable generation shards are cache-first; the migration monolith is
+ *     stale-while-revalidate.
  *   - RainViewer's small frame manifest: network-first with last-known-good
  *     fallback so already-cached radar tiles can initialize offline.
  *   - Live weather APIs (NWS, Open-Meteo): always fetched fresh.
  */
 'use strict';
 
-var VERSION = 'v83';
+var VERSION = 'v84';
 var RUNTIME_CACHE_VERSION = 'v2';
 var SHELL_CACHE = 'stormscope-shell-' + VERSION;
 var TILE_CACHE = 'stormscope-tiles-' + RUNTIME_CACHE_VERSION;
@@ -124,6 +125,10 @@ function isLiveApiRequest(url) {
 
 function isCameraIndex(url) {
   return url.pathname.indexOf('data/cameras.index.json') !== -1;
+}
+
+function isCameraSourceHealth(url) {
+  return url.pathname.indexOf('data/source-health.json') !== -1;
 }
 
 function isCameraShard(url) {
@@ -436,8 +441,8 @@ self.addEventListener('fetch', function (event) {
     return;
   }
 
-  // Camera dataset: stale-while-revalidate.
-  if (isCameraIndex(url)) {
+  // Camera metadata is current-first with a last-known-good offline fallback.
+  if (isCameraIndex(url) || isCameraSourceHealth(url)) {
     event.respondWith(networkFirstWithCache(request, DATA_CACHE));
     return;
   }

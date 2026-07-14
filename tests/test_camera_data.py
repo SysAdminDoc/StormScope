@@ -86,6 +86,7 @@ class CameraDataTests(unittest.TestCase):
             camera(3, type="embed", url="https://earthcam.com.evil.test/view"),
             camera(4, url="https://example.com:notaport/image.jpg"),
             camera(5, status="active"),
+            camera(6, ingestion_source="x" * 161),
         ]
         with self.assertRaises(camera_data.CameraDataValidationError) as caught:
             camera_data.validate_camera_data(invalid)
@@ -95,6 +96,7 @@ class CameraDataTests(unittest.TestCase):
         self.assertIn("unsupported status", message)
         self.assertIn("is not allowed", message)
         self.assertIn("invalid media URL", message)
+        self.assertIn("ingestion_source must be bounded", message)
 
     def test_repair_upgrades_only_verified_urls_and_creates_rollback_backup(self):
         verified_http = next(iter(repair_camera_data.VERIFIED_HTTPS_UPGRADES))

@@ -22,6 +22,7 @@
       "county": {"type": "string"},
       "direction": {"type": "string"},
       "provider": {"type": "string", "minLength": 1},
+      "ingestion_source": {"type": "string", "minLength": 1, "maxLength": 160},
       "status": {"enum": ["Active", "Offline", "Unknown"]},
       "last_verified": {
         "description": "Provider-side or ingestion verification time; never overwritten by browser playback.",

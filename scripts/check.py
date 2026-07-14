@@ -5,12 +5,18 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 
 try:
     from camera_data import CAMERA_SCHEMA_VERSION, load_camera_data, validate_camera_data
 except ModuleNotFoundError:  # pragma: no cover - package import
     from scripts.camera_data import CAMERA_SCHEMA_VERSION, load_camera_data, validate_camera_data
+
+try:
+    from source_health import load_source_health
+except ModuleNotFoundError:  # pragma: no cover - package import
+    from scripts.source_health import load_source_health
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -39,7 +45,14 @@ def main() -> int:
 
     cameras = load_camera_data(ROOT / "data" / "cameras.json")
     validate_camera_data(cameras)
+    source_health = load_source_health(ROOT / "data" / "source-health.json")
+    source_counts = Counter(camera.get("ingestion_source") or camera.get("provider") for camera in cameras)
+    for record in source_health["providers"]:
+        if record["final_count"] != source_counts[record["name"]]:
+            raise RuntimeError(f"source-health camera count is stale for {record['name']!r}")
     print(f"\nValidated {len(cameras):,} cameras against schema v{CAMERA_SCHEMA_VERSION}.")
+    print(f"Validated source-health schema v{source_health['schema_version']} for "
+          f"{len(source_health['providers'])} ingestion sources.")
     print("All local regression gates passed.")
     return 0
 

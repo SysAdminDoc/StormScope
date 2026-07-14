@@ -109,6 +109,16 @@ class ProviderAdapterTests(unittest.TestCase):
         ], sort_keys=True)
         self.assertEqual(adapter_payload.encode(), legacy_payload.encode())
 
+    def test_successful_legacy_runner_stamps_the_ingestion_source(self):
+        fetch_cameras.cameras.clear()
+
+        def collector():
+            fetch_cameras.cameras.append({"name": "Camera"})
+            return 1
+
+        result = fetch_cameras.run_fetcher("Provider A", collector)
+        self.assertEqual("Provider A", result.cameras[0]["ingestion_source"])
+
 
 class ProviderFamilyTests(unittest.TestCase):
     def runtime(self, *, fetch_json=None, post_json=None, http_bytes=None):

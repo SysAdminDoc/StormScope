@@ -654,6 +654,8 @@ async function main() {
     assert.equal(cameraMetrics.source, 'shards');
     assert.ok(cameraMetrics.firstBatchMs > 0 && cameraMetrics.firstBatchMs < 2500,
       `first camera shard should render within 2.5 s, observed ${cameraMetrics.firstBatchMs} ms`);
+    await page.waitForFunction(() => document.getElementById('camera-source-health').textContent
+      .startsWith('All ingestion sources:'));
 
     // Geolocation "locate me": grant + mock a position, then verify the map
     // recenters and the polite announcer confirms it. Coordinates are session-only.
@@ -1367,6 +1369,7 @@ async function main() {
       const results = window._stormscope.getCameraResults();
       return results.length > 1 && results.every((camera) => camera.source === 'angelcam');
     });
+    assert.match(await page.locator('#camera-source-health').textContent(), /^AngelCam ingestion sources:/);
     await visibleResults.nth(0).locator('.monitor-result').click();
     await visibleResults.nth(1).locator('.monitor-result').click();
     await page.locator('#open-monitor').click();
@@ -1643,6 +1646,8 @@ async function main() {
     const diagnosticsReport = JSON.parse(fs.readFileSync(await diagnosticsDownload.path(), 'utf8'));
     const serializedDiagnostics = JSON.stringify(diagnosticsReport);
     assert.equal(diagnosticsReport.schema, 1);
+    assert.equal(diagnosticsReport.camera_ingestion.available, true);
+    assert.equal(diagnosticsReport.camera_ingestion.providers.length, 78);
     assert.match(serializedDiagnostics, /\[url\]/);
     assert.doesNotMatch(serializedDiagnostics, /camera\.example|token=secret|40\.12345|-75\.98765/);
     assert.equal(Object.hasOwn(diagnosticsReport, 'favorites'), false);

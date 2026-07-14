@@ -32,6 +32,7 @@ try:
         canonical_source_url,
         feed_identity,
         healthy_metadata,
+        load_camera_data,
         provider_identity,
         reserve_camera_ids,
         restore_camera_data,
@@ -47,6 +48,7 @@ except ModuleNotFoundError:  # pragma: no cover - package import during tests
         canonical_source_url,
         feed_identity,
         healthy_metadata,
+        load_camera_data,
         provider_identity,
         reserve_camera_ids,
         restore_camera_data,
@@ -69,7 +71,7 @@ try:
         collect_mapicons,
         collect_new_england_datatables,
     )
-except ModuleNotFoundError:  # pragma: no cover - package import during tests
+except (ImportError, ModuleNotFoundError):  # pragma: no cover - package import during tests
     from scripts.providers import FunctionProviderAdapter, ProviderRegistry, ProviderResult, ProviderRuntime
     from scripts.providers.geospatial import IterisConfig, collect_iteris_geojson
     from scripts.providers.traveler import (
@@ -83,12 +85,18 @@ except ModuleNotFoundError:  # pragma: no cover - package import during tests
         collect_new_england_datatables,
     )
 
+try:
+    from source_health import load_source_health, update_source_health, write_source_health
+except ModuleNotFoundError:  # pragma: no cover - package import during tests
+    from scripts.source_health import load_source_health, update_source_health, write_source_health
+
 sys.stdout.reconfigure(encoding='utf-8')
 ctx = ssl.create_default_context()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / 'data'
 OUTPUT = DATA_DIR / 'cameras.json'
+SOURCE_HEALTH_OUTPUT = DATA_DIR / 'source-health.json'
 
 cameras = []
 cam_id = 0
@@ -634,7 +642,7 @@ def fetch_txdot():
 def fetch_nps():
     try:
         url = 'https://developer.nps.gov/api/v1/webcams?api_key=DEMO_KEY&limit=500'
-        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.110.0'})
+        data = fetch_json(url, headers={'User-Agent': 'StormScope/0.111.0'})
         count = 0
         for cam in data.get('data', []):
             if str(cam.get('status') or '').lower() == 'inactive':
@@ -764,7 +772,7 @@ def _current_jpeg_snapshot(
     request = urllib.request.Request(
         url,
         headers={
-            'User-Agent': 'StormScope/0.110.0',
+            'User-Agent': 'StormScope/0.111.0',
             'Accept': 'image/jpeg,image/*,*/*',
             'Cache-Control': 'no-cache',
         },
@@ -5329,7 +5337,7 @@ def fetch_faa_weathercams_north_dakota():
     headers = {
         'User-Agent': (
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-            'AppleWebKit/537.36 Chrome/130.0 StormScope/0.110.0'
+            'AppleWebKit/537.36 Chrome/130.0 StormScope/0.111.0'
         ),
         'Accept': 'application/json, image/*, */*',
         'Referer': state_page,
@@ -6751,6 +6759,8 @@ def run_fetcher(name, func):
             stats[name] = f'ERROR: {error}'
             print(f'  {name}: {error}; retaining last-known-good rows')
             return ProviderResult(name, [], error)
+        for row in rows:
+            row['ingestion_source'] = name
         stats[name] = len(rows)
         print(f'  {name}: {len(rows)} cameras')
         return ProviderResult(name, rows)
@@ -6909,25 +6919,20 @@ def merge_provider_results(
         existing: list[dict],
         results: list[ProviderResult],
         retention_ratio: float = PROVIDER_RETENTION_RATIO,
-        id_allocator=None) -> list[dict]:
-    accepted_results = []
-    for result in results:
-        if not result.succeeded:
-            continue
-        previous_count = sum(1 for camera in existing if camera.get('provider') == result.name)
-        minimum_count = int(previous_count * retention_ratio + 0.999999)
-        if previous_count and len(result.cameras) < minimum_count:
-            stats[result.name] = (
-                f'ERROR: incomplete snapshot ({len(result.cameras)} < {minimum_count}); '
+        id_allocator=None,
+        evaluation=None) -> list[dict]:
+    accepted_results, rejected_snapshots = evaluation or evaluate_provider_results(
+        existing, results, retention_ratio
+    )
+    for name, detail in rejected_snapshots.items():
+        if detail is not None:
+            stats[name] = (
+                f'ERROR: incomplete snapshot ({detail[0]} < {detail[1]}); '
                 'retaining last-known-good rows'
             )
-            continue
-        accepted_results.append(result)
+
     successful = {result.name for result in accepted_results}
-    degraded_providers = {
-        result.name for result in results
-        if result.name not in successful
-    }
+    degraded_providers = {result.name for result in results if result.name not in successful}
     fresh_by_provider = {result.name: result.cameras for result in accepted_results}
     old_by_provider_identity = {}
     old_by_feed_identity = {}
@@ -6981,7 +6986,7 @@ def merge_provider_results(
             or camera.get('url') in replacement_feed_urls
         ):
             continue
-        provider = camera.get('provider')
+        provider = camera.get('ingestion_source') or camera.get('provider')
         if provider in successful:
             if provider not in inserted_providers:
                 ordered.extend(fresh_by_provider[provider])
@@ -7019,6 +7024,28 @@ def merge_provider_results(
     return sorted(merged, key=lambda camera: camera['id'])
 
 
+def evaluate_provider_results(
+        existing: list[dict],
+        results: list[ProviderResult],
+        retention_ratio: float = PROVIDER_RETENTION_RATIO):
+    accepted_results = []
+    rejected_snapshots = {}
+    for result in results:
+        if not result.succeeded:
+            rejected_snapshots[result.name] = None
+            continue
+        previous_count = sum(
+            1 for camera in existing
+            if (camera.get('ingestion_source') or camera.get('provider')) == result.name
+        )
+        minimum_count = int(previous_count * retention_ratio + 0.999999)
+        if previous_count and len(result.cameras) < minimum_count:
+            rejected_snapshots[result.name] = (len(result.cameras), minimum_count)
+            continue
+        accepted_results.append(result)
+    return accepted_results, rejected_snapshots
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--rollback', action='store_true', help='restore the last-known-good camera dataset')
@@ -7037,20 +7064,35 @@ def main(argv=None):
         return 0
 
     selected_adapters = provider_adapters().select(args.provider)
+    attempted_at = utc_now_iso()
+    previous_health = load_source_health(SOURCE_HEALTH_OUTPUT)
 
     print('StormScope Camera Data Fetcher')
     print('=' * 50)
     results = [adapter.fetch(run_fetcher) for adapter in selected_adapters]
     if not any(result.succeeded for result in results):
+        current = load_camera_data(OUTPUT)
+        health = update_source_health(
+            previous_health, current, current, results, selected_adapters,
+            set(), attempted_at,
+        )
+        write_source_health(SOURCE_HEALTH_OUTPUT, health)
         raise RuntimeError('all providers failed; dataset was not changed')
 
+    previous_cameras = []
+    accepted_names = set()
+
     def commit(current):
+        previous_cameras.extend(dict(camera) for camera in current)
+        evaluation = evaluate_provider_results(current, results)
+        accepted_names.update(result.name for result in evaluation[0])
         merged = merge_provider_results(
             current,
             results,
             id_allocator=lambda count: reserve_camera_ids(
                 OUTPUT.with_name('camera-id-sequence.json'), current, count
             ),
+            evaluation=evaluation,
         )
         source_counts = {}
         for camera in current:
@@ -7071,6 +7113,11 @@ def main(argv=None):
         return merged
 
     merged, summary = update_camera_data(OUTPUT, commit)
+    health = update_source_health(
+        previous_health, previous_cameras, merged, results, selected_adapters,
+        accepted_names, attempted_at,
+    )
+    write_source_health(SOURCE_HEALTH_OUTPUT, health)
 
     print(f'\nWrote {summary.total} schema v{summary.schema_version} cameras to {OUTPUT}')
     print(f'File size: {OUTPUT.stat().st_size / 1024:.0f} KB')

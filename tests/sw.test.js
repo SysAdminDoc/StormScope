@@ -276,6 +276,7 @@ test('generation-keyed camera shards are immutable cache-first entries', async (
 test('camera index is distinct from immutable shards and monolith recovery', () => {
   const worker = loadWorker();
   assert.equal(worker.context.isCameraIndex(new URL('https://example.test/data/cameras.index.json')), true);
+  assert.equal(worker.context.isCameraSourceHealth(new URL('https://example.test/data/source-health.json')), true);
   assert.equal(worker.context.isCameraMonolith(new URL('https://example.test/data/cameras.json')), true);
   assert.equal(worker.context.isCameraShard(new URL('https://example.test/data/camera-shards/0001.json')), false);
 });
