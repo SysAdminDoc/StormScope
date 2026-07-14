@@ -50,6 +50,21 @@ test('validates extension, MIME, byte limits, and deterministic export round tri
   assert.throws(() => overlays.parseBundle(future), /invalid/);
 });
 
+test('recovery snapshots are validated, detached, and retain persistence intent', () => {
+  const text = JSON.stringify({ type: 'Point', coordinates: [-90, 38] });
+  const record = overlays.createRecord(file('plan.json', 'application/json', text), text, Date.UTC(2026, 6, 13));
+  record.persisted = true;
+  record.layer = { remove() {} };
+  const snapshots = overlays.recoverySnapshot([record]);
+  assert.equal(snapshots[0].persisted, true);
+  assert.equal(snapshots[0].record.id, record.id);
+  assert.equal(Object.hasOwn(snapshots[0].record, 'layer'), false);
+  snapshots[0].record.name = 'Changed';
+  assert.equal(record.name, 'plan');
+  assert.throws(() => overlays.recoverySnapshot([]), /recovery/);
+  assert.throws(() => overlays.recoverySnapshot([{ id: 'invalid' }]), /record/);
+});
+
 test('computes exact bounds and enforces aggregate feature limits', () => {
   const collection = { type: 'FeatureCollection', features: [
     { type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [-179, -10] } },

@@ -63,8 +63,13 @@ test('saves and updates named views with map, layer, and opacity state', () => {
   view = store.getView('home');
   assert.equal(view.snapshot.zoom, 9);
   assert.equal(view.snapshot.opacity.radar, 0.4);
+  const deleted = store.getView('home');
   store.deleteView('home');
   assert.deepEqual(store.listViews(), []);
+  store.restoreView(deleted);
+  assert.deepEqual(store.getView('home'), deleted);
+  assert.throws(() => store.restoreView(deleted), /conflicts/);
+  store.deleteView('home');
 
   store.saveView('Generated one', snapshot());
   store.saveView('Generated two', snapshot());
@@ -190,6 +195,26 @@ test('failed storage writes leave the in-memory last good state unchanged', () =
   const store = SavedState.createStore(storeOptions(storage));
   assert.throws(() => store.setFavorite(1, true), /quota/);
   assert.deepEqual(store.listFavorites(), []);
+});
+
+test('failed view restore preserves the current state', () => {
+  const backing = SavedState.memoryStorage();
+  const source = SavedState.createStore(storeOptions(backing));
+  source.saveView('Recover me', snapshot(), { id: 'recover-me' });
+  const deleted = source.getView('recover-me');
+  source.deleteView('recover-me');
+  const before = source.getState();
+  const storage = {
+    getItem: backing.getItem,
+    removeItem: backing.removeItem,
+    setItem(key, value) {
+      if (key === SavedState.DEFAULT_KEY) throw new Error('quota exceeded');
+      backing.setItem(key, value);
+    }
+  };
+  const store = SavedState.createStore(storeOptions(storage));
+  assert.throws(() => store.restoreView(deleted), /quota/);
+  assert.deepEqual(store.getState(), before);
 });
 
 test('rejects unsafe view payloads before persistence', () => {

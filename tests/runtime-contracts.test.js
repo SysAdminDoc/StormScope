@@ -470,3 +470,11 @@ test('popup anchor hrefs from fetched provider text are scheme-guarded (CVE-2025
   // All feature popups are built as DOM nodes, never HTML strings passed to bindPopup.
   assert.doesNotMatch(app, /bindPopup\(\s*'[^']*<[^']*'/);
 });
+
+test('local authored-data deletion exposes bounded recovery and confirmed bulk removal', () => {
+  assert.match(app, /RECOVERY_ACTION_WINDOW_MS = 10 \* 1000/);
+  assert.match(app, /window\.confirm\(tr\('overlays\.clearConfirm'/);
+  assert.match(app, /function persistOverlayRecovery\(snapshots\)/);
+  assert.match(app, /savedStore\.restoreView\(view\)/);
+  assert.match(css, /\.saved-state-status \.recovery-action/);
+});

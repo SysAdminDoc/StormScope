@@ -811,8 +811,58 @@ async function main() {
     const overlayDownload = page.waitForEvent('download');
     await page.locator('#export-local-overlays').click();
     assert.equal((await overlayDownload).suggestedFilename(), 'stormscope-local-overlays.json');
+
+    const persistedOverlay = page.locator('.local-overlay-item').filter({ hasText: 'incident-plan' });
+    await persistedOverlay.getByRole('button', { name: 'Remove', exact: true }).click();
+    const overlayUndo = page.locator('#local-overlay-status .recovery-action');
+    await overlayUndo.waitFor({ state: 'visible' });
+    assert.match(await page.locator('#local-overlay-status').textContent(), /Removed “incident-plan”\. Undo for 10 seconds\./);
+    assert.equal(await page.locator('.local-overlay-item').count(), 1);
+    await overlayUndo.focus();
+    await page.keyboard.press('Enter');
+    await page.locator('#local-overlay-status').filter({ hasText: 'Restored “incident-plan”.' }).waitFor({ state: 'visible' });
+    assert.equal(await page.locator('.local-overlay-item').count(), 2);
+    const recoveredOverlayPage = await context.newPage();
+    recoveredOverlayPage.baseURL = baseURL;
+    await addNetworkFixtures(recoveredOverlayPage);
+    await waitForApp(recoveredOverlayPage);
+    await recoveredOverlayPage.getByRole('button', { name: 'Toggle layers panel' }).click();
+    await recoveredOverlayPage.locator('.local-overlay-item').filter({ hasText: 'incident-plan' }).waitFor({ state: 'visible' });
+    await recoveredOverlayPage.close();
+
+    await persistedOverlay.getByRole('button', { name: 'Remove', exact: true }).click();
+    await overlayUndo.waitFor({ state: 'visible' });
+    await page.evaluate(() => {
+      const transaction = IDBDatabase.prototype.transaction;
+      IDBDatabase.prototype.transaction = function failNextTransaction() {
+        IDBDatabase.prototype.transaction = transaction;
+        throw new DOMException('Quota exceeded', 'QuotaExceededError');
+      };
+    });
+    await overlayUndo.click();
+    await page.locator('#local-overlay-status')
+      .filter({ hasText: 'restored for this session but could not be kept for reload' }).waitFor({ state: 'visible' });
+    assert.equal(await page.locator('.local-overlay-item').count(), 2, 'failed persistence must retain a session-only recovery');
+
+    page.once('dialog', async dialog => {
+      assert.match(dialog.message(), /Remove all 2 local overlays.*Restore will be available for 10 seconds/);
+      await dialog.dismiss();
+    });
     await page.locator('#clear-local-overlays').click();
-    await page.locator('#local-overlay-status').filter({ hasText: 'Removed all local overlays' }).waitFor({ state: 'visible' });
+    assert.equal(await page.locator('.local-overlay-item').count(), 2, 'cancelled bulk removal must preserve all overlays');
+    page.once('dialog', dialog => dialog.accept());
+    await page.locator('#clear-local-overlays').click();
+    const overlayRestore = page.locator('#local-overlay-status .recovery-action');
+    await overlayRestore.waitFor({ state: 'visible' });
+    assert.match(await page.locator('#local-overlay-status').textContent(), /Removed 2 local overlays\. Restore for 10 seconds\./);
+    assert.equal(await page.locator('.local-overlay-item').count(), 0);
+    await overlayRestore.focus();
+    await page.keyboard.press('Enter');
+    await page.locator('#local-overlay-status').filter({ hasText: 'Restored 2 local overlays.' }).waitFor({ state: 'visible' });
+    assert.equal(await page.locator('.local-overlay-item').count(), 2);
+    page.once('dialog', dialog => dialog.accept());
+    await page.locator('#clear-local-overlays').click();
+    await page.locator('#local-overlay-status').filter({ hasText: 'Removed 2 local overlays.' }).waitFor({ state: 'visible' });
     assert.equal(await page.locator('.local-overlay-item').count(), 0);
     await page.locator('#toggle-satellite').check();
     await page.locator('#toggle-lightning').check();
@@ -1361,6 +1411,16 @@ async function main() {
     await page.locator('#view-name').fill('Smoke view');
     await page.getByRole('button', { name: 'Save', exact: true }).click();
     await page.locator('#saved-state-status').filter({ hasText: 'View saved locally.' }).waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#saved-views option', { hasText: 'Smoke view' }).count(), 1);
+    await page.locator('#saved-views').selectOption({ label: 'Smoke view' });
+    await page.getByRole('button', { name: 'Delete', exact: true }).click();
+    const savedViewUndo = page.locator('#saved-state-status .recovery-action');
+    await savedViewUndo.waitFor({ state: 'visible' });
+    assert.match(await page.locator('#saved-state-status').textContent(), /Deleted “Smoke view”\. Undo for 10 seconds\./);
+    assert.equal(await page.locator('#saved-views option', { hasText: 'Smoke view' }).count(), 0);
+    await savedViewUndo.focus();
+    await page.keyboard.press('Enter');
+    await page.locator('#saved-state-status').filter({ hasText: 'Restored “Smoke view”.' }).waitFor({ state: 'visible' });
     assert.equal(await page.locator('#saved-views option', { hasText: 'Smoke view' }).count(), 1);
     await page.locator('#data-mode').selectOption('standard');
     await page.locator('#radar-palette').selectOption('standard');

@@ -419,6 +419,17 @@
       return commit(next);
     }
 
+    function restoreView(value) {
+      var next = getState();
+      var restored = normalizeView(value, next.views.length, nowIso());
+      if (next.views.some(function (view) {
+        return view.id === restored.id || view.name.toLowerCase() === restored.name.toLowerCase();
+      })) throw new Error('saved view conflicts with current state');
+      if (next.views.length >= MAX_VIEWS) throw new RangeError('views exceed the supported limit');
+      next.views.push(restored);
+      return commit(next);
+    }
+
     return Object.freeze({
       getState: getState,
       getStatus: function () {
@@ -442,6 +453,7 @@
       },
       saveView: saveView,
       deleteView: deleteView,
+      restoreView: restoreView,
       setLastView: function (snapshot) { var next = getState(); next.lastView = normalizeSnapshot(snapshot); return commit(next); },
       getLastView: function () { return state.lastView ? clone(state.lastView) : null; },
       clearLastView: function () { var next = getState(); next.lastView = null; return commit(next); },

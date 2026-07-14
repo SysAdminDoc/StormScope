@@ -18,12 +18,13 @@
   })();
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.106.0';
+  var APP_VERSION = '0.107.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
   var IMAGE_REFRESH_INTERVAL = 15000;
   var CAMERA_OBSERVATION_TTL = 6 * 60 * 60 * 1000;
+  var RECOVERY_ACTION_WINDOW_MS = 10 * 1000;
   var RAINVIEWER_COLOR_SCHEME = 2;
   var RAINVIEWER_MAX_NATIVE_ZOOM = 7;
   var RAINVIEWER_PRELOAD_RESERVE = 20;
@@ -70,6 +71,7 @@
   var searchRenderMetrics = { fullRenders: 0, windowRenders: 0, markerSyncs: 0 };
   var savedStore = null;
   var saveLastViewTimer = null;
+  var recoveryActionTimers = Object.create(null);
   var startupSharedScene = null;
   var startupSceneError = false;
   var pendingSceneFrameTime = null;
@@ -1446,6 +1448,106 @@
     });
   }
 
+  function persistOverlayRecovery(snapshots) {
+    var persisted = snapshots.filter(function (snapshot) { return snapshot.persisted; });
+    if (!persisted.length) return Promise.resolve();
+    if (!localOverlayDatabase) return Promise.reject(new Error('storage unavailable'));
+    return new Promise(function (resolve, reject) {
+      var transaction = localOverlayDatabase.transaction('overlays', 'readwrite');
+      var store = transaction.objectStore('overlays');
+      transaction.onabort = function () { reject(transaction.error || new Error('storage aborted')); };
+      transaction.onerror = function () { /* onabort reports the atomic failure */ };
+      transaction.oncomplete = resolve;
+      try {
+        persisted.forEach(function (snapshot) { store.put(overlayStoredRecord(snapshot.record)); });
+      } catch (error) {
+        try { transaction.abort(); } catch (abortError) { /* already failed */ }
+        reject(error);
+      }
+    });
+  }
+
+  function addRecoveredOverlays(snapshots, persistent) {
+    snapshots.forEach(function (snapshot) {
+      var record = snapshot.record;
+      record.persisted = persistent && snapshot.persisted;
+      record.layer = null;
+      localOverlayRecords.push(record);
+      drawLocalOverlay(record);
+    });
+    renderLocalOverlayList();
+  }
+
+  function restoreLocalOverlays(snapshots, successKey, variables) {
+    var currentIds = new Set(localOverlayRecords.map(function (record) { return record.id; }));
+    if (localOverlayRecords.length + snapshots.length > StormScopeLocalOverlays.MAX_OVERLAYS ||
+        snapshots.some(function (snapshot) { return currentIds.has(snapshot.record.id); })) {
+      return Promise.reject(new Error('overlay recovery conflicts with current overlays'));
+    }
+    return persistOverlayRecovery(snapshots).then(function () {
+      addRecoveredOverlays(snapshots, true);
+      setLocalOverlayStatus(successKey, variables);
+    }, function () {
+      addRecoveredOverlays(snapshots, false);
+      setLocalOverlayStatus('overlays.restoredSessionOnly', null, true);
+    });
+  }
+
+  function removeLocalOverlay(record, button) {
+    var snapshots;
+    try { snapshots = StormScopeLocalOverlays.recoverySnapshot([record]); } catch (error) {
+      if (button) button.disabled = false;
+      setLocalOverlayStatus('overlays.error.restore', null, true);
+      return;
+    }
+    var removal = record.persisted
+      ? overlayTransaction('readwrite', function (store) { return store.delete(record.id); })
+      : Promise.resolve();
+    removal.then(function () {
+      if (record.layer) map.removeLayer(record.layer);
+      localOverlayRecords = localOverlayRecords.filter(function (itemRecord) { return itemRecord !== record; });
+      renderLocalOverlayList();
+      offerRecoveryAction(
+        'local-overlay-status',
+        tr('overlays.removedUndo', { name: record.name, seconds: localNumber(RECOVERY_ACTION_WINDOW_MS / 1000) }),
+        tr('recovery.undo'),
+        tr('overlays.removed', { name: record.name }),
+        function () { return restoreLocalOverlays(snapshots, 'overlays.restored', { name: record.name }); },
+        function () { setLocalOverlayStatus('overlays.error.restore', null, true); }
+      );
+    }).catch(function () {
+      if (button) button.disabled = false;
+      setLocalOverlayStatus('overlays.error.storage', null, true);
+    });
+  }
+
+  function clearLocalOverlays() {
+    var count = localOverlayRecords.length;
+    if (!count || !window.confirm(tr('overlays.clearConfirm', {
+      count: localNumber(count), seconds: localNumber(RECOVERY_ACTION_WINDOW_MS / 1000)
+    }))) return;
+    var snapshots;
+    try { snapshots = StormScopeLocalOverlays.recoverySnapshot(localOverlayRecords); } catch (error) {
+      setLocalOverlayStatus('overlays.error.restore', null, true);
+      return;
+    }
+    var clear = localOverlayDatabase
+      ? overlayTransaction('readwrite', function (store) { return store.clear(); }) : Promise.resolve();
+    clear.then(function () {
+      localOverlayRecords.forEach(function (record) { if (record.layer) map.removeLayer(record.layer); });
+      localOverlayRecords = [];
+      renderLocalOverlayList();
+      offerRecoveryAction(
+        'local-overlay-status',
+        tr('overlays.clearedUndo', { count: localNumber(count), seconds: localNumber(RECOVERY_ACTION_WINDOW_MS / 1000) }),
+        tr('recovery.restore'),
+        tr('overlays.cleared'),
+        function () { return restoreLocalOverlays(snapshots, 'overlays.restoredAll', { count: localNumber(count) }); },
+        function () { setLocalOverlayStatus('overlays.error.restore', null, true); }
+      );
+    }).catch(function () { setLocalOverlayStatus('overlays.error.storage', null, true); });
+  }
+
   function openLocalOverlayDatabase() {
     if (!window.indexedDB) return Promise.resolve([]);
     return new Promise(function (resolve, reject) {
@@ -1461,10 +1563,49 @@
     });
   }
 
-  function setLocalOverlayStatus(key, variables, error) {
-    var status = document.getElementById('local-overlay-status');
-    status.textContent = tr(key, variables);
+  function cancelRecoveryAction(statusId) {
+    var pending = recoveryActionTimers[statusId];
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    delete recoveryActionTimers[statusId];
+  }
+
+  function setRecoveryStatusText(statusId, message, error) {
+    cancelRecoveryAction(statusId);
+    var status = document.getElementById(statusId);
+    status.textContent = message;
     status.classList.toggle('error', Boolean(error));
+  }
+
+  function offerRecoveryAction(statusId, message, actionLabel, expiredMessage, action, onError) {
+    cancelRecoveryAction(statusId);
+    var status = document.getElementById(statusId);
+    var text = document.createElement('span');
+    text.textContent = message;
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'recovery-action';
+    button.textContent = actionLabel;
+    status.replaceChildren(text, button);
+    status.classList.remove('error');
+    var pending = { timer: null };
+    pending.timer = setTimeout(function () {
+      if (recoveryActionTimers[statusId] !== pending) return;
+      delete recoveryActionTimers[statusId];
+      status.textContent = expiredMessage;
+    }, RECOVERY_ACTION_WINDOW_MS);
+    recoveryActionTimers[statusId] = pending;
+    button.addEventListener('click', function () {
+      if (recoveryActionTimers[statusId] !== pending) return;
+      clearTimeout(pending.timer);
+      delete recoveryActionTimers[statusId];
+      button.disabled = true;
+      Promise.resolve().then(action).catch(typeof onError === 'function' ? onError : function () {});
+    });
+  }
+
+  function setLocalOverlayStatus(key, variables, error) {
+    setRecoveryStatusText('local-overlay-status', tr(key, variables), error);
   }
 
   function localOverlayPopup(feature) {
@@ -1570,7 +1711,7 @@
         var button = document.createElement('button');
         button.type = 'button';
         button.textContent = label;
-        button.addEventListener('click', handler);
+        button.addEventListener('click', function () { handler(button); });
         actions.appendChild(button);
       }
       action(tr('overlays.zoom'), function () { zoomLocalOverlay(record); });
@@ -1590,13 +1731,9 @@
           renderLocalOverlayList();
         }).catch(function () { setLocalOverlayStatus('overlays.error.storage', null, true); });
       });
-      action(tr('overlays.remove'), function () {
-        if (record.layer) map.removeLayer(record.layer);
-        localOverlayRecords = localOverlayRecords.filter(function (itemRecord) { return itemRecord !== record; });
-        var removal = record.persisted ? overlayTransaction('readwrite', function (store) { return store.delete(record.id); }) : Promise.resolve();
-        removal.catch(function () { setLocalOverlayStatus('overlays.error.storage', null, true); });
-        setLocalOverlayStatus('overlays.removed', { name: record.name });
-        renderLocalOverlayList();
+      action(tr('overlays.remove'), function (button) {
+        button.disabled = true;
+        removeLocalOverlay(record, button);
       });
       item.appendChild(visibility);
       item.appendChild(name);
@@ -3130,9 +3267,7 @@
   }
 
   function setSavedStateStatus(message, error) {
-    var status = document.getElementById('saved-state-status');
-    status.textContent = message;
-    status.classList.toggle('error', Boolean(error));
+    setRecoveryStatusText('saved-state-status', message, error);
   }
 
   function refreshSavedViews(selectedId) {
@@ -5011,10 +5146,25 @@
       var select = document.getElementById('saved-views');
       var view = savedStore.getView(select.value);
       if (!view) return;
-      savedStore.deleteView(view.id);
+      try { savedStore.deleteView(view.id); } catch (error) {
+        setSavedStateStatus(tr('views.deleteError'), true);
+        return;
+      }
       refreshSavedViews();
       document.getElementById('view-name').value = '';
-      setSavedStateStatus(tr('views.deleted', { name: view.name }));
+      offerRecoveryAction(
+        'saved-state-status',
+        tr('views.deletedUndo', { name: view.name, seconds: localNumber(RECOVERY_ACTION_WINDOW_MS / 1000) }),
+        tr('recovery.undo'),
+        tr('views.deleted', { name: view.name }),
+        function () {
+          savedStore.restoreView(view);
+          refreshSavedViews(view.id);
+          document.getElementById('view-name').value = view.name;
+          setSavedStateStatus(tr('views.restored', { name: view.name }));
+        },
+        function () { setSavedStateStatus(tr('views.restoreError'), true); }
+      );
     });
     document.getElementById('export-state').addEventListener('click', function () {
       var blob = new Blob([savedStore.exportJson(2)], { type: 'application/json' });
@@ -5068,15 +5218,7 @@
         setLocalOverlayStatus('overlays.exportedAll');
       } catch (error) { setLocalOverlayStatus('overlays.error.export', null, true); }
     });
-    document.getElementById('clear-local-overlays').addEventListener('click', function () {
-      localOverlayRecords.forEach(function (record) { if (record.layer) map.removeLayer(record.layer); });
-      localOverlayRecords = [];
-      var clear = localOverlayDatabase
-        ? overlayTransaction('readwrite', function (store) { return store.clear(); }) : Promise.resolve();
-      clear.catch(function () { setLocalOverlayStatus('overlays.error.storage', null, true); });
-      renderLocalOverlayList();
-      setLocalOverlayStatus('overlays.cleared');
-    });
+    document.getElementById('clear-local-overlays').addEventListener('click', clearLocalOverlays);
     document.getElementById('copy-scene').addEventListener('click', function () { copyCurrentScene(); });
     document.getElementById('share-scene').addEventListener('click', function () { shareCurrentScene(); });
 
@@ -5417,6 +5559,7 @@
       if (monitorRegistry) monitorRegistry.destroyAll();
       if (localOverlayDatabase) localOverlayDatabase.close();
       clearTimeout(saveLastViewTimer);
+      Object.keys(recoveryActionTimers).forEach(cancelRecoveryAction);
       teardownResources.forEach(function (resource) { resource.destroy(); });
     });
   }

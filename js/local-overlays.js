@@ -245,6 +245,14 @@
     if (!Array.isArray(records) || records.length > MAX_OVERLAYS) throw new RangeError('overlay limit exceeded');
     return JSON.stringify({ schema: BUNDLE_SCHEMA, version: VERSION, exportedAt: new Date(now || Date.now()).toISOString(), overlays: records.map(validateRecord) }, null, 2);
   }
+  function recoverySnapshot(records) {
+    if (!Array.isArray(records) || !records.length || records.length > MAX_OVERLAYS) {
+      throw new RangeError('overlay recovery set is invalid');
+    }
+    return records.map(function (record) {
+      return { record: validateRecord(record), persisted: Boolean(record.persisted) };
+    });
+  }
   function geometryBounds(collection) {
     var normalized = normalizeGeoJson(collection).collection;
     var result = { west: 180, south: 90, east: -180, north: -90 };
@@ -269,6 +277,6 @@
     MAX_FEATURES: MAX_FEATURES, MAX_COORDINATES: MAX_COORDINATES, MAX_OVERLAYS: MAX_OVERLAYS, COLORS: COLORS,
     sourceFormat: sourceFormat, normalizeGeoJson: normalizeGeoJson, parseGpx: parseGpx, createRecord: createRecord,
     validateRecord: validateRecord, parseBundle: parseBundle, exportOverlay: exportOverlay, exportBundle: exportBundle,
-    geometryBounds: geometryBounds, positionCount: positionCount, style: style
+    recoverySnapshot: recoverySnapshot, geometryBounds: geometryBounds, positionCount: positionCount, style: style
   });
 });

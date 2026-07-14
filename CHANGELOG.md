@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.107.0 - 2026-07-14
+
+- Made saved-view and private-overlay deletion recoverable through a keyboard-accessible 10-second Undo/Restore action. Restored persisted overlays are atomically written back to IndexedDB before they return to the map; storage failures retain a clearly disclosed session-only copy instead of silently losing authored data.
+- Added a localized native confirmation before bulk overlay removal, cancellation with no mutation, and browser regressions covering single and bulk recovery, persistence after reload, failed saved-view restoration, and untrusted overlay snapshots. SW v80.
+
 ## v0.106.0 - 2026-07-14
 
 - Made Alerts, Layers, Search, and Situation surfaces mutually exclusive through one top-level panel state path. Alert refreshes and locale re-renders can no longer reopen Alerts above an active panel; closing any header panel predictably restores enabled alerts and synchronized `aria-expanded` state.

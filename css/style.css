@@ -605,6 +605,19 @@ button:focus-visible {
 .local-overlay-bulk-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .local-overlay-status { min-height: 1.4em; line-height: 1.4; }
 .local-overlay-status.error { color: var(--danger); }
+.local-overlay-status .recovery-action,
+.saved-state-status .recovery-action {
+  min-height: 32px;
+  margin: 6px 0 0 8px;
+  padding: 4px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 7px;
+  background: var(--bg-panel-hover);
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
 
 .incident-cameras ul {
   display: grid;
