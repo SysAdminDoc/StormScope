@@ -25,7 +25,10 @@ function storeOptions(storage, extra) {
 
 test('exports the same frozen API as a browser global and CommonJS module', () => {
   const source = fs.readFileSync(modulePath, 'utf8');
-  const context = { JSON, Date, Math, Number, String, Boolean, Object, Array, TypeError, RangeError, isFinite };
+  const context = {
+    JSON, Date, Math, Number, String, Boolean, Object, Array, ArrayBuffer, Uint8Array,
+    TextDecoder, TextEncoder, TypeError, RangeError, Set, isFinite
+  };
   context.globalThis = context;
   vm.createContext(context);
   vm.runInContext(source, context, { filename: 'saved-state.js' });
@@ -109,6 +112,76 @@ test('exports and imports validated JSON without network or account state', () =
   targetStore.importJson(exported);
   assert.deepEqual(targetStore.getState(), sourceStore.getState());
   assert.doesNotMatch(exported, /account|token|network/i);
+});
+
+test('decodes only bounded valid UTF-8 import bytes', () => {
+  const text = '{"schema":"stormscope-saved-state"}';
+  assert.equal(SavedState.decodeImportBytes(new TextEncoder().encode(text)), text);
+  assert.throws(() => SavedState.decodeImportBytes(
+    new Uint8Array(SavedState.MAX_IMPORT_BYTES + 1)
+  ), /size limit/);
+  assert.throws(() => SavedState.decodeImportBytes(new Uint8Array([0xC3, 0x28])), /UTF-8/);
+});
+
+test('current schema rejects coercible scalar types while explicit v0-v2 migrations retain coercion', () => {
+  const source = SavedState.createStore(storeOptions(SavedState.memoryStorage()));
+  source.setFavorite(7, true);
+  source.saveView('Strict', snapshot(), { id: 'strict' });
+  const canonical = source.getState();
+  function changed(mutator) {
+    const value = structuredClone(canonical);
+    mutator(value);
+    return value;
+  }
+  assert.throws(() => SavedState.migratePayload(changed(value => { value.version = '3'; })), /version/);
+  assert.throws(() => SavedState.migratePayload(changed(value => { value.favorites = null; })), /array/);
+  assert.throws(() => SavedState.migratePayload(changed(value => { value.favorites[0] = 7; })), /strings/);
+  assert.throws(() => SavedState.migratePayload(changed(value => { value.views[0].snapshot.zoom = '7'; })), /finite number/);
+  assert.throws(() => SavedState.migratePayload(changed(value => { value.views[0].snapshot.center.lat = false; })), /finite number/);
+  assert.throws(() => SavedState.migratePayload(changed(value => { value.views[0].snapshot.opacity.radar = []; })), /finite number/);
+
+  const legacy = SavedState.migratePayload({
+    version: '2', favorites: [7], views: [{
+      id: 'legacy', name: 'Legacy', createdAt: '2026-07-11T20:00:00Z',
+      snapshot: { center: { lat: '39.1', lon: '-90.2' }, zoom: '7', layers: { radar: true }, opacity: { radar: '0.5' } }
+    }], lastView: null
+  }, { nowIso: '2026-07-11T20:00:00.000Z' });
+  assert.equal(legacy.views[0].snapshot.zoom, 7);
+  assert.equal(legacy.views[0].snapshot.opacity.radar, 0.5);
+  assert.deepEqual(legacy.favorites, ['7']);
+});
+
+test('imports reject duplicate IDs and case-insensitive names without mutating state', () => {
+  const storage = SavedState.memoryStorage();
+  const store = SavedState.createStore(storeOptions(storage));
+  store.saveView('Existing', snapshot(), { id: 'existing' });
+  const before = store.getState();
+  const beforeRaw = storage.getItem(SavedState.DEFAULT_KEY);
+
+  const duplicateId = structuredClone(before);
+  duplicateId.views.push(Object.assign({}, duplicateId.views[0], { name: 'Different name' }));
+  assert.throws(() => store.importJson(JSON.stringify(duplicateId)), /IDs must be unique/);
+  const duplicateName = structuredClone(before);
+  duplicateName.views.push(Object.assign({}, duplicateName.views[0], { id: 'different', name: 'eXiStInG' }));
+  assert.throws(() => store.importJson(JSON.stringify(duplicateName)), /names must be unique/);
+  assert.deepEqual(store.getState(), before);
+  assert.equal(storage.getItem(SavedState.DEFAULT_KEY), beforeRaw);
+});
+
+test('successful imports return a restorable previous snapshot', () => {
+  const target = SavedState.createStore(storeOptions(SavedState.memoryStorage()));
+  target.setFavorite(99, true);
+  const previous = target.getState();
+  const source = SavedState.createStore(storeOptions(SavedState.memoryStorage()));
+  source.setFavorite(7, true);
+  source.saveView('Imported', snapshot(), { id: 'imported' });
+
+  const result = target.importJson(source.exportJson());
+  assert.deepEqual(result.previous, previous);
+  assert.deepEqual(result.state, source.getState());
+  target.replaceState(result.previous);
+  assert.deepEqual(target.getState().favorites, ['99']);
+  assert.deepEqual(target.listViews(), []);
 });
 
 test('migrates v1 and unversioned payloads safely', () => {

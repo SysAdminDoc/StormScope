@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.114.0 - 2026-07-14
+
+- Made saved-state imports strict, 5 MiB/UTF-8 bounded, duplicate-safe, staged, and recoverable through a 12-second Undo without mutating state on rejection. SW v87.
+
 ## v0.113.0 - 2026-07-14
 
 - Bounded camera-generation caching to validated current and previous datasets within 64 MiB, added cached recovery for transient HTTP failures, and serialized pruning with runtime cache clearing. SW v86.

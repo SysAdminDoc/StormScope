@@ -1488,6 +1488,77 @@ async function main() {
       element.checked = false;
       element.dispatchEvent(new Event('change', { bubbles: true }));
     });
+
+    const savedStateBeforeImport = await page.evaluate(() => localStorage.getItem('stormscope.saved-state'));
+    const savedStateContentsBeforeImport = JSON.parse(savedStateBeforeImport);
+    delete savedStateContentsBeforeImport.updatedAt;
+    const importedState = JSON.parse(savedStateBeforeImport);
+    importedState.views = [Object.assign({}, importedState.views[0], {
+      id: 'imported-view',
+      name: 'Imported view'
+    })];
+    importedState.updatedAt = '2026-07-14T12:00:00.000Z';
+    await page.locator('#import-state-file').setInputFiles({
+      name: 'stormscope-saved-state.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify(importedState), 'utf8')
+    });
+    const importUndo = page.locator('#saved-state-status .recovery-action');
+    await importUndo.waitFor({ state: 'visible' });
+    assert.match(await page.locator('#saved-state-status').textContent(), /Saved state imported\. Undo for 12 seconds\./);
+    assert.equal(await page.locator('#saved-views option', { hasText: 'Imported view' }).count(), 1);
+    assert.equal(await page.locator('#saved-views option', { hasText: 'Smoke view' }).count(), 0);
+    await importUndo.focus();
+    await page.keyboard.press('Enter');
+    await page.locator('#saved-state-status').filter({ hasText: 'Previous saved state restored.' }).waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#saved-views option', { hasText: 'Imported view' }).count(), 0);
+    assert.equal(await page.locator('#saved-views option', { hasText: 'Smoke view' }).count(), 1);
+    assert.deepEqual(await page.evaluate(() => {
+      const state = JSON.parse(localStorage.getItem('stormscope.saved-state'));
+      delete state.updatedAt;
+      return state;
+    }), savedStateContentsBeforeImport);
+
+    const invalidImportedState = JSON.parse(savedStateBeforeImport);
+    invalidImportedState.views[0].snapshot.zoom = String(invalidImportedState.views[0].snapshot.zoom);
+    await page.locator('#import-state-file').setInputFiles({
+      name: 'invalid-saved-state.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify(invalidImportedState), 'utf8')
+    });
+    await page.locator('#saved-state-status').filter({ hasText: 'Import rejected because the file is invalid.' })
+      .waitFor({ state: 'visible' });
+    assert.deepEqual(await page.evaluate(() => {
+      const state = JSON.parse(localStorage.getItem('stormscope.saved-state'));
+      delete state.updatedAt;
+      return state;
+    }), savedStateContentsBeforeImport);
+    assert.equal(await page.locator('#saved-views option', { hasText: 'Smoke view' }).count(), 1);
+
+    await page.locator('#import-state-file').setInputFiles({
+      name: 'oversized-saved-state.json',
+      mimeType: 'application/json',
+      buffer: Buffer.alloc((5 * 1024 * 1024) + 1, 0x20)
+    });
+    await page.locator('#saved-state-status').filter({ hasText: 'Import rejected because the file exceeds 5 MiB.' }).waitFor({ state: 'visible' });
+    assert.deepEqual(await page.evaluate(() => {
+      const state = JSON.parse(localStorage.getItem('stormscope.saved-state'));
+      delete state.updatedAt;
+      return state;
+    }), savedStateContentsBeforeImport);
+
+    await page.locator('#import-state-file').setInputFiles({
+      name: 'invalid-utf8-saved-state.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from([0xc3, 0x28])
+    });
+    await page.locator('#saved-state-status').filter({ hasText: 'Import rejected because the file is not valid UTF-8.' }).waitFor({ state: 'visible' });
+    assert.deepEqual(await page.evaluate(() => {
+      const state = JSON.parse(localStorage.getItem('stormscope.saved-state'));
+      delete state.updatedAt;
+      return state;
+    }), savedStateContentsBeforeImport);
+
     const presetMap = await page.evaluate(() => {
       const map = window._stormscope.getMap();
       return { center: map.getCenter(), zoom: map.getZoom() };

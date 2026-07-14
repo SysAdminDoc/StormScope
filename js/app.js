@@ -18,13 +18,14 @@
   })();
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.113.0';
+  var APP_VERSION = '0.114.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
   var IMAGE_REFRESH_INTERVAL = 15000;
   var CAMERA_OBSERVATION_TTL = 6 * 60 * 60 * 1000;
   var RECOVERY_ACTION_WINDOW_MS = 10 * 1000;
+  var IMPORT_RECOVERY_WINDOW_MS = 12 * 1000;
   var RAINVIEWER_COLOR_SCHEME = 2;
   var RAINVIEWER_MAX_NATIVE_ZOOM = 7;
   var RAINVIEWER_PRELOAD_RESERVE = 20;
@@ -1579,7 +1580,7 @@
     status.classList.toggle('error', Boolean(error));
   }
 
-  function offerRecoveryAction(statusId, message, actionLabel, expiredMessage, action, onError) {
+  function offerRecoveryAction(statusId, message, actionLabel, expiredMessage, action, onError, windowMs) {
     cancelRecoveryAction(statusId);
     var status = document.getElementById(statusId);
     var text = document.createElement('span');
@@ -1595,7 +1596,7 @@
       if (recoveryActionTimers[statusId] !== pending) return;
       delete recoveryActionTimers[statusId];
       status.textContent = expiredMessage;
-    }, RECOVERY_ACTION_WINDOW_MS);
+    }, Number(windowMs) > 0 ? Number(windowMs) : RECOVERY_ACTION_WINDOW_MS);
     recoveryActionTimers[statusId] = pending;
     button.addEventListener('click', function () {
       if (recoveryActionTimers[statusId] !== pending) return;
@@ -5314,16 +5315,39 @@
       var input = this;
       var file = input.files && input.files[0];
       if (!file) return;
+      if (file.size > StormScopeSavedState.MAX_IMPORT_BYTES) {
+        setSavedStateStatus(tr('views.importTooLarge'), true);
+        input.value = '';
+        return;
+      }
       var reader = new FileReader();
       reader.onload = function () {
         try {
-          savedStore.importJson(String(reader.result));
+          var json = StormScopeSavedState.decodeImportBytes(reader.result);
+          var imported = savedStore.importJson(json);
           refreshSavedViews();
           updateFavoriteButton(activeCamera);
           scheduleSearchRender();
-          setSavedStateStatus(tr('views.imported'));
+          offerRecoveryAction(
+            'saved-state-status',
+            tr('views.importedUndo', { seconds: localNumber(IMPORT_RECOVERY_WINDOW_MS / 1000) }),
+            tr('recovery.undo'),
+            tr('views.imported'),
+            function () {
+              savedStore.replaceState(imported.previous);
+              refreshSavedViews();
+              updateFavoriteButton(activeCamera);
+              scheduleSearchRender();
+              setSavedStateStatus(tr('views.importRestored'));
+            },
+            function () { setSavedStateStatus(tr('views.importRestoreError'), true); },
+            IMPORT_RECOVERY_WINDOW_MS
+          );
         } catch (error) {
-          setSavedStateStatus(tr('views.importRejected'), true);
+          var message = String(error && error.message || '');
+          var key = /size limit/i.test(message) ? 'views.importTooLarge'
+            : /UTF-8/i.test(message) ? 'views.importEncodingError' : 'views.importRejected';
+          setSavedStateStatus(tr(key), true);
         } finally {
           input.value = '';
         }
@@ -5332,7 +5356,7 @@
         setSavedStateStatus(tr('views.importReadError'), true);
         input.value = '';
       };
-      reader.readAsText(file);
+      reader.readAsArrayBuffer(file);
     });
     document.getElementById('import-local-overlay').addEventListener('click', function () {
       document.getElementById('local-overlay-file').click();

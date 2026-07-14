@@ -14,11 +14,28 @@
   var DEFAULT_KEY = 'stormscope.saved-state';
   var MAX_FAVORITES = 10000;
   var MAX_VIEWS = 200;
+  var MAX_IMPORT_BYTES = 5 * 1024 * 1024;
   var ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
   var LAYER_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,31}$/;
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
+  }
+
+  function decodeImportBytes(value) {
+    var bytes;
+    if (value instanceof ArrayBuffer) bytes = new Uint8Array(value);
+    else if (ArrayBuffer.isView(value)) bytes = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+    else throw new TypeError('saved-state import must be binary data');
+    if (bytes.byteLength > MAX_IMPORT_BYTES) throw new RangeError('saved-state import exceeds the size limit');
+    var text;
+    try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); } catch (_error) {
+      throw new TypeError('saved-state import is not valid UTF-8');
+    }
+    if (new TextEncoder().encode(text).byteLength > MAX_IMPORT_BYTES) {
+      throw new RangeError('saved-state import exceeds the UTF-8 size limit');
+    }
+    return text;
   }
 
   function own(object, key) {
@@ -32,9 +49,9 @@
     return value;
   }
 
-  function finiteNumber(value, label) {
-    var number = Number(value);
-    if (!isFinite(number)) throw new TypeError(label + ' must be a finite number');
+  function finiteNumber(value, label, legacy) {
+    var number = legacy ? Number(value) : value;
+    if (typeof number !== 'number' || !Number.isFinite(number)) throw new TypeError(label + ' must be a finite number');
     return number;
   }
 
@@ -49,17 +66,18 @@
     return id;
   }
 
-  function normalizeFavorites(value) {
+  function normalizeFavorites(value, legacy) {
     var source;
-    if (value == null) source = [];
+    if (legacy && value == null) source = [];
     else if (Array.isArray(value)) source = value;
-    else if (typeof value === 'object') {
+    else if (legacy && typeof value === 'object') {
       source = Object.keys(value).filter(function (key) { return Boolean(value[key]); });
     } else throw new TypeError('favorites must be an array or object');
     if (source.length > MAX_FAVORITES) throw new RangeError('favorites exceed the supported limit');
     var seen = Object.create(null);
     var result = [];
     source.forEach(function (value) {
+      if (!legacy && typeof value !== 'string') throw new TypeError('current-schema favorite IDs must be strings');
       var id = normalizeCameraId(value);
       if (!seen[id]) {
         seen[id] = true;
@@ -69,11 +87,11 @@
     return result;
   }
 
-  function normalizeCenter(value, fallback) {
+  function normalizeCenter(value, fallback, legacy) {
     var source = value || fallback;
     objectValue(source, 'view center');
-    var latitude = finiteNumber(own(source, 'lat') ? source.lat : source.latitude, 'latitude');
-    var longitude = finiteNumber(own(source, 'lon') ? source.lon : (own(source, 'lng') ? source.lng : source.longitude), 'longitude');
+    var latitude = finiteNumber(own(source, 'lat') ? source.lat : source.latitude, 'latitude', legacy);
+    var longitude = finiteNumber(own(source, 'lon') ? source.lon : (own(source, 'lng') ? source.lng : source.longitude), 'longitude', legacy);
     if (latitude < -90 || latitude > 90) throw new RangeError('latitude must be between -90 and 90');
     if (longitude < -180 || longitude > 180) throw new RangeError('longitude must be between -180 and 180');
     return { lat: latitude, lon: longitude };
@@ -91,13 +109,13 @@
     return result;
   }
 
-  function normalizeOpacityMap(value) {
+  function normalizeOpacityMap(value, legacy) {
     if (value == null) return {};
     var source = objectValue(value, 'view opacity');
     var result = {};
     Object.keys(source).sort().forEach(function (key) {
       if (!LAYER_PATTERN.test(key)) throw new TypeError('view opacity contains an invalid key');
-      var opacity = finiteNumber(source[key], 'view opacity.' + key);
+      var opacity = finiteNumber(source[key], 'view opacity.' + key, legacy);
       if (opacity < 0 || opacity > 1) throw new RangeError('view opacity.' + key + ' must be between 0 and 1');
       result[key] = opacity;
     });
@@ -111,11 +129,11 @@
     return value;
   }
 
-  function normalizeWorkflow(source, snapshot) {
+  function normalizeWorkflow(source, snapshot, legacy) {
     if (source.radar != null) {
       var radar = objectValue(source.radar, 'view radar');
       var palette = boundedString(radar.palette, 'view radar palette', 20);
-      var speed = finiteNumber(radar.speed, 'view radar speed');
+      var speed = finiteNumber(radar.speed, 'view radar speed', legacy);
       if (['standard', 'colorblind', 'contrast'].indexOf(palette) === -1) throw new TypeError('view radar palette is invalid');
       if ([0, 400, 800, 1600].indexOf(speed) === -1) throw new TypeError('view radar speed is invalid');
       snapshot.radar = { palette: palette, speed: speed };
@@ -154,7 +172,7 @@
       snapshot.weatherUnits = units;
     }
     if (source.outlookDay != null) {
-      var outlookDay = finiteNumber(source.outlookDay, 'view outlook day');
+      var outlookDay = finiteNumber(source.outlookDay, 'view outlook day', legacy);
       if (!Number.isInteger(outlookDay) || outlookDay < 1 || outlookDay > 3) {
         throw new TypeError('view outlook day is invalid');
       }
@@ -182,18 +200,19 @@
     return result;
   }
 
-  function normalizeSnapshot(value) {
+  function normalizeSnapshot(value, options) {
+    var legacy = Boolean(options && options.legacy);
     var source = objectValue(value, 'view');
-    var map = source.map && typeof source.map === 'object' ? source.map : source;
-    var center = normalizeCenter(source.center || map.center, map);
-    var zoom = finiteNumber(own(source, 'zoom') ? source.zoom : map.zoom, 'zoom');
+    var map = legacy && source.map && typeof source.map === 'object' ? source.map : source;
+    var center = normalizeCenter(legacy ? (source.center || map.center) : source.center, legacy ? map : null, legacy);
+    var zoom = finiteNumber(legacy ? (own(source, 'zoom') ? source.zoom : map.zoom) : source.zoom, 'zoom', legacy);
     if (zoom < 0 || zoom > 24) throw new RangeError('zoom must be between 0 and 24');
     return normalizeWorkflow(source, {
       center: center,
       zoom: zoom,
-      layers: normalizeBooleanMap(legacyLayers(source), 'view layers'),
-      opacity: normalizeOpacityMap(legacyOpacity(source))
-    });
+      layers: normalizeBooleanMap(legacy ? legacyLayers(source) : source.layers, 'view layers'),
+      opacity: normalizeOpacityMap(legacy ? legacyOpacity(source) : source.opacity, legacy)
+    }, legacy);
   }
 
   function normalizeName(value) {
@@ -208,21 +227,26 @@
     return value;
   }
 
-  function validIso(value, fallback) {
-    if (typeof value !== 'string' || !isFinite(Date.parse(value))) return fallback;
-    return new Date(Date.parse(value)).toISOString();
+  function normalizeIso(value, label, fallback, legacy) {
+    if (typeof value === 'string' && value.length <= 40 &&
+        /(?:Z|[+-]\d{2}:\d{2})$/i.test(value) && Number.isFinite(Date.parse(value))) {
+      return new Date(Date.parse(value)).toISOString();
+    }
+    if (legacy) return fallback;
+    throw new TypeError(label + ' must be an ISO timestamp');
   }
 
-  function normalizeView(value, index, nowIso) {
+  function normalizeView(value, index, nowIso, legacy) {
     var source = objectValue(value, 'saved view');
-    var id = source.id == null ? 'migrated-' + (index + 1) : normalizeViewId(source.id);
-    var createdAt = validIso(source.createdAt, nowIso);
+    var id = source.id == null && legacy ? 'migrated-' + (index + 1) : normalizeViewId(source.id);
+    var createdAt = normalizeIso(source.createdAt, 'saved view createdAt', nowIso, legacy);
+    var snapshot = legacy ? (source.snapshot || source.view || source) : source.snapshot;
     return {
       id: id,
       name: normalizeName(source.name),
-      snapshot: normalizeSnapshot(source.snapshot || source.view || source),
+      snapshot: normalizeSnapshot(snapshot, { legacy: legacy }),
       createdAt: createdAt,
-      updatedAt: validIso(source.updatedAt, createdAt)
+      updatedAt: normalizeIso(source.updatedAt, 'saved view updatedAt', createdAt, legacy)
     };
   }
 
@@ -242,37 +266,50 @@
     var nowIso = settings.nowIso || new Date().toISOString();
     var parsed = typeof input === 'string' ? JSON.parse(input) : input;
     var source = objectValue(parsed, 'saved state');
-    var version = source.version == null ? 0 : Number(source.version);
+    var version;
+    if (source.version == null) version = 0;
+    else if (typeof source.version === 'number') version = source.version;
+    else if (typeof source.version === 'string' && /^(?:0|1|2)$/.test(source.version)) version = Number(source.version);
+    else throw new TypeError('saved-state version is invalid');
     if (!Number.isInteger(version) || version < 0) throw new TypeError('saved-state version is invalid');
     if (version > VERSION) throw new RangeError('saved-state version is newer than this app supports');
     if (version === VERSION && source.schema !== SCHEMA) throw new TypeError('saved-state schema is invalid');
+    var legacy = version < VERSION;
+    if (!legacy && ['favorites', 'views', 'lastView', 'updatedAt'].some(function (key) { return !own(source, key); })) {
+      throw new TypeError('current saved-state payload is incomplete');
+    }
 
     var favorites = source.favorites;
-    if (favorites == null) favorites = source.favoriteCameraIds;
+    if (legacy && favorites == null) favorites = source.favoriteCameraIds;
     var viewSource = source.views;
-    if (viewSource == null) viewSource = source.savedViews;
-    if (viewSource == null) viewSource = [];
+    if (legacy && viewSource == null) viewSource = source.savedViews;
+    if (legacy && viewSource == null) viewSource = [];
     if (!Array.isArray(viewSource)) throw new TypeError('views must be an array');
     if (viewSource.length > MAX_VIEWS) throw new RangeError('views exceed the supported limit');
 
-    var byId = Object.create(null);
+    var ids = new Set();
+    var names = new Set();
     var views = [];
     viewSource.forEach(function (view, index) {
-      var normalized = normalizeView(view, index, nowIso);
-      if (byId[normalized.id] != null) views[byId[normalized.id]] = normalized;
-      else {
-        byId[normalized.id] = views.length;
-        views.push(normalized);
-      }
+      var normalized = normalizeView(view, index, nowIso, legacy);
+      var foldedName = normalized.name.toLowerCase();
+      if (ids.has(normalized.id)) throw new TypeError('saved view IDs must be unique');
+      if (names.has(foldedName)) throw new TypeError('saved view names must be unique ignoring case');
+      ids.add(normalized.id);
+      names.add(foldedName);
+      views.push(normalized);
     });
 
     return {
       schema: SCHEMA,
       version: VERSION,
-      favorites: normalizeFavorites(favorites),
+      favorites: normalizeFavorites(favorites, legacy),
       views: views,
-      lastView: source.lastView == null ? null : normalizeSnapshot(source.lastView.snapshot || source.lastView),
-      updatedAt: validIso(source.updatedAt, nowIso)
+      lastView: source.lastView == null ? null : normalizeSnapshot(
+        legacy ? (source.lastView.snapshot || source.lastView) : source.lastView,
+        { legacy: legacy }
+      ),
+      updatedAt: normalizeIso(source.updatedAt, 'saved state updatedAt', nowIso, legacy)
     };
   }
 
@@ -345,10 +382,13 @@
     }
     if (!state) state = emptyState(nowIso());
 
-    function commit(candidate) {
+    function stageCandidate(candidate, preserveUpdatedAt) {
       var next = migratePayload(candidate, { nowIso: nowIso() });
-      next.updatedAt = nowIso();
-      var serialized = JSON.stringify(next);
+      if (!preserveUpdatedAt) next.updatedAt = nowIso();
+      return { state: next, serialized: JSON.stringify(next) };
+    }
+
+    function commitStaged(staged) {
       var currentRaw = readRaw(key);
       if (currentRaw != null) {
         try {
@@ -358,11 +398,15 @@
           // Never replace a valid backup with corrupt primary data.
         }
       }
-      storage.setItem(key, serialized);
-      state = next;
+      storage.setItem(key, staged.serialized);
+      state = staged.state;
       loadError = null;
       recoveredFromBackup = false;
       return clone(state);
+    }
+
+    function commit(candidate) {
+      return commitStaged(stageCandidate(candidate));
     }
 
     function getState() { return clone(state); }
@@ -454,14 +498,24 @@
       saveView: saveView,
       deleteView: deleteView,
       restoreView: restoreView,
-      setLastView: function (snapshot) { var next = getState(); next.lastView = normalizeSnapshot(snapshot); return commit(next); },
+      setLastView: function (snapshot) {
+        var next = getState();
+        // Runtime captures may still use the pre-v3 map/visibility aliases. Keep
+        // that compatibility at the trusted local API boundary; imports remain
+        // strict unless they explicitly pass through a v0-v2 migration.
+        next.lastView = normalizeSnapshot(snapshot, { legacy: true });
+        return commit(next);
+      },
       getLastView: function () { return state.lastView ? clone(state.lastView) : null; },
       clearLastView: function () { var next = getState(); next.lastView = null; return commit(next); },
       exportJson: function (space) { return JSON.stringify(state, null, space == null ? 2 : space); },
       importJson: function (json) {
+        var previous = getState();
         var imported = migratePayload(json, { nowIso: nowIso() });
-        return commit(imported);
+        var staged = stageCandidate(imported);
+        return { state: commitStaged(staged), previous: previous };
       },
+      replaceState: function (value) { return commitStaged(stageCandidate(value, true)); },
       reset: function () { return commit(emptyState(nowIso())); }
     });
   }
@@ -470,9 +524,11 @@
     SCHEMA: SCHEMA,
     VERSION: VERSION,
     DEFAULT_KEY: DEFAULT_KEY,
+    MAX_IMPORT_BYTES: MAX_IMPORT_BYTES,
     createStore: createStore,
     memoryStorage: memoryStorage,
     normalizeCameraId: normalizeCameraId,
+    decodeImportBytes: decodeImportBytes,
     normalizeSnapshot: normalizeSnapshot,
     migratePayload: migratePayload,
     validatePayload: validatePayload
