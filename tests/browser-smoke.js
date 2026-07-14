@@ -731,6 +731,7 @@ async function main() {
 
     assert.equal(await page.locator('html').evaluate((element) => element.scrollWidth > element.clientWidth), false);
     assert.equal(await page.locator('#radar-retry').isHidden(), true);
+    await page.waitForFunction(() => !document.querySelector('#radar-time').textContent.startsWith('Loading'));
     assert.match(await page.locator('#radar-time').textContent(), /old|ago|just now/i);
     await page.locator('#btn-summary').focus();
     await page.keyboard.press('Enter');

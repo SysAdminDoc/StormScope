@@ -9,11 +9,13 @@ const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'css', 'style.css'), 'utf8');
 const contextLayers = fs.readFileSync(path.join(root, 'js', 'context-layers.js'), 'utf8');
 const contextControllers = fs.readFileSync(path.join(root, 'js', 'context-layer-controllers.js'), 'utf8');
+const cameraRecordSource = fs.readFileSync(path.join(root, 'js', 'camera-record.js'), 'utf8');
 const cameraFeedSource = fs.readFileSync(path.join(root, 'js', 'camera-feed.js'), 'utf8');
 const serviceWorker = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const spatialQuery = fs.readFileSync(path.join(root, 'js', 'spatial-query.js'), 'utf8');
 const cameraData = JSON.parse(fs.readFileSync(path.join(root, 'data', 'cameras.json'), 'utf8'));
 const i18n = require('../js/i18n.js');
+const cameraRecord = require('../js/camera-record.js');
 const cameraFeed = require('../js/camera-feed.js');
 
 test('RainViewer uses the 2026 past-radar contract', () => {
@@ -34,6 +36,7 @@ test('RainViewer uses the 2026 past-radar contract', () => {
 });
 
 test('embed trust uses exact host-or-subdomain matching', () => {
+  assert.equal(cameraFeed.TRUSTED_EMBED_HOST_SUFFIXES, cameraRecord.TRUSTED_EMBED_HOST_SUFFIXES);
   assert.equal(cameraFeed.hostMatchesSuffix('earthcam.com', 'earthcam.com'), true);
   assert.equal(cameraFeed.hostMatchesSuffix('www.earthcam.com', 'earthcam.com'), true);
   assert.equal(cameraFeed.hostMatchesSuffix('earthcam.com.attacker.example', 'earthcam.com'), false);
@@ -43,9 +46,9 @@ test('embed trust uses exact host-or-subdomain matching', () => {
     'weathercams.faa.gov', 'hazcams.com', 'ipcamlive.com', 'rtsp.me']) {
     assert.ok(cameraFeed.TRUSTED_EMBED_HOST_SUFFIXES.includes(suffix));
   }
-  assert.doesNotMatch(cameraFeedSource, /hostname\.indexOf/);
-  assert.doesNotMatch(cameraFeedSource, /'511'/);
-  assert.match(cameraFeedSource, /parsed\.protocol !== 'https:'/);
+  assert.doesNotMatch(cameraRecordSource, /hostname\.indexOf/);
+  assert.doesNotMatch(cameraRecordSource, /'511'/);
+  assert.match(cameraRecordSource, /parsed\.protocol !== 'https:'/);
 
   const suffixes = cameraFeed.TRUSTED_EMBED_HOST_SUFFIXES;
   const rejectedEmbeds = cameraData.filter((camera) => {
@@ -54,6 +57,7 @@ test('embed trust uses exact host-or-subdomain matching', () => {
     return parsed.protocol !== 'https:' || !suffixes.some((suffix) => cameraFeed.hostMatchesSuffix(parsed.hostname, suffix));
   });
   assert.deepEqual(rejectedEmbeds, [], 'every shipped embed should pass the exact trust policy');
+  cameraData.forEach((camera) => cameraRecord.validateCameraRecord(camera));
 });
 
 test('feed failures tear down resources before replacing the DOM and are retryable', () => {
@@ -72,11 +76,14 @@ test('feed failures tear down resources before replacing the DOM and are retryab
 });
 
 test('extracted lifecycle modules load before app, remain offline, and own one teardown loop', () => {
+  const recordPosition = html.indexOf('js/camera-record.js');
+  const storePosition = html.indexOf('js/camera-store.js');
   const cameraPosition = html.indexOf('js/camera-feed.js');
   const controllerPosition = html.indexOf('js/context-layer-controllers.js');
   const appPosition = html.indexOf('js/app.js');
-  assert.ok(cameraPosition >= 0 && controllerPosition >= 0 &&
+  assert.ok(recordPosition >= 0 && storePosition > recordPosition && cameraPosition > recordPosition && controllerPosition >= 0 &&
     appPosition > cameraPosition && appPosition > controllerPosition);
+  assert.match(serviceWorker, /\.\/js\/camera-record\.js/);
   assert.match(serviceWorker, /\.\/js\/camera-feed\.js/);
   assert.match(serviceWorker, /\.\/js\/context-layer-controllers\.js/);
   assert.match(contextControllers, /function createControllerSet/);

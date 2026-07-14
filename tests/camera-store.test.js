@@ -7,11 +7,13 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 
+const cameraRecord = require('../js/camera-record.js');
 const cameraStore = require('../js/camera-store.js');
 
-function response(value, ok = true) {
+function response(value, ok = true, headers = {}) {
   return {
     ok,
+    headers: { get: name => headers[String(name).toLowerCase()] ?? null },
     json: async () => value,
     text: async () => typeof value === 'string' ? value : JSON.stringify(value)
   };
@@ -64,11 +66,16 @@ function camera(id, overrides) {
     road: '',
     lat: 40,
     lon: -75,
+    url: `https://example.com/camera-${id}.jpg`,
     state: 'Pennsylvania',
     county: 'Test',
     source: 'dot',
     type: 'image',
-    health: 'unknown'
+    health: 'unknown',
+    last_verified: null,
+    failure_class: null,
+    source_url: null,
+    refresh_cadence_seconds: null
   }, overrides || {});
 }
 
@@ -108,8 +115,10 @@ function sourceHealth(overrides) {
 }
 
 test('exports the same camera-store API as a browser global', () => {
+  const recordSource = fs.readFileSync(path.join(__dirname, '..', 'js', 'camera-record.js'), 'utf8');
   const source = fs.readFileSync(path.join(__dirname, '..', 'js', 'camera-store.js'), 'utf8');
   const context = { globalThis: { fetch: async () => response([]) } };
+  vm.runInNewContext(recordSource, context);
   vm.runInNewContext(source, context);
   assert.equal(typeof context.globalThis.StormScopeCameraStore.CameraStore, 'function');
   assert.equal(typeof context.globalThis.StormScopeCameraStore.filterCameras, 'function');
@@ -159,6 +168,24 @@ test('source-health loading is independent from camera generation loading and ca
   assert.equal(healthyStore.getSourceHealth().providers[0].name, 'Provider A');
 });
 
+test('shared camera validator enforces schema types and feed-specific trust', () => {
+  assert.equal(cameraRecord.validateCameraRecord(camera(1)).id, 1);
+  assert.equal(cameraRecord.validateCameraRecord(camera(2, {
+    type: 'youtube', source: 'youtube', url: 'abcDEF_123-'
+  })).url, 'abcDEF_123-');
+  assert.equal(cameraRecord.validateCameraRecord(camera(3, {
+    type: 'embed', source: 'earthcam', url: 'https://www.earthcam.com/player'
+  })).type, 'embed');
+  assert.throws(() => cameraRecord.validateCameraRecord(camera(4, { lat: '40' })), /latitude/);
+  assert.throws(() => cameraRecord.validateCameraRecord(camera(5, { url: 'http://example.com/cam.jpg' })), /HTTPS feed URL/);
+  assert.throws(() => cameraRecord.validateCameraRecord(camera(6, {
+    type: 'embed', url: 'https://earthcam.com.attacker.example/player'
+  })), /trusted embed URL/);
+  assert.throws(() => cameraRecord.validateCameraRecord(camera(7, {
+    health: 'healthy', last_verified: null
+  })), /healthy evidence/);
+});
+
 test('loads bounded shards progressively and reports cumulative progress', async () => {
   const calls = [];
   const progress = [];
@@ -183,7 +210,48 @@ test('loads bounded shards progressively and reports cumulative progress', async
     'data/' + fixture.index.shards[0].path,
     'data/' + fixture.index.shards[1].path
   ]);
-  assert.deepEqual(progress.map(item => [item.loaded, item.complete]), [[2, false], [3, false], [3, true]]);
+  assert.deepEqual(progress.map(item => [item.loaded, item.complete, item.generationValidated]), [
+    [2, false, false], [3, false, false], [3, true, true]
+  ]);
+});
+
+test('rejects oversized indexes before parsing and rejects off-origin shard descriptors', async () => {
+  const fixture = generation([[camera(1)]]);
+  const oversized = new cameraStore.CameraStore({
+    fetch: async () => response(fixture.index, true, {
+      'content-length': String(cameraStore.MAX_INDEX_BYTES + 1)
+    })
+  });
+  await assert.rejects(oversized.load({ fallback: false }), /byte limit/);
+  assert.deepEqual(oversized.getCameras(), []);
+
+  const oversizedBody = new cameraStore.CameraStore({
+    fetch: async () => response(' '.repeat(cameraStore.MAX_INDEX_BYTES + 1))
+  });
+  await assert.rejects(oversizedBody.load({ fallback: false }), /byte limit/);
+
+  const hostileIndex = structuredClone(fixture.index);
+  hostileIndex.shards[0].path = `https://attacker.example/0001.json?generation=${hostileIndex.dataset_sha256}`;
+  const hostile = new cameraStore.CameraStore({ fetch: async () => response(hostileIndex) });
+  await assert.rejects(hostile.load({ fallback: false }), /path is invalid/);
+  assert.deepEqual(hostile.getCameras(), []);
+});
+
+test('rejects index count ceilings and malformed camera records without retaining partial state', async () => {
+  const overCount = generation([[camera(1)]]);
+  overCount.index.total = cameraStore.MAX_CAMERAS + 1;
+  const overCountStore = new cameraStore.CameraStore({ fetch: async () => response(overCount.index) });
+  await assert.rejects(overCountStore.load({ fallback: false }), /index is invalid/);
+
+  const malformed = generation([[camera(1)], [camera(2, { lon: 'west' })]]);
+  const payloads = {
+    'data/cameras.index.json': malformed.index,
+    ['data/' + malformed.index.shards[0].path]: malformed.texts[0],
+    ['data/' + malformed.index.shards[1].path]: malformed.texts[1]
+  };
+  const store = new cameraStore.CameraStore({ fetch: async url => response(payloads[url]) });
+  await assert.rejects(store.load({ fallback: false }), /longitude/);
+  assert.deepEqual(store.getCameras(), []);
 });
 
 test('manifest-only load fetches no shards and resume verifies the complete generation', async () => {
@@ -225,6 +293,27 @@ test('durable-ID lookup fetches and verifies exactly one matching shard', async 
   assert.equal(await store.loadCameraById(99), null);
 });
 
+test('durable-ID lookup is owned by cancellation and validates fetched records', async () => {
+  const fixture = generation([[camera(1)]]);
+  let releaseShard;
+  const store = new cameraStore.CameraStore({ fetch: async url => {
+    if (url.endsWith('cameras.index.json')) return response(fixture.index);
+    return new Promise(resolve => { releaseShard = resolve; });
+  } });
+  await store.load({ deferShards: true });
+  const lookup = store.loadCameraById(1);
+  store.cancel();
+  releaseShard(response(fixture.texts[0]));
+  await assert.rejects(lookup, error => error.name === 'AbortError');
+
+  const invalidFixture = generation([[camera(2, { source_url: false })]]);
+  const invalidStore = new cameraStore.CameraStore({ fetch: async url => response(
+    url.endsWith('cameras.index.json') ? invalidFixture.index : invalidFixture.texts[0]
+  ) });
+  await invalidStore.load({ deferShards: true });
+  await assert.rejects(invalidStore.loadCameraById(2), /source_url/);
+});
+
 test('falls back to the monolith after a shard failure', async () => {
   const monolith = [camera(10), camera(11)];
   const fixture = generation([[camera(1)]]);
@@ -240,6 +329,7 @@ test('falls back to the monolith after a shard failure', async () => {
   const result = await store.load();
   assert.equal(result.source, 'monolith');
   assert.deepEqual(result.cameras, monolith);
+  assert.equal(await store.loadCameraById(1), null, 'fallback must clear the rejected shard index');
 });
 
 test('a byte-corrupt shard discards the generation and loads the monolith once', async () => {

@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.112.0 - 2026-07-14
+
+- Enforced bounded same-origin camera artifacts with shared schema and feed-trust validation, cancellable generation ownership, staged generation identity, and malformed-input regression coverage. SW v85.
+
 ## v0.111.0 - 2026-07-14
 
 - Added schema-validated per-ingestion-source camera refresh health with explicit fresh, retained, failed, and unknown states; bounded attempt/success timestamps and coverage counts; source-filtered EN/ES UI; redacted diagnostics; offline last-known-good caching; and deterministic Python/JavaScript/browser regression coverage. SW v84.

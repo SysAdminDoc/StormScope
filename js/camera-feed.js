@@ -2,51 +2,26 @@
 'use strict';
 
 (function (root, factory) {
-  var api = factory();
+  var cameraRecord = typeof module === 'object' && module.exports
+    ? require('./camera-record.js')
+    : root && root.StormScopeCameraRecord;
+  var api = factory(cameraRecord);
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.StormScopeCameraFeed = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (cameraRecord) {
+  if (!cameraRecord) throw new Error('Camera feed requires the shared camera-record contract');
   var OBSERVATION_UNSUPPORTED = 'unsupported';
   var REASON_BROWSER_HLS = 'browser_hls';
   var REASON_UNTRUSTED_EMBED = 'untrusted_embed';
-  var TRUSTED_EMBED_HOST_SUFFIXES = Object.freeze([
-    'v.angelcam.com',
-    'cdn.jwplayer.com',
-    'earthcam.com',
-    'myearthcam.com',
-    'nps.gov',
-    'brownrice.com',
-    'abbeyroad.com',
-    'esbnyc.com',
-    'weathercams.faa.gov',
-    'hazcams.com',
-    'ipcamlive.com',
-    'rtsp.me'
-  ]);
+  var TRUSTED_EMBED_HOST_SUFFIXES = cameraRecord.TRUSTED_EMBED_HOST_SUFFIXES;
 
   function requireFunction(value, label) {
     if (typeof value !== 'function') throw new TypeError(label + ' callback is required');
     return value;
   }
 
-  function hostMatchesSuffix(hostname, suffix) {
-    return hostname === suffix || hostname.endsWith('.' + suffix);
-  }
-
-  function isAllowedEmbedUrl(url, suffixes) {
-    var trusted = suffixes || TRUSTED_EMBED_HOST_SUFFIXES;
-    try {
-      var parsed = new URL(url);
-      var hostname = parsed.hostname.toLowerCase();
-      if (parsed.protocol !== 'https:') return false;
-      for (var i = 0; i < trusted.length; i++) {
-        if (hostMatchesSuffix(hostname, trusted[i])) return true;
-      }
-    } catch (error) {
-      return false;
-    }
-    return false;
-  }
+  var hostMatchesSuffix = cameraRecord.hostMatchesSuffix;
+  var isAllowedEmbedUrl = cameraRecord.isAllowedEmbedUrl;
 
   function youtubeEmbedUrl(videoId, extraParams, origin) {
     var params = 'autoplay=1&mute=1&playsinline=1&rel=0';

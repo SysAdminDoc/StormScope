@@ -1,12 +1,23 @@
 (function (root, factory) {
   'use strict';
-  var api = factory();
+  var cameraRecord = typeof module === 'object' && module.exports
+    ? require('./camera-record.js')
+    : root && root.StormScopeCameraRecord;
+  var api = factory(cameraRecord);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.StormScopeCameraStore = api;
-}(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+}(typeof globalThis !== 'undefined' ? globalThis : this, function (cameraRecord) {
   'use strict';
 
+  if (!cameraRecord) throw new Error('CameraStore requires the shared camera-record contract');
+
   var HEALTH_RANK = { healthy: 0, unknown: 1, degraded: 2, offline: 3 };
+  var MAX_INDEX_BYTES = 256 * 1024;
+  var MAX_SHARD_BYTES = 2 * 1024 * 1024;
+  var MAX_MONOLITH_BYTES = 32 * 1024 * 1024;
+  var MAX_SHARDS = 256;
+  var MAX_CAMERAS = 100000;
+  var MAX_CAMERAS_PER_SHARD = 5000;
   var SOURCE_HEALTH_STATUSES = ['fresh', 'retained', 'failed', 'unknown'];
   var SOURCE_HEALTH_FAILURE_CLASSES = new Set([
     'authentication_required', 'confirmed_dead', 'empty_snapshot', 'incomplete_snapshot',
@@ -167,11 +178,70 @@
     return (separator === -1 ? '' : base.slice(0, separator + 1)) + path;
   }
 
-  function responseJson(response, url) {
-    if (!response || response.ok === false || typeof response.json !== 'function') {
+  function normalizedShardUrl(indexUrl, descriptor, datasetHash) {
+    var expectedPath = 'camera-shards/' + descriptor.id + '.json?generation=' + datasetHash;
+    if (descriptor.path !== expectedPath || descriptor.path.indexOf('\\') !== -1) {
+      throw new Error('Camera shard path is invalid: ' + descriptor.id);
+    }
+    var syntheticOrigin = 'https://stormscope.invalid/';
+    var indexAbsolute = new URL(indexUrl, syntheticOrigin);
+    var resolved = new URL(descriptor.path, indexAbsolute);
+    var directory = indexAbsolute.pathname.slice(0, indexAbsolute.pathname.lastIndexOf('/') + 1);
+    if (resolved.origin !== indexAbsolute.origin ||
+        resolved.pathname !== directory + 'camera-shards/' + descriptor.id + '.json' ||
+        resolved.search !== '?generation=' + datasetHash || resolved.hash) {
+      throw new Error('Camera shard path is not same-origin: ' + descriptor.id);
+    }
+    return /^(?:[a-z]+:)?\/\//i.test(indexUrl) ? resolved.href : relativeUrl(indexUrl, descriptor.path);
+  }
+
+  function requireResponse(response, url) {
+    if (!response || response.ok === false) {
       throw new Error('Unable to load camera data: ' + url);
     }
-    return response.json();
+    return response;
+  }
+
+  function declaredContentLength(response) {
+    if (!response.headers || typeof response.headers.get !== 'function') return null;
+    var raw = response.headers.get('content-length');
+    if (raw == null || raw === '') return null;
+    var value = Number(raw);
+    return Number.isSafeInteger(value) && value >= 0 ? value : null;
+  }
+
+  async function boundedResponseText(response, url, maximumBytes) {
+    requireResponse(response, url);
+    var declared = declaredContentLength(response);
+    if (declared !== null && declared > maximumBytes) {
+      throw new Error('Camera data exceeds the byte limit: ' + url);
+    }
+    if (response.body && typeof response.body.getReader === 'function') {
+      var reader = response.body.getReader();
+      var chunks = [];
+      var total = 0;
+      while (true) {
+        var part = await reader.read();
+        if (part.done) break;
+        var chunk = part.value instanceof Uint8Array ? part.value : new Uint8Array(part.value || []);
+        total += chunk.byteLength;
+        if (total > maximumBytes) {
+          try { await reader.cancel(); } catch (_error) { /* best effort */ }
+          throw new Error('Camera data exceeds the byte limit: ' + url);
+        }
+        chunks.push(chunk);
+      }
+      var joined = new Uint8Array(total);
+      var offset = 0;
+      chunks.forEach(function (chunk) { joined.set(chunk, offset); offset += chunk.byteLength; });
+      return new TextDecoder('utf-8', { fatal: true }).decode(joined);
+    }
+    if (typeof response.text !== 'function') throw new Error('Unable to load camera data: ' + url);
+    var text = await response.text();
+    if (typeof text !== 'string' || new TextEncoder().encode(text).byteLength > maximumBytes) {
+      throw new Error('Camera data exceeds the byte limit: ' + url);
+    }
+    return text;
   }
 
   function sourceHealthTimestamp(value, nullable) {
@@ -380,6 +450,17 @@
     });
   }
 
+  function validateCameraArray(cameras, maximum, previousId) {
+    if (!Array.isArray(cameras) || cameras.length > maximum) throw new Error('Camera collection is invalid');
+    var lastId = previousId || 0;
+    cameras.forEach(function (camera) {
+      cameraRecord.validateCameraRecord(camera);
+      if (camera.id <= lastId) throw new Error('Camera IDs are not strictly increasing: ' + camera.id);
+      lastId = camera.id;
+    });
+    return lastId;
+  }
+
   async function defaultSha256(bytes) {
     if (!globalObject.crypto || !globalObject.crypto.subtle) {
       throw new Error('SHA-256 validation is unavailable');
@@ -403,7 +484,9 @@
     this.sha256 = options.sha256 || defaultSha256;
     this._cameras = [];
     this._index = null;
+    this._pendingIndex = null;
     this._controller = null;
+    this._lookupController = null;
     this._sourceHealthController = null;
     this._sourceHealth = null;
     this._requestId = 0;
@@ -412,8 +495,10 @@
   CameraStore.prototype.cancel = function () {
     this._requestId += 1;
     if (this._controller) this._controller.abort();
+    if (this._lookupController) this._lookupController.abort();
     if (this._sourceHealthController) this._sourceHealthController.abort();
     this._controller = null;
+    this._lookupController = null;
     this._sourceHealthController = null;
   };
 
@@ -428,22 +513,26 @@
     });
   };
 
-  CameraStore.prototype._fetchJson = async function (url, signal) {
+  CameraStore.prototype._fetchJson = async function (url, signal, maximumBytes) {
     var response = await this.fetch(url, { signal: signal });
-    return responseJson(response, url);
+    var text = await boundedResponseText(response, url, maximumBytes);
+    try {
+      return JSON.parse(text);
+    } catch (_error) {
+      throw new Error('Camera data is not valid JSON: ' + url);
+    }
   };
 
-  CameraStore.prototype._fetchText = async function (url, signal) {
+  CameraStore.prototype._fetchText = async function (url, signal, maximumBytes) {
     var response = await this.fetch(url, { signal: signal });
-    if (!response || response.ok === false || typeof response.text !== 'function') {
-      throw new Error('Unable to load camera data: ' + url);
-    }
-    return response.text();
+    return boundedResponseText(response, url, maximumBytes);
   };
 
   CameraStore.prototype._validateIndex = function (index) {
     if (!index || index.index_version !== 2 || index.camera_schema_version !== 2 ||
-        !Number.isInteger(index.total) || index.total < 0 || !Array.isArray(index.shards) ||
+        !Number.isInteger(index.total) || index.total < 0 || index.total > MAX_CAMERAS ||
+        !Array.isArray(index.shards) || index.shards.length > MAX_SHARDS ||
+        !Number.isInteger(index.shard_size) || index.shard_size < 1 || index.shard_size > MAX_CAMERAS_PER_SHARD ||
         !isSha256(index.dataset_sha256) ||
         index.dataset_hash_algorithm !== 'sha256-concat-shard-digests-v1' ||
         typeof index.generated_at !== 'string' || !Number.isFinite(Date.parse(index.generated_at)) ||
@@ -455,37 +544,44 @@
     }
     var describedTotal = 0;
     var previousLastId = 0;
-    index.shards.forEach(function (descriptor, position) {
+    var normalizedShards = index.shards.map(function (descriptor, position) {
       if (!descriptor || descriptor.id !== String(position + 1).padStart(4, '0') ||
           typeof descriptor.path !== 'string' ||
-          descriptor.path.indexOf('?generation=' + index.dataset_sha256) === -1 ||
           !Number.isInteger(descriptor.count) || descriptor.count <= 0 ||
+          descriptor.count > MAX_CAMERAS_PER_SHARD || descriptor.count > index.shard_size ||
           !Number.isInteger(descriptor.first_id) || !Number.isInteger(descriptor.last_id) ||
           descriptor.first_id <= previousLastId || descriptor.last_id < descriptor.first_id ||
+          !Array.isArray(descriptor.bbox) || descriptor.bbox.length !== 4 ||
+          descriptor.bbox.some(function (value) { return typeof value !== 'number' || !Number.isFinite(value); }) ||
           !isSha256(descriptor.sha256)) {
         throw new Error('Camera shard descriptor is invalid: ' + (descriptor && descriptor.id || position));
       }
+      var resolvedPath = normalizedShardUrl(this.indexUrl, descriptor, index.dataset_sha256);
       describedTotal += descriptor.count;
       previousLastId = descriptor.last_id;
-    });
+      return Object.freeze(Object.assign({}, descriptor, { resolved_path: resolvedPath }));
+    }, this);
     if (describedTotal !== index.total) throw new Error('Camera shard descriptors do not match index total');
+    return Object.freeze(Object.assign({}, index, { shards: Object.freeze(normalizedShards) }));
   };
 
   CameraStore.prototype._loadMonolith = async function (requestId, signal, callback, cause) {
     this._assertActive(requestId, signal);
-    var cameras = await this._fetchJson(this.monolithUrl, signal);
+    this._index = null;
+    this._pendingIndex = null;
+    var cameras = await this._fetchJson(this.monolithUrl, signal, MAX_MONOLITH_BYTES);
     this._assertActive(requestId, signal);
-    if (!Array.isArray(cameras)) throw new Error('Camera monolith must be an array');
+    validateCameraArray(cameras, MAX_CAMERAS, 0);
     this._cameras = cameras.slice();
     this._progress(callback, {
       source: 'monolith', loaded: cameras.length, total: cameras.length,
-      shardsLoaded: 0, shardsTotal: 0, complete: true, fallbackCause: cause || null
+      shardsLoaded: 0, shardsTotal: 0, complete: true, generationValidated: true,
+      fallbackCause: cause || null
     });
     return { cameras: this.getCameras(), source: 'monolith', index: null, complete: true };
   };
 
   CameraStore.prototype._loadShards = async function (index, requestId, signal, options) {
-    var seenIds = new Set();
     var healthTotals = {};
     var providerTotals = {};
     var verifiedTotal = 0;
@@ -494,8 +590,8 @@
     for (var shardIndex = 0; shardIndex < index.shards.length; shardIndex += 1) {
       this._assertActive(requestId, signal);
       var descriptor = index.shards[shardIndex];
-      var shardUrl = relativeUrl(this.indexUrl, descriptor.path);
-      var shardText = await this._fetchText(shardUrl, signal);
+      var shardUrl = descriptor.resolved_path;
+      var shardText = await this._fetchText(shardUrl, signal, MAX_SHARD_BYTES);
       this._assertActive(requestId, signal);
       var shardHash = await this.sha256(new TextEncoder().encode(shardText));
       this._assertActive(requestId, signal);
@@ -504,12 +600,8 @@
       if (!Array.isArray(shard) || shard.length !== descriptor.count) {
         throw new Error('Camera shard is invalid: ' + descriptor.id);
       }
+      previousId = validateCameraArray(shard, MAX_CAMERAS_PER_SHARD, previousId);
       shard.forEach(function (camera) {
-        if (!Number.isInteger(camera.id) || camera.id <= previousId || seenIds.has(camera.id)) {
-          throw new Error('Camera IDs are not strictly increasing: ' + camera.id);
-        }
-        previousId = camera.id;
-        seenIds.add(camera.id);
         var health = String(camera.health || 'unknown');
         var provider = String(camera.provider || 'unattributed');
         healthTotals[health] = (healthTotals[health] || 0) + 1;
@@ -523,22 +615,27 @@
       this._cameras.push.apply(this._cameras, shard);
       this._progress(options.onProgress, {
         source: 'shards', loaded: this._cameras.length, total: index.total,
-        shardsLoaded: shardIndex + 1, shardsTotal: index.shards.length, complete: false
+        shardsLoaded: shardIndex + 1, shardsTotal: index.shards.length,
+        complete: false, generationValidated: false
       });
     }
     if (this._cameras.length !== index.total) throw new Error('Camera shard total does not match index');
     var aggregateBytes = new Uint8Array(shardHashes.length * 32);
     shardHashes.forEach(function (hash, position) { aggregateBytes.set(hash, position * 32); });
     if (await this.sha256(aggregateBytes) !== index.dataset_sha256) throw new Error('Camera dataset hash mismatch');
+    this._assertActive(requestId, signal);
     if (!totalsEqual(healthTotals, index.health_totals) ||
         !totalsEqual(providerTotals, index.provider_totals) || verifiedTotal !== index.verified_total) {
       throw new Error('Camera verification summaries do not match the generation');
     }
     this._progress(options.onProgress, {
       source: 'shards', loaded: this._cameras.length, total: index.total,
-      shardsLoaded: index.shards.length, shardsTotal: index.shards.length, complete: true
+      shardsLoaded: index.shards.length, shardsTotal: index.shards.length,
+      complete: true, generationValidated: true
     });
     this._assertActive(requestId, signal);
+    this._index = index;
+    this._pendingIndex = null;
     return { cameras: this.getCameras(), source: 'shards', index: index, complete: true };
   };
 
@@ -550,11 +647,13 @@
     var signal = controller.signal;
     this._controller = controller;
     this._cameras = [];
+    this._index = null;
+    this._pendingIndex = null;
     try {
-      var index = await this._fetchJson(this.indexUrl, signal);
+      var index = await this._fetchJson(this.indexUrl, signal, MAX_INDEX_BYTES);
       this._assertActive(requestId, signal);
-      this._validateIndex(index);
-      this._index = index;
+      index = this._validateIndex(index);
+      this._pendingIndex = index;
       if (options.deferShards) {
         return { cameras: [], source: 'index-only', index: index, complete: false };
       }
@@ -562,8 +661,10 @@
     } catch (error) {
       if (error && error.name === 'AbortError') throw error;
       this._assertActive(requestId, signal);
-      if (options.fallback === false) throw error;
       this._cameras = [];
+      this._index = null;
+      this._pendingIndex = null;
+      if (options.fallback === false) throw error;
       return this._loadMonolith(requestId, signal, options.onProgress, String(error && error.message || error));
     } finally {
       if (requestId === this._requestId) this._controller = null;
@@ -572,20 +673,24 @@
 
   CameraStore.prototype.resume = async function (options) {
     options = options || {};
-    if (!this._index) return this.load(options);
+    var index = this._pendingIndex || this._index;
+    if (!index) return this.load(options);
     this.cancel();
     var requestId = this._requestId;
     var controller = new AbortController();
     var signal = controller.signal;
     this._controller = controller;
     this._cameras = [];
+    this._pendingIndex = index;
     try {
-      return await this._loadShards(this._index, requestId, signal, options);
+      return await this._loadShards(index, requestId, signal, options);
     } catch (error) {
       if (error && error.name === 'AbortError') throw error;
       this._assertActive(requestId, signal);
-      if (options.fallback === false) throw error;
       this._cameras = [];
+      this._index = null;
+      this._pendingIndex = null;
+      if (options.fallback === false) throw error;
       return this._loadMonolith(requestId, signal, options.onProgress, String(error && error.message || error));
     } finally {
       if (requestId === this._requestId) this._controller = null;
@@ -594,23 +699,37 @@
 
   CameraStore.prototype.loadCameraById = async function (id) {
     id = Number(id);
-    if (!Number.isInteger(id) || !this._index) return null;
-    var descriptor = this._index.shards.find(function (item) {
+    var index = this._pendingIndex || this._index;
+    if (!Number.isInteger(id) || !index) return null;
+    var descriptor = index.shards.find(function (item) {
       return id >= item.first_id && id <= item.last_id;
     });
     if (!descriptor) return null;
+    if (this._lookupController) this._lookupController.abort();
     var controller = new AbortController();
-    var text = await this._fetchText(relativeUrl(this.indexUrl, descriptor.path), controller.signal);
-    var hash = await this.sha256(new TextEncoder().encode(text));
-    if (hash !== descriptor.sha256) throw new Error('Camera shard hash mismatch: ' + descriptor.id);
-    var shard = JSON.parse(text);
-    if (!Array.isArray(shard) || shard.length !== descriptor.count ||
-        shard[0].id !== descriptor.first_id || shard[shard.length - 1].id !== descriptor.last_id) {
-      throw new Error('Camera shard is invalid: ' + descriptor.id);
+    this._lookupController = controller;
+    var requestId = this._requestId;
+    try {
+      var text = await this._fetchText(descriptor.resolved_path, controller.signal, MAX_SHARD_BYTES);
+      this._assertActive(requestId, controller.signal);
+      var hash = await this.sha256(new TextEncoder().encode(text));
+      this._assertActive(requestId, controller.signal);
+      if (hash !== descriptor.sha256) throw new Error('Camera shard hash mismatch: ' + descriptor.id);
+      var shard;
+      try { shard = JSON.parse(text); } catch (_error) { throw new Error('Camera shard is not valid JSON: ' + descriptor.id); }
+      if (!Array.isArray(shard) || shard.length !== descriptor.count) {
+        throw new Error('Camera shard is invalid: ' + descriptor.id);
+      }
+      validateCameraArray(shard, MAX_CAMERAS_PER_SHARD, 0);
+      if (shard[0].id !== descriptor.first_id || shard[shard.length - 1].id !== descriptor.last_id) {
+        throw new Error('Camera shard is invalid: ' + descriptor.id);
+      }
+      var camera = shard.find(function (item) { return item.id === id; }) || null;
+      if (camera && !this._cameras.some(function (item) { return item.id === id; })) this._cameras.push(camera);
+      return camera;
+    } finally {
+      if (this._lookupController === controller) this._lookupController = null;
     }
-    var camera = shard.find(function (item) { return item.id === id; }) || null;
-    if (camera && !this._cameras.some(function (item) { return item.id === id; })) this._cameras.push(camera);
-    return camera;
   };
 
   CameraStore.prototype.getCameras = function () {
@@ -622,7 +741,7 @@
     var controller = new AbortController();
     this._sourceHealthController = controller;
     try {
-      var value = await this._fetchJson(this.sourceHealthUrl, controller.signal);
+      var value = await this._fetchJson(this.sourceHealthUrl, controller.signal, MAX_INDEX_BYTES);
       if (controller.signal.aborted) throw abortError();
       this._sourceHealth = validateSourceHealth(value);
       return this._sourceHealth;
@@ -642,6 +761,12 @@
   return {
     CameraStore: CameraStore,
     HEALTH_RANK: HEALTH_RANK,
+    MAX_INDEX_BYTES: MAX_INDEX_BYTES,
+    MAX_SHARD_BYTES: MAX_SHARD_BYTES,
+    MAX_MONOLITH_BYTES: MAX_MONOLITH_BYTES,
+    MAX_SHARDS: MAX_SHARDS,
+    MAX_CAMERAS: MAX_CAMERAS,
+    MAX_CAMERAS_PER_SHARD: MAX_CAMERAS_PER_SHARD,
     calculateVirtualWindow: calculateVirtualWindow,
     distanceKm: distanceKm,
     nearestVerifiedCameras: nearestVerifiedCameras,
