@@ -18,7 +18,7 @@
   })();
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.95.0';
+  var APP_VERSION = '0.96.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -4403,7 +4403,57 @@
     return true;
   }
 
+  // ── Geolocation "locate me" ──
+  // Centers the map on the device location. Coordinates are used only for the
+  // in-session map view and a transient marker — never stored, shared, or added
+  // to scene links.
+  var locateMarker = null;
+  var locateMarkerTimer = null;
+
+  function announceLocate(message) {
+    var el = document.getElementById('locate-announcer');
+    if (el) el.textContent = message;
+  }
+
+  function clearLocateMarker() {
+    clearTimeout(locateMarkerTimer);
+    locateMarkerTimer = null;
+    if (locateMarker) {
+      map.removeLayer(locateMarker);
+      locateMarker = null;
+    }
+  }
+
+  function locateMe() {
+    var button = document.getElementById('btn-locate');
+    if (!navigator.geolocation) {
+      announceLocate(tr('locate.unsupported'));
+      return;
+    }
+    button.disabled = true;
+    announceLocate(tr('locate.searching'));
+    navigator.geolocation.getCurrentPosition(function (position) {
+      button.disabled = false;
+      var lat = position.coords.latitude;
+      var lon = position.coords.longitude;
+      map.setView([lat, lon], Math.max(map.getZoom(), 9));
+      clearLocateMarker();
+      locateMarker = L.circleMarker([lat, lon], {
+        radius: 9, color: '#4dabf7', weight: 3, fillColor: '#4dabf7', fillOpacity: 0.35
+      }).addTo(map);
+      locateMarkerTimer = setTimeout(clearLocateMarker, 15000);
+      announceLocate(tr('locate.found'));
+    }, function (error) {
+      button.disabled = false;
+      var key = error && error.code === error.PERMISSION_DENIED ? 'locate.denied'
+        : error && error.code === error.TIMEOUT ? 'locate.timeout'
+          : 'locate.unavailable';
+      announceLocate(tr(key));
+    }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
+  }
+
   function bindUI() {
+    document.getElementById('btn-locate').addEventListener('click', locateMe);
     document.getElementById('open-comparison').addEventListener('click', openMapComparison);
     document.querySelector('[data-comparison-close]').addEventListener('click', function () {
       closeMapComparison(true);

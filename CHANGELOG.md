@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.96.0 - 2026-07-14
+
+- Added a header "locate me" control that centers the map on the device location via the browser Geolocation API and drops a transient marker. Permission prompts, denials, timeouts, and unsupported browsers are handled with a localized (EN/ES) polite-announcer message. Coordinates are used only for the in-session view and marker — never stored, shared, or added to scene links. Headless-mocked coverage recenters on a mocked position and confirms the announcement. SW v69.
+
 ## v0.95.0 - 2026-07-14
 
 - Hardened modal focus containment: `trapFocus` now detects when focus has escaped the open modal (for example when a live-feed re-render removes the focused control and focus falls back to `<body>`) and pulls it back into the modal on the next Tab, so keyboard and screen-reader users can no longer reach the inert background of the camera, comparison, or monitor modals. SW v68.

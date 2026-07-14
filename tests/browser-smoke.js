@@ -505,6 +505,36 @@ async function main() {
     assert.ok(cameraMetrics.firstBatchMs > 0 && cameraMetrics.firstBatchMs < 2500,
       `first camera shard should render within 2.5 s, observed ${cameraMetrics.firstBatchMs} ms`);
 
+    // Geolocation "locate me": grant + mock a position, then verify the map
+    // recenters and the polite announcer confirms it. Coordinates are session-only.
+    await context.grantPermissions(['geolocation'], { origin: baseURL });
+    await context.setGeolocation({ latitude: 47.6062, longitude: -122.3321 });
+    await page.locator('#btn-locate').click();
+    await page.waitForFunction(() =>
+      document.getElementById('locate-announcer').textContent.includes('Centered the map'));
+    const locatedCenter = await page.evaluate(() => {
+      const center = window._stormscope.getMap().getCenter();
+      return { lat: center.lat, lng: center.lng };
+    });
+    assert.ok(Math.abs(locatedCenter.lat - 47.6062) < 0.5 && Math.abs(locatedCenter.lng + 122.3321) < 0.5,
+      `locate-me should recenter near the mocked position, observed ${JSON.stringify(locatedCenter)}`);
+    await context.clearPermissions();
+    // Restore the default view so downstream golden-path assertions are stable.
+    // Wait for the animated recenter to settle (moveend) before hard-resetting,
+    // with a timeout fallback in case the animation already completed.
+    await page.evaluate(() => new Promise((resolve) => {
+      const map = window._stormscope.getMap();
+      let settled = false;
+      const reset = () => {
+        if (settled) return;
+        settled = true;
+        map.setView([39.5, -98.5], 5, { animate: false });
+        resolve();
+      };
+      map.once('moveend', reset);
+      setTimeout(reset, 1200);
+    }));
+
     assert.equal(await page.locator('html').evaluate((element) => element.scrollWidth > element.clientWidth), false);
     assert.equal(await page.locator('#radar-retry').isHidden(), true);
     assert.match(await page.locator('#radar-time').textContent(), /old|ago|just now/i);

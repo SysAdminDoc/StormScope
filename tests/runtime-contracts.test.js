@@ -323,6 +323,24 @@ test('virtual camera results expose roving keyboard collection semantics', () =>
   assert.match(app, /aria-setsize/);
 });
 
+test('geolocation locate-me is permission-gated and never persists coordinates', () => {
+  assert.match(html, /id="btn-locate"[^>]*data-i18n-title-key="header\.locate"/);
+  assert.match(html, /id="btn-locate"[^>]*data-i18n-aria-label-key="header\.locateLabel"/);
+  assert.match(html, /id="locate-announcer"[^>]*role="status"[^>]*aria-live="polite"/);
+  assert.match(app, /function locateMe\(\)/);
+  assert.match(app, /navigator\.geolocation\.getCurrentPosition/);
+  assert.match(app, /error\.PERMISSION_DENIED/);
+  assert.match(app, /error\.TIMEOUT/);
+  // Coordinates are session-only: the locate flow must not write to storage.
+  const locateBlock = app.slice(app.indexOf('function locateMe()'), app.indexOf('function bindUI()'));
+  assert.doesNotMatch(locateBlock, /localStorage|sessionStorage|indexedDB/i);
+  for (const locale of ['en', 'es']) {
+    for (const key of ['header.locate', 'header.locateLabel', 'locate.searching', 'locate.found', 'locate.denied', 'locate.timeout', 'locate.unavailable', 'locate.unsupported']) {
+      assert.ok(i18n.catalogs[locale][key], `${locale} catalog should define ${key}`);
+    }
+  }
+});
+
 test('focus trap recovers focus that escaped the modal and inerts the background', () => {
   const match = app.match(/function trapFocus\(e\) \{([\s\S]*?)\n  \}/);
   assert.ok(match, 'trapFocus should exist');

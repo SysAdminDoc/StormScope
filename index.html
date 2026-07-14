@@ -33,6 +33,9 @@
     <div class="header-right">
       <span id="data-freshness" class="status-chip hidden" role="status" aria-live="polite"></span>
       <span id="connection-state" class="status-chip" role="status" aria-live="polite">Online</span>
+      <button id="btn-locate" class="header-btn" title="Find my location" aria-label="Center the map on my location" data-i18n-title-key="header.locate" data-i18n-aria-label-key="header.locateLabel">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"/></svg>
+      </button>
       <button id="btn-search" class="header-btn" title="Find cameras" aria-label="Find cameras" aria-expanded="false" aria-controls="search-panel">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
       </button>
@@ -48,6 +51,7 @@
       </button>
     </div>
   </header>
+  <p id="locate-announcer" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></p>
 
   <aside id="situation-panel" class="situation-panel hidden" aria-labelledby="situation-heading">
     <div class="situation-header">
