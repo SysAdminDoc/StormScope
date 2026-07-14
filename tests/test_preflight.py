@@ -17,9 +17,9 @@ class PreflightTests(unittest.TestCase):
         self.assertEqual((2026, 7, 4), preflight.version_tuple("2026.07.04"))
 
     def test_supported_version_ranges_are_explicit(self) -> None:
-        self.assertTrue(preflight.in_range((3, 10), preflight.PYTHON_MIN, preflight.PYTHON_MAX))
+        self.assertTrue(preflight.in_range((3, 11), preflight.PYTHON_MIN, preflight.PYTHON_MAX))
         self.assertTrue(preflight.in_range((24, 16), preflight.NODE_MIN))
-        self.assertFalse(preflight.in_range((3, 9, 9), preflight.PYTHON_MIN, preflight.PYTHON_MAX))
+        self.assertFalse(preflight.in_range((3, 10, 99), preflight.PYTHON_MIN, preflight.PYTHON_MAX))
         self.assertFalse(preflight.in_range((4, 0), preflight.PYTHON_MIN, preflight.PYTHON_MAX))
 
 

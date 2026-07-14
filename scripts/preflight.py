@@ -13,7 +13,7 @@ from typing import Callable
 
 
 ROOT = Path(__file__).resolve().parent.parent
-PYTHON_MIN = (3, 10, 0)
+PYTHON_MIN = (3, 11, 0)
 PYTHON_MAX = (4, 0, 0)
 NODE_MIN = (18, 0, 0)
 NPM_MIN = (9, 0, 0)
@@ -142,7 +142,7 @@ def collect_results() -> list[Result]:
     results = [Result(
         "Python",
         ".".join(str(part) for part in python_actual),
-        ">=3.10,<4",
+        ">=3.11,<4",
         in_range(python_actual, PYTHON_MIN, PYTHON_MAX),
         sys.executable,
     )]

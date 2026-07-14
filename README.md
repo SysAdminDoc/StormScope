@@ -107,7 +107,7 @@ npx playwright install chromium firefox webkit
 python scripts/preflight.py
 ```
 
-The preflight reports every actual version and install path before work starts. Supported versions are Python `>=3.10,<4`, Node.js `>=18`, npm `>=9`, curl `>=8`, Ruff `0.15.20`, yt-dlp `2026.7.4`, and Playwright `1.61.1` with its pinned Chromium, Firefox, and WebKit engines installed. Python tools are exact-pinned in `requirements-dev.txt`; Node tooling is exact-locked by `package-lock.json` and declares npm `11.13.0` as the development package manager.
+The preflight reports every actual version and install path before work starts. Supported versions are Python `>=3.11,<4`, Node.js `>=18`, npm `>=9`, curl `>=8`, Ruff `0.15.20`, yt-dlp `2026.7.4`, and Playwright `1.61.1` with its pinned Chromium, Firefox, and WebKit engines installed. Python tools are exact-pinned in `requirements-dev.txt`; Node tooling is exact-locked by `package-lock.json` and declares npm `11.13.0` as the development package manager.
 
 Run the complete local regression gate before changing or publishing the app:
 
