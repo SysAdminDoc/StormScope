@@ -3,6 +3,7 @@
 ## v0.119.0 - 2026-07-14
 
 - Added an opt-in Screen Wake Lock for active radar, camera, multi-camera, and comparison monitoring with visibility release/reacquire, revocation, rejection, and unsupported-browser handling. SW v92.
+- Published the enforced contribution, provider-adapter/data-safety, release, and private security-reporting contracts in the public README.
 
 ## v0.118.0 - 2026-07-14
 

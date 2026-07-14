@@ -6,6 +6,7 @@ const test = require('node:test');
 const root = path.resolve(__dirname, '..');
 const app = fs.readFileSync(path.join(root, 'js', 'app.js'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'css', 'style.css'), 'utf8');
 const contextLayers = fs.readFileSync(path.join(root, 'js', 'context-layers.js'), 'utf8');
 const contextControllers = fs.readFileSync(path.join(root, 'js', 'context-layer-controllers.js'), 'utf8');
@@ -214,6 +215,16 @@ test('screen wake lock is opt-in, lifecycle-owned, and available offline', () =>
   assert.match(wakeLockSource, /visibilitychange/);
   assert.match(wakeLockSource, /lock\.addEventListener\('release'/);
   assert.match(app, /syncWakeLockMonitoring/);
+});
+
+test('public contribution, provider, release, and security contracts are discoverable', () => {
+  assert.match(readme, /## Contributing and Security/);
+  assert.match(readme, /python scripts\/check\.py/);
+  assert.match(readme, /atomic `ProviderResult`/);
+  assert.match(readme, /Existing IDs are never renumbered or reused/);
+  assert.match(readme, /scripts\/package_release\.py --prepare/);
+  assert.match(readme, /mailto:matt_parker@outlook\.com/);
+  assert.match(readme, /Do not open a public issue containing exploit details/);
 });
 
 test('accessible situation summary is user-triggered and exposes non-map navigation', () => {

@@ -40,6 +40,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 - **Recoverable Offline Storage** — Cache diagnostics report cache bytes plus origin usage/quota, percentage, and persistence state; users can request durable offline storage or clear runtime data while preserving the app shell
 - **English and Spanish UI** — Live language switching covers controls, cache recovery, compass/CAP vocabulary, source taxonomy, radar/provider states, weather labels, WMO conditions, dates, numbers, and units; source-authored NWS prose is explicitly identified when it remains in English
 - **Bounded Multi-Camera Monitor** — Select 2–4 search results after a bandwidth warning; offscreen/hidden direct feeds pause, one close destroys all players, and unsupported provider embeds become safe source links
+- **Opt-in Monitoring Wake Lock** — A session-only control can keep the display awake during active radar, camera, multi-camera, or comparison monitoring; it releases when hidden or closed and remains off by default
 - **599 YouTube Live Streams** — Playback-verified streams including beaches, airports, railcams, harbors, city skylines, landmarks, campuses, indoor/outdoor feeds, wildlife cams, volcano cams, and city-list discoveries (red markers)
 - **256 EarthCam Live Snapshot Feeds** — EarthCam Network cameras render their official refreshing `image.php` snapshot frame directly in the viewer (EarthCam's player gates live video to authorized domains, so 256 of 276 rows now use the hotlinkable public snapshot instead of a non-playing page embed); 20 partner-hosted EarthCam rows remain page embeds
 - **253 Provider Embed Feeds** — 20 EarthCam embed pages, 162 active NPS embed pages, 18 FAA WeatherCam pages, 17 Hazcams weather players, 6 DRBA ferry players, 4 AngelCam players, 4 direct LiveBeaches/Brownrice players, 21 first-party IPCamLive embeds, and 1 first-party RTSP.me lake feed
@@ -160,6 +161,20 @@ python scripts/dependency_audit.py --online
 ```
 
 The normal regression gate runs the same exact-pin inventory and expiring disposition checks offline. The live mode exits with status 2 for any undispositioned advisory and status 1 for malformed/expired reviews, NVD mismatches, or inventory drift. Reviewed tooling advisories live in `config/dependency-advisories.json`; vendored dispositions remain beside their hash/license provenance in `vendor/dependencies.json`.
+
+## Contributing and Security
+
+Before proposing a change, install the pinned toolchain above and run `python scripts/check.py`. That command is the public acceptance contract: it validates camera data and generated shards, exact dependency/license pins, Python and JavaScript behavior, service-worker routing, accessibility, offline recovery, and Chromium/Firefox/WebKit smoke paths. UI copy must remain in both `en` and `es` catalogs in `js/i18n.js`; shell modules must load before `js/app.js` and be listed in `sw.js`; release versions must be changed only through `scripts/package_release.py --prepare`.
+
+Camera ingestion changes have additional data-safety invariants:
+
+- A provider adapter returns one atomic `ProviderResult` from `scripts/providers/contracts.py`; a failed result cannot contain partial cameras, and incomplete/empty provider snapshots retain the last-known-good rows.
+- Adapter names are unique, registry order is stable, and runner results must preserve the requested provider identity (`scripts/providers/registry.py`).
+- Durable camera IDs and provider identities survive feed URL rotation. Existing IDs are never renumbered or reused; new IDs come from the locked atomic sequence in `scripts/camera_data.py`.
+- Records must pass `data/cameras.schema.json`, exact feed-type/source rules, HTTPS/embed trust checks, coverage floors, and protocol-specific freshness or advancement probes before replacement.
+- Add or update focused adapter/failure tests, run a bounded `--provider` refresh when applicable, rebuild shards with `python scripts/build_camera_shards.py`, then run the complete gate. Never commit a retained/failed provider as a successful partial snapshot.
+
+Report suspected vulnerabilities privately to [matt_parker@outlook.com](mailto:matt_parker@outlook.com) with the subject `[StormScope security]`. Include the affected StormScope version or commit, impact, minimal reproduction, and any proposed mitigation; sanitize tokens, personal data, precise private locations, and third-party credentials. Do not open a public issue containing exploit details before remediation and coordinated disclosure.
 
 ## Tech Stack
 
