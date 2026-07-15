@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.122.0 - 2026-07-14
+
+- Redesigned the responsive operations shell with a desktop navigation rail, mobile bottom navigation, dismissible alert drawer, location shortcut, clearer alert cards, and a high-information radar timeline. SW v95.
+
 ## v0.121.0 - 2026-07-14
 
 - Added sticky localized layer search, section and parameter matching, active-only navigation, live result counts, one-action reset, and accessible empty states across desktop and mobile. SW v94.

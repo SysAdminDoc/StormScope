@@ -6,7 +6,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://api.waterdata.usgs.gov https://api.water.noaa.gov https://earthquake.usgs.gov https://photon.komoot.io https://nominatim.openstreetmap.org https://satellitemaps.nesdis.noaa.gov https://video.dot.state.mn.us https://www.mwra.com https://strmr3.sha.maryland.gov https://strmr5.sha.maryland.gov https://strmr10.sha.maryland.gov https://s18.us-east-1.skyvdn.com https://s19.us-east-1.skyvdn.com https://s20.us-east-1.skyvdn.com https://mcleansfs1.us-east-1.skyvdn.com https://mcleansfs2.us-east-1.skyvdn.com https://mcleansfs3.us-east-1.skyvdn.com https://mcleansfs4.us-east-1.skyvdn.com https://mcleansfs5.us-east-1.skyvdn.com https://api.rainviewer.com https://tilecache.rainviewer.com https://mapservices.weather.noaa.gov https://nowcoast.noaa.gov https://services3.arcgis.com https://api.weather.gov https://api.open-meteo.com https://cdn3.wowza.com https://stream.oktraffic.org https://video.deldot.gov https://wink.njta.com https://vtc1.roadsummary.com https://vtc2.roadsummary.com https://vtc3.roadsummary.com https://s2.ozarkstrafficoneview.com https://sfs01-traveler.modot.mo.gov https://sfs02-traveler.modot.mo.gov https://sfs03-traveler.modot.mo.gov https://sfs04-traveler.modot.mo.gov https://sfs07-traveler.modot.mo.gov https://wzmedia.dot.ca.gov https://nzp-wowza01.si.edu https://nzp-wowza02.si.edu https://cs7.pixelcaster.com https://gameday-camera.its.msstate.edu; media-src 'self' blob: https://video.dot.state.mn.us https://www.mwra.com https://strmr3.sha.maryland.gov https://strmr5.sha.maryland.gov https://strmr10.sha.maryland.gov https://s18.us-east-1.skyvdn.com https://s19.us-east-1.skyvdn.com https://s20.us-east-1.skyvdn.com https://mcleansfs1.us-east-1.skyvdn.com https://mcleansfs2.us-east-1.skyvdn.com https://mcleansfs3.us-east-1.skyvdn.com https://mcleansfs4.us-east-1.skyvdn.com https://mcleansfs5.us-east-1.skyvdn.com https://cdn3.wowza.com https://stream.oktraffic.org https://video.deldot.gov https://wink.njta.com https://vtc1.roadsummary.com https://vtc2.roadsummary.com https://vtc3.roadsummary.com https://s2.ozarkstrafficoneview.com https://sfs01-traveler.modot.mo.gov https://sfs02-traveler.modot.mo.gov https://sfs03-traveler.modot.mo.gov https://sfs04-traveler.modot.mo.gov https://sfs07-traveler.modot.mo.gov https://wzmedia.dot.ca.gov https://nzp-wowza01.si.edu https://nzp-wowza02.si.edu https://cs7.pixelcaster.com https://gameday-camera.its.msstate.edu; frame-src https://v.angelcam.com https://cdn.jwplayer.com https://www.youtube-nocookie.com https://earthcam.com https://*.earthcam.com https://myearthcam.com https://*.myearthcam.com https://nps.gov https://*.nps.gov https://brownrice.com https://*.brownrice.com https://abbeyroad.com https://*.abbeyroad.com https://esbnyc.com https://*.esbnyc.com https://hazcams.com https://*.hazcams.com https://ipcamlive.com https://*.ipcamlive.com https://rtsp.me https://*.rtsp.me https://weathercams.faa.gov; object-src 'none'; base-uri 'none'; form-action 'none'; manifest-src 'self'; worker-src 'self' blob:">
   <title>StormScope — Live Weather Radar & Webcams</title>
   <meta name="description" content="Real-time weather radar with live traffic and weather cameras. See the weather through webcams across America and the world.">
-  <meta name="theme-color" content="#0a0a14">
+  <meta name="theme-color" content="#080d16">
   <link rel="icon" href="favicon.ico">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
@@ -31,26 +31,45 @@
       <h1>StormScope</h1>
     </div>
     <div class="header-right">
-      <span id="data-freshness" class="status-chip hidden" role="status" aria-live="polite"></span>
       <span id="connection-state" class="status-chip" role="status" aria-live="polite">Online</span>
+      <span id="data-freshness" class="status-chip hidden" role="status" aria-live="polite"></span>
+      <button id="btn-place-search" class="header-search-btn" type="button" aria-label="Search location" aria-controls="search-panel" data-i18n-aria-label-key="header.placeSearch">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+        <span data-i18n="header.placeSearch">Search location</span>
+      </button>
       <button id="btn-locate" class="header-btn" title="Find my location" aria-label="Center the map on my location" data-i18n-title-key="header.locate" data-i18n-aria-label-key="header.locateLabel">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"/></svg>
       </button>
-      <button id="btn-search" class="header-btn" title="Find cameras" aria-label="Find cameras" aria-expanded="false" aria-controls="search-panel">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
-      </button>
-      <button id="btn-summary" class="header-btn" title="Situation summary" aria-label="Open situation summary" aria-expanded="false" aria-controls="situation-panel">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 5h14M5 12h14M5 19h9"/></svg>
-      </button>
-      <button id="btn-layers" class="header-btn" title="Layers" aria-label="Toggle layers panel" aria-expanded="false" aria-controls="layers-panel">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <polygon points="12 2 2 7 12 12 22 7 12 2"/>
-          <polyline points="2 17 12 22 22 17"/>
-          <polyline points="2 12 12 17 22 12"/>
-        </svg>
-      </button>
     </div>
   </header>
+
+  <nav id="primary-nav" class="primary-nav" aria-label="Primary navigation">
+    <button id="btn-radar" class="primary-nav-btn" type="button" aria-current="page">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="2"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4M4.9 4.9a10 10 0 0 0 0 14.2M19.1 4.9a10 10 0 0 1 0 14.2"/></svg>
+      <span>Live radar</span>
+    </button>
+    <button id="btn-alerts" class="primary-nav-btn" type="button" aria-label="Active alerts" aria-expanded="false" aria-controls="alerts-panel">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v4M12 17h.01"/></svg>
+      <span>Active alerts</span>
+      <span id="nav-alert-count" class="primary-nav-badge hidden" aria-hidden="true"></span>
+    </button>
+    <button id="btn-layers" class="primary-nav-btn" type="button" title="Layers" aria-label="Toggle layers panel" aria-expanded="false" aria-controls="layers-panel">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+        <polyline points="2 17 12 22 22 17"/>
+        <polyline points="2 12 12 17 22 12"/>
+      </svg>
+      <span>Layers</span>
+    </button>
+    <button id="btn-search" class="primary-nav-btn" type="button" title="Find cameras" aria-label="Find cameras" aria-expanded="false" aria-controls="search-panel">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="6" width="14" height="12" rx="2"/><path d="m17 10 4-2v8l-4-2M7 10h4"/></svg>
+      <span>Cameras</span>
+    </button>
+    <button id="btn-summary" class="primary-nav-btn" type="button" title="Situation summary" aria-label="Open situation summary" aria-expanded="false" aria-controls="situation-panel">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V2h6v2M9 9h6M9 13h6M9 17h4"/></svg>
+      <span>Situation</span>
+    </button>
+  </nav>
   <p id="locate-announcer" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></p>
 
   <aside id="situation-panel" class="situation-panel hidden" aria-labelledby="situation-heading">
@@ -374,8 +393,11 @@
 
   <aside id="alerts-panel" class="alerts-panel hidden" aria-labelledby="alerts-heading">
     <div class="alerts-header">
-      <h2 id="alerts-heading">Active NWS alerts</h2>
-      <span id="alerts-status" role="status" aria-live="polite">Loading…</span>
+      <div>
+        <h2 id="alerts-heading">Active NWS alerts</h2>
+        <span id="alerts-status" role="status" aria-live="polite">Loading…</span>
+      </div>
+      <button id="close-alerts" class="panel-close-btn" type="button" aria-label="Close active alerts">×</button>
     </div>
     <p class="alerts-provider-note">NWS provider text (may remain in English)</p>
     <ul id="alerts-list" class="alerts-list"></ul>
@@ -384,25 +406,34 @@
   </aside>
 
   <div id="radar-controls" role="group" aria-label="Past radar timeline">
-    <div class="radar-playback-row" role="toolbar" aria-label="Radar frame controls">
-      <button id="radar-prev" class="radar-btn" title="Previous frame" aria-label="Previous radar frame">
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="4" x2="5" y2="20" stroke="currentColor" stroke-width="2"/></svg>
-      </button>
-      <button id="radar-play" class="radar-btn" title="Play/Pause" aria-label="Play or pause radar animation" aria-pressed="false">
-        <svg id="icon-play" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-        <svg id="icon-pause" viewBox="0 0 24 24" fill="currentColor" class="hidden" aria-hidden="true"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-      </button>
-      <button id="radar-next" class="radar-btn" title="Next frame" aria-label="Next radar frame">
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="4" x2="19" y2="20" stroke="currentColor" stroke-width="2"/></svg>
-      </button>
-      <span id="radar-time" role="status" aria-live="polite">Loading radar…</span>
-      <button id="radar-retry" class="radar-retry hidden" type="button">Retry</button>
-      <a id="radar-source" class="radar-source" href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer">RainViewer</a>
+    <div class="radar-controls-header">
+      <div class="radar-controls-title"><strong>Radar playback</strong><span>Observed imagery</span></div>
+      <div class="radar-controls-meta">
+        <span id="radar-time" role="status" aria-live="polite">Loading radar…</span>
+        <a id="radar-source" class="radar-source" href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer">RainViewer</a>
+      </div>
     </div>
-    <label class="radar-scrubber-row" for="radar-scrubber">
-      <span id="radar-frame-position">Frame 0 of 0</span>
-      <input id="radar-scrubber" type="range" min="0" max="0" value="0" disabled aria-describedby="radar-time radar-frame-position">
-    </label>
+    <div class="radar-controls-body">
+      <div class="radar-playback-row" role="toolbar" aria-label="Radar frame controls">
+        <button id="radar-prev" class="radar-btn" title="Previous frame" aria-label="Previous radar frame">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="4" x2="5" y2="20" stroke="currentColor" stroke-width="2"/></svg>
+        </button>
+        <button id="radar-play" class="radar-btn radar-btn-primary" title="Play/Pause" aria-label="Play or pause radar animation" aria-pressed="false">
+          <svg id="icon-play" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          <svg id="icon-pause" viewBox="0 0 24 24" fill="currentColor" class="hidden" aria-hidden="true"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+        </button>
+        <button id="radar-next" class="radar-btn" title="Next frame" aria-label="Next radar frame">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="4" x2="19" y2="20" stroke="currentColor" stroke-width="2"/></svg>
+        </button>
+        <button id="radar-retry" class="radar-retry hidden" type="button">Retry</button>
+      </div>
+      <label class="radar-scrubber-row" for="radar-scrubber">
+        <input id="radar-scrubber" type="range" min="0" max="0" value="0" disabled aria-describedby="radar-time radar-frame-position">
+        <span class="radar-range-label">Earlier</span>
+        <span id="radar-frame-position">Frame 0 of 0</span>
+        <span class="radar-range-label radar-range-label-latest">Latest</span>
+      </label>
+    </div>
   </div>
 
   <div id="camera-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-cam-name">

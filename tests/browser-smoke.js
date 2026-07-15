@@ -680,6 +680,29 @@ async function main() {
     await addNetworkFixtures(page, networkMetrics);
     await waitForApp(page);
 
+    await page.locator('#alerts-status').filter({ hasText: /1 alert/ }).waitFor({ state: 'visible' });
+    await assertSurfaceWithinViewport(page, '#primary-nav', 'desktop primary navigation');
+    await assertSurfaceWithinViewport(page, '#radar-controls', 'desktop radar timeline');
+    assert.equal(await page.locator('#btn-alerts').getAttribute('aria-current'), 'page');
+    assert.equal(await page.locator('#nav-alert-count').textContent(), '1');
+    await page.locator('#btn-radar').click();
+    await page.locator('#alerts-panel').waitFor({ state: 'hidden' });
+    assert.equal(await page.locator('#btn-radar').getAttribute('aria-current'), 'page');
+    await page.locator('#btn-alerts').click();
+    await page.locator('#alerts-panel').waitFor({ state: 'visible' });
+    await page.locator('#close-alerts').click();
+    await page.locator('#alerts-panel').waitFor({ state: 'hidden' });
+    assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.id), 'btn-alerts');
+    await page.locator('#btn-alerts').click();
+    await page.locator('#alerts-panel').waitFor({ state: 'visible' });
+    await page.locator('#btn-place-search').click();
+    await page.locator('#search-panel').waitFor({ state: 'visible' });
+    assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.id), 'place-query');
+    assert.equal(await page.locator('#btn-search').getAttribute('aria-current'), 'page');
+    await page.locator('#btn-search').click();
+    await page.locator('#search-panel').waitFor({ state: 'hidden' });
+    await page.locator('#alerts-panel').waitFor({ state: 'visible' });
+
     const vendorRuntime = await page.evaluate(() => ({
       leaflet: window.L && window.L.version,
       markercluster: typeof window.L.markerClusterGroup,

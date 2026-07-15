@@ -232,6 +232,31 @@ test('layer navigation is searchable, active-only, localized, and state-preservi
   }
 });
 
+test('responsive operations shell keeps primary workflows explicit and radar clear of drawers', () => {
+  assert.match(html, /id="primary-nav"[^>]*aria-label="Primary navigation"/);
+  assert.match(html, /id="btn-radar"[^>]*aria-current="page"/);
+  assert.match(html, /id="btn-alerts"[^>]*aria-expanded="false"[^>]*aria-controls="alerts-panel"/);
+  assert.match(html, /id="nav-alert-count"[^>]*aria-hidden="true"/);
+  assert.match(html, /id="close-alerts"[^>]*aria-label="Close active alerts"/);
+  assert.match(html, /id="btn-place-search"[^>]*aria-controls="search-panel"/);
+  assert.match(html, /class="radar-controls-header"/);
+  assert.match(html, /class="radar-controls-body"/);
+  assert.match(css, /@media \(min-width: 601px\)[\s\S]*\.primary-nav[\s\S]*flex-direction: column/);
+  assert.match(css, /@media \(max-width: 600px\)[\s\S]*\.primary-nav[\s\S]*bottom: 0/);
+  assert.match(css, /max-height: calc\(100vh - 224px/);
+  assert.match(css, /max-height: calc\(100vh - 240px/);
+  assert.match(app, /function syncPrimaryNavigation\(\)/);
+  assert.match(app, /function showRadarCanvas\(\)/);
+  assert.match(app, /function toggleAlertsPanel\(\)/);
+  assert.match(app, /alertsPanelDismissed/);
+  for (const locale of ['en', 'es']) {
+    for (const key of ['nav.primary', 'nav.radar', 'nav.alerts', 'nav.layers', 'nav.cameras', 'nav.situation',
+      'radar.observed', 'radar.earlier', 'radar.latest', 'alerts.closePanel', 'header.placeSearch']) {
+      assert.ok(i18n.catalogs[locale][key], `${locale} catalog should define ${key}`);
+    }
+  }
+});
+
 test('incident camera proximity loads before the app and remains available offline', () => {
   const spatialPosition = html.indexOf('js/spatial-query.js');
   const appPosition = html.indexOf('js/app.js');

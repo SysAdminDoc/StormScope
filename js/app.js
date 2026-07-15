@@ -18,7 +18,7 @@
   })();
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.121.0';
+  var APP_VERSION = '0.122.0';
   var MAP_ZOOM = 5;
   var RADAR_ANIMATION_SPEED = 800;
   var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
@@ -89,6 +89,7 @@
   var refreshInstallDiscovery = function () {};
   var weatherUnits = 'us';
   var alertsVisible = true;
+  var alertsPanelDismissed = false;
   var activeAlerts = [];
   var alertLayerGroup = null;
   var alertLayersById = Object.create(null);
@@ -4505,8 +4506,8 @@
       });
       button.appendChild(title);
       var impactSummary = alertImpactRows(alert).filter(function (row) {
-        return row.kind === 'officialHeadline' || /DamageThreat$/.test(row.kind);
-      }).slice(0, 2);
+        return /DamageThreat$/.test(row.kind);
+      }).slice(0, 1);
       impactSummary.forEach(function (row) {
         var impact = document.createElement('span');
         impact.className = 'alert-impact-summary';
@@ -4548,6 +4549,11 @@
     status.textContent = activeAlerts.length
       ? tr(activeAlerts.length === 1 ? 'alerts.countOne' : 'alerts.countMany', { count: localNumber(activeAlerts.length) })
       : tr('alerts.none');
+    var navAlertCount = document.getElementById('nav-alert-count');
+    navAlertCount.textContent = activeAlerts.length > 99 ? '99+' : localNumber(activeAlerts.length);
+    navAlertCount.classList.toggle('hidden', activeAlerts.length === 0);
+    document.getElementById('btn-alerts').setAttribute('aria-label', tr('nav.alerts') +
+      (activeAlerts.length ? ' (' + localNumber(activeAlerts.length) + ')' : ''));
     syncAlertsPanelVisibility();
   }
 
@@ -4662,8 +4668,9 @@
     document.getElementById('btn-search').setAttribute('aria-expanded', 'false');
     document.getElementById('layers-panel').classList.add('hidden');
     document.getElementById('btn-layers').setAttribute('aria-expanded', 'false');
+    alertsPanelDismissed = false;
+    syncAlertsPanelVisibility();
     var panel = document.getElementById('alerts-panel');
-    panel.classList.remove('hidden');
     var first = panel.querySelector('.alert-list-button');
     if (first) first.focus();
   }
@@ -4671,7 +4678,8 @@
   function readAlertFromSummary(alert) {
     document.getElementById('situation-panel').classList.add('hidden');
     document.getElementById('btn-summary').setAttribute('aria-expanded', 'false');
-    document.getElementById('alerts-panel').classList.remove('hidden');
+    alertsPanelDismissed = false;
+    syncAlertsPanelVisibility();
     showAlertDetail(alert, true, document.getElementById('btn-summary'), false);
   }
 
@@ -4876,10 +4884,47 @@
     });
   }
 
+  function syncPrimaryNavigation() {
+    var selectedId = 'btn-radar';
+    TOP_LEVEL_PANELS.some(function (entry) {
+      if (document.getElementById(entry.panel).classList.contains('hidden')) return false;
+      selectedId = entry.toggle;
+      return true;
+    });
+    if (selectedId === 'btn-radar' && !document.getElementById('alerts-panel').classList.contains('hidden')) {
+      selectedId = 'btn-alerts';
+    }
+    document.querySelectorAll('.primary-nav-btn').forEach(function (button) {
+      var selected = button.id === selectedId;
+      button.classList.toggle('is-active', selected);
+      if (selected) button.setAttribute('aria-current', 'page');
+      else button.removeAttribute('aria-current');
+    });
+  }
+
   function syncAlertsPanelVisibility() {
-    document.getElementById('alerts-panel').classList.toggle(
-      'hidden', !alertsVisible || topLevelPanelIsOpen()
-    );
+    var hidden = !alertsVisible || alertsPanelDismissed || topLevelPanelIsOpen();
+    document.getElementById('alerts-panel').classList.toggle('hidden', hidden);
+    document.getElementById('btn-alerts').setAttribute('aria-expanded', String(!hidden));
+    syncPrimaryNavigation();
+  }
+
+  function showRadarCanvas() {
+    TOP_LEVEL_PANELS.forEach(function (entry) {
+      document.getElementById(entry.panel).classList.add('hidden');
+      document.getElementById(entry.toggle).setAttribute('aria-expanded', 'false');
+    });
+    alertsPanelDismissed = true;
+    syncAlertsPanelVisibility();
+  }
+
+  function toggleAlertsPanel() {
+    TOP_LEVEL_PANELS.forEach(function (entry) {
+      document.getElementById(entry.panel).classList.add('hidden');
+      document.getElementById(entry.toggle).setAttribute('aria-expanded', 'false');
+    });
+    alertsPanelDismissed = !document.getElementById('alerts-panel').classList.contains('hidden');
+    syncAlertsPanelVisibility();
   }
 
   function toggleTopLevelPanel(panelId, toggleId) {
@@ -5151,6 +5196,13 @@
 
   function bindUI() {
     initLayerNavigation();
+    document.getElementById('btn-radar').addEventListener('click', showRadarCanvas);
+    document.getElementById('btn-alerts').addEventListener('click', toggleAlertsPanel);
+    document.getElementById('close-alerts').addEventListener('click', function () {
+      alertsPanelDismissed = true;
+      syncAlertsPanelVisibility();
+      document.getElementById('btn-alerts').focus();
+    });
     document.getElementById('wake-lock-monitoring').addEventListener('change', function () {
       wakeLockController.setEnabled(this.checked, true);
     });
@@ -5201,6 +5253,14 @@
       }
     });
 
+    document.getElementById('btn-place-search').addEventListener('click', function () {
+      if (document.getElementById('search-panel').classList.contains('hidden')) {
+        toggleTopLevelPanel('search-panel', 'btn-search');
+        scheduleSearchRender();
+      }
+      document.getElementById('place-query').focus();
+    });
+
     document.getElementById('btn-layers').addEventListener('click', function () {
       toggleTopLevelPanel('layers-panel', 'btn-layers');
     });
@@ -5238,6 +5298,7 @@
         if (alertLayerGroup) map.removeLayer(alertLayerGroup);
         document.getElementById('alerts-panel').classList.add('hidden');
       } else {
+        alertsPanelDismissed = false;
         fetchNwsAlerts();
       }
       scheduleLastViewSave();
