@@ -42,6 +42,36 @@ test('versioned scene token round-trips every documented public field', () => {
   assert.deepEqual(codec.fromHash('#' + codec.toHash(scene())), codec.decode(token));
 });
 
+test('scene layer bit positions are pinned and independent of registry order', () => {
+  // Locking these values guards every previously shared scene link: changing a bit position
+  // (e.g. by reordering the layer registry) must be a deliberate, VERSION-bumping change that
+  // fails this test first.
+  assert.deepEqual(codec.layerBits, [
+    { id: 'radar', bit: 0, legacyRequired: true },
+    { id: 'cameras', bit: 1, legacyRequired: true },
+    { id: 'coverage', bit: 2, legacyRequired: true },
+    { id: 'alerts', bit: 3, legacyRequired: true },
+    { id: 'lightning', bit: 4, legacyRequired: true },
+    { id: 'wildfires', bit: 5, legacyRequired: true },
+    { id: 'satellite', bit: 6, legacyRequired: true },
+    { id: 'tropical', bit: 7, legacyRequired: false },
+    { id: 'wpcOutlooks', bit: 8, legacyRequired: false },
+    { id: 'usgsGauges', bit: 9, legacyRequired: false },
+    { id: 'earthquakes', bit: 10, legacyRequired: false },
+    { id: 'convective', bit: 11, legacyRequired: false },
+    { id: 'watches', bit: 12, legacyRequired: false }
+  ]);
+
+  // Enabling exactly one layer must set exactly its pinned bit in the wire payload `l`.
+  codec.layerBits.forEach((entry) => {
+    const onlyThis = {};
+    codec.layerBits.forEach((other) => { onlyThis[other.id] = other.id === entry.id; });
+    const token = codec.encode(scene({ layers: onlyThis }));
+    const payload = JSON.parse(Buffer.from(token.slice(2), 'base64url').toString('utf8'));
+    assert.equal(payload.l, 1 << entry.bit, entry.id + ' encodes to the wrong scene bit');
+  });
+});
+
 test('favorites, saved views, locale, theme, and unknown private fields are never encoded', () => {
   const input = scene({ favorites: ['secret'], savedViews: [{ name: 'private' }], locale: 'es', theme: 'dark', token: 'secret' });
   const token = codec.encode(input);

@@ -12,8 +12,43 @@
   var VERSION = 1;
   var PREFIX = VERSION + '.';
   var MAX_TOKEN_LENGTH = 2048;
-  var LAYERS = registry.sceneKeys();
-  var MAX_LAYER_BITS = (1 << LAYERS.length) - 1;
+  // Canonical, order-stable scene layer bit assignments — this is the wire contract.
+  // Bit positions MUST NOT change without bumping VERSION, and they are pinned here
+  // independently of the layer registry's array order so reordering the registry can never
+  // silently repoint a previously shared scene link. `legacyRequired` marks the original v1
+  // layers that must be present as booleans; layers added afterwards default to false when
+  // absent so older or hand-built scene objects still decode.
+  var SCENE_LAYER_BITS = [
+    { id: 'radar', bit: 0, legacyRequired: true },
+    { id: 'cameras', bit: 1, legacyRequired: true },
+    { id: 'coverage', bit: 2, legacyRequired: true },
+    { id: 'alerts', bit: 3, legacyRequired: true },
+    { id: 'lightning', bit: 4, legacyRequired: true },
+    { id: 'wildfires', bit: 5, legacyRequired: true },
+    { id: 'satellite', bit: 6, legacyRequired: true },
+    { id: 'tropical', bit: 7, legacyRequired: false },
+    { id: 'wpcOutlooks', bit: 8, legacyRequired: false },
+    { id: 'usgsGauges', bit: 9, legacyRequired: false },
+    { id: 'earthquakes', bit: 10, legacyRequired: false },
+    { id: 'convective', bit: 11, legacyRequired: false },
+    { id: 'watches', bit: 12, legacyRequired: false }
+  ];
+  (function assertLayerBitCoverage() {
+    var keys = registry.sceneKeys();
+    var seen = {};
+    SCENE_LAYER_BITS.forEach(function (entry, index) {
+      if (entry.bit !== index) throw new Error('scene layer bits must be contiguous from zero');
+      if (seen[entry.bit]) throw new Error('duplicate scene layer bit: ' + entry.bit);
+      seen[entry.bit] = true;
+      if (keys.indexOf(entry.id) === -1) throw new Error('scene bit references unknown layer: ' + entry.id);
+    });
+    keys.forEach(function (id) {
+      if (!SCENE_LAYER_BITS.some(function (entry) { return entry.id === id; })) {
+        throw new Error('layer ' + id + ' has no scene bit assignment; assign a bit and bump VERSION');
+      }
+    });
+  })();
+  var MAX_LAYER_BITS = (1 << SCENE_LAYER_BITS.length) - 1;
   var PALETTES = ['standard', 'colorblind', 'contrast'];
   var SPEEDS = [0, 400, 800, 1600];
   var SEVERITIES = ['all', 'minor', 'moderate', 'severe', 'extreme'];
@@ -56,8 +91,9 @@
     var radar = objectValue(source.radar, 'scene radar');
     var filters = objectValue(source.cameraFilters, 'scene camera filters');
     var normalizedLayers = {};
-    LAYERS.forEach(function (name, index) {
-      if (index >= 7 && layers[name] == null) {
+    SCENE_LAYER_BITS.forEach(function (entry) {
+      var name = entry.id;
+      if (!entry.legacyRequired && layers[name] == null) {
         normalizedLayers[name] = false;
         return;
       }
@@ -111,7 +147,7 @@
 
   function compact(scene) {
     var layerBits = 0;
-    LAYERS.forEach(function (name, index) { if (scene.layers[name]) layerBits |= (1 << index); });
+    SCENE_LAYER_BITS.forEach(function (entry) { if (scene.layers[entry.id]) layerBits |= (1 << entry.bit); });
     return {
       v: VERSION,
       m: [scene.map.lat, scene.map.lon, scene.map.zoom],
@@ -136,7 +172,7 @@
       throw new TypeError('scene payload shape is invalid');
     }
     var layers = {};
-    LAYERS.forEach(function (name, index) { layers[name] = Boolean(source.l & (1 << index)); });
+    SCENE_LAYER_BITS.forEach(function (entry) { layers[entry.id] = Boolean(source.l & (1 << entry.bit)); });
     if (!Number.isInteger(source.r[1]) || !PALETTES[source.r[1]] || !Number.isInteger(source.r[2]) ||
         SPEEDS[source.r[2]] == null || !Number.isInteger(source.a) || !SEVERITIES[source.a] ||
         !Number.isInteger(source.f[2]) || SOURCES[source.f[2]] == null || !Number.isInteger(source.f[3]) ||
@@ -211,6 +247,7 @@
   return Object.freeze({
     VERSION: VERSION,
     MAX_TOKEN_LENGTH: MAX_TOKEN_LENGTH,
+    layerBits: Object.freeze(SCENE_LAYER_BITS.map(function (entry) { return Object.freeze(Object.assign({}, entry)); })),
     encode: encode,
     decode: decode,
     fromHash: fromHash,
