@@ -127,3 +127,20 @@ test('registry is local declarative data without executable loading primitives',
   assert.doesNotMatch(source, /\beval\s*\(|\bFunction\s*\(|\bimport\s*\(/);
   assert.doesNotMatch(source, /https?:\/\//);
 });
+
+test('every layer is covered by view-snapshot apply through a base effect or lifecycle binding', () => {
+  // Base (non-lifecycle) layers whose apply effect lives in app.js applyBaseLayerEffect.
+  const BASE_EFFECT_IDS = ['radar', 'cameras', 'coverage', 'alerts'];
+  registry.descriptors.forEach((descriptor) => {
+    const covered = BASE_EFFECT_IDS.includes(descriptor.id) || Boolean(descriptor.lifecycleId);
+    assert.ok(covered, descriptor.id + ' has no apply path (add a base effect or a lifecycle binding)');
+  });
+});
+
+test('applyViewSnapshot drives layer effects from the registry, not a per-layer ladder', () => {
+  const app = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8');
+  // Apply must iterate the registry so a new layer is never silently omitted.
+  assert.match(app, /function applyViewSnapshot[\s\S]*StormScopeLayerRegistry\.descriptors\.forEach/);
+  // The old hand-enumerated ladder must be gone.
+  assert.doesNotMatch(app, /if \(typeof layers\.(radar|earthquakes|watches) === 'boolean'\)/);
+});

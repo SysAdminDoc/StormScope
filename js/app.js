@@ -3208,6 +3208,51 @@
     }
   }
 
+  // Base (non-lifecycle) layer effects that cannot be expressed as refresh/disable bindings.
+  // Every other layer is driven declaratively from the registry's lifecycle bindings, so adding
+  // a new lifecycle layer never requires a new apply branch here.
+  function applyBaseLayerEffect(id, enabled) {
+    if (id === 'radar') {
+      radarVisible = enabled;
+      if (radarLayer) {
+        if (enabled) radarLayer.addTo(map);
+        else map.removeLayer(radarLayer);
+      }
+      return true;
+    }
+    if (id === 'cameras') {
+      if (cameraCluster) {
+        if (enabled) cameraCluster.addTo(map);
+        else map.removeLayer(cameraCluster);
+      }
+      return true;
+    }
+    if (id === 'coverage') {
+      if (radarHost) updateCoverageLayer();
+      return true;
+    }
+    if (id === 'alerts') {
+      alertsVisible = enabled;
+      if (alertLayerGroup) {
+        if (enabled) alertLayerGroup.addTo(map);
+        else map.removeLayer(alertLayerGroup);
+      }
+      return true;
+    }
+    return false;
+  }
+
+  function applyLayerEnabled(descriptor, enabled, bindings) {
+    var toggle = document.getElementById(descriptor.toggleId);
+    if (toggle) toggle.checked = enabled;
+    if (applyBaseLayerEffect(descriptor.id, enabled)) return;
+    var binding = (bindings || operationalLayerRuntimeBindings())[descriptor.id];
+    if (binding && typeof binding.refresh === 'function' && typeof binding.disable === 'function') {
+      if (enabled) binding.refresh();
+      else binding.disable();
+    }
+  }
+
   function applyViewSnapshot(snapshot) {
     if (!snapshot) return;
     StormScopeLayerRegistry.applyControlState(document, snapshot, 'profile');
@@ -3215,76 +3260,11 @@
     convectiveDay = Number(document.getElementById('convective-day').value);
     map.setView([snapshot.center.lat, snapshot.center.lon], snapshot.zoom, { animate: false });
     var layers = snapshot.layers || {};
-    if (typeof layers.radar === 'boolean') {
-      radarVisible = layers.radar;
-      document.getElementById('toggle-radar').checked = radarVisible;
-      if (radarLayer) {
-        if (radarVisible) radarLayer.addTo(map);
-        else map.removeLayer(radarLayer);
-      }
-    }
-    if (typeof layers.cameras === 'boolean') {
-      document.getElementById('toggle-cameras').checked = layers.cameras;
-      if (cameraCluster) {
-        if (layers.cameras) cameraCluster.addTo(map);
-        else map.removeLayer(cameraCluster);
-      }
-    }
-    if (typeof layers.coverage === 'boolean') {
-      document.getElementById('toggle-coverage').checked = layers.coverage;
-      if (radarHost) updateCoverageLayer();
-    }
-    if (typeof layers.alerts === 'boolean') {
-      alertsVisible = layers.alerts;
-      document.getElementById('toggle-alerts').checked = alertsVisible;
-      if (!alertsVisible && alertLayerGroup) map.removeLayer(alertLayerGroup);
-      if (alertsVisible && alertLayerGroup) alertLayerGroup.addTo(map);
-    }
-    if (typeof layers.lightning === 'boolean') {
-      document.getElementById('toggle-lightning').checked = layers.lightning;
-      if (layers.lightning) refreshLightning();
-      else disableLightning();
-    }
-    if (typeof layers.satellite === 'boolean') {
-      document.getElementById('toggle-satellite').checked = layers.satellite;
-      if (layers.satellite) refreshSatellite();
-      else disableSatellite();
-    }
-    if (typeof layers.wildfires === 'boolean') {
-      document.getElementById('toggle-wildfires').checked = layers.wildfires;
-      if (layers.wildfires) refreshWildfires();
-      else disableWildfires();
-    }
-    if (typeof layers.tropical === 'boolean') {
-      document.getElementById('toggle-tropical').checked = layers.tropical;
-      if (layers.tropical) refreshTropical();
-      else disableTropical();
-    }
-    if (typeof layers.wpcOutlooks === 'boolean') {
-      document.getElementById(StormScopeLayerRegistry.get('wpcOutlooks').toggleId).checked = layers.wpcOutlooks;
-      if (layers.wpcOutlooks) refreshWpcOutlooks();
-      else disableWpcOutlooks();
-    }
-    if (typeof layers.usgsGauges === 'boolean') {
-      document.getElementById('toggle-usgs-gauges').checked = layers.usgsGauges;
-      if (layers.usgsGauges) refreshUsgsGauges();
-      else disableUsgsGauges();
-    }
-    if (typeof layers.earthquakes === 'boolean') {
-      document.getElementById(StormScopeLayerRegistry.get('earthquakes').toggleId).checked = layers.earthquakes;
-      if (layers.earthquakes) refreshEarthquakes();
-      else disableEarthquakes();
-    }
-    if (typeof layers.convective === 'boolean') {
-      document.getElementById(StormScopeLayerRegistry.get('convective').toggleId).checked = layers.convective;
-      if (layers.convective) refreshConvectiveOutlooks();
-      else disableConvectiveOutlooks();
-    }
-    if (typeof layers.watches === 'boolean') {
-      document.getElementById('toggle-watches').checked = layers.watches;
-      if (layers.watches) refreshSevereWatches();
-      else disableSevereWatches();
-    }
+    var layerBindings = operationalLayerRuntimeBindings();
+    StormScopeLayerRegistry.descriptors.forEach(function (descriptor) {
+      var enabled = layers[descriptor.sceneKey];
+      if (typeof enabled === 'boolean') applyLayerEnabled(descriptor, enabled, layerBindings);
+    });
     if (snapshot.opacity && typeof snapshot.opacity.radar === 'number') {
       radarOpacity = snapshot.opacity.radar;
       document.getElementById('radar-opacity').value = String(Math.round(radarOpacity * 100));
