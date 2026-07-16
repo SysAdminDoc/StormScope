@@ -314,6 +314,34 @@ test('durable-ID lookup is owned by cancellation and validates fetched records',
   await assert.rejects(invalidStore.loadCameraById(2), /source_url/);
 });
 
+test('durable-ID lookup during an in-flight full load does not corrupt the generation count', async () => {
+  const fixture = generation([[camera(1), camera(2)], [camera(3), camera(4)]]);
+  const shard0Url = 'data/' + fixture.index.shards[0].path;
+  const shard1Url = 'data/' + fixture.index.shards[1].path;
+  let reachedShard0Resolve;
+  const reachedShard0 = new Promise(resolve => { reachedShard0Resolve = resolve; });
+  let releaseShard0;
+  const blockedShard0 = new Promise(resolve => { releaseShard0 = () => resolve(response(fixture.texts[0])); });
+  const store = new cameraStore.CameraStore({ fetch: async url => {
+    if (url.endsWith('cameras.index.json')) return response(fixture.index);
+    if (url === shard0Url) { reachedShard0Resolve(); return blockedShard0; }
+    if (url === shard1Url) return response(fixture.texts[1]);
+    throw new Error('unexpected url ' + url);
+  } });
+
+  const loadPromise = store.load();
+  await reachedShard0; // full shard load is now in flight and blocked on shard 0
+  const looked = await store.loadCameraById(3);
+  assert.equal(looked.id, 3, 'lookup still returns the requested camera');
+  assert.equal(store.getCameras().length, 0, 'lookup must not append to _cameras during a full load');
+
+  releaseShard0();
+  const result = await loadPromise;
+  assert.equal(result.source, 'shards', 'the full load completes as shards, not a forced monolith fallback');
+  assert.equal(result.cameras.length, 4, 'the generation count is exactly index.total');
+  assert.ok(result.cameras.some(item => item.id === 3), 'the full generation still contains the looked-up camera');
+});
+
 test('falls back to the monolith after a shard failure', async () => {
   const monolith = [camera(10), camera(11)];
   const fixture = generation([[camera(1)]]);

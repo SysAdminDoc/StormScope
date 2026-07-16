@@ -490,6 +490,7 @@
     this._sourceHealthController = null;
     this._sourceHealth = null;
     this._requestId = 0;
+    this._corpusLoading = false;
   }
 
   CameraStore.prototype.cancel = function () {
@@ -500,6 +501,7 @@
     this._controller = null;
     this._lookupController = null;
     this._sourceHealthController = null;
+    this._corpusLoading = false;
   };
 
   CameraStore.prototype._assertActive = function (requestId, signal) {
@@ -566,22 +568,32 @@
   };
 
   CameraStore.prototype._loadMonolith = async function (requestId, signal, callback, cause) {
-    this._assertActive(requestId, signal);
-    this._index = null;
-    this._pendingIndex = null;
-    var cameras = await this._fetchJson(this.monolithUrl, signal, MAX_MONOLITH_BYTES);
-    this._assertActive(requestId, signal);
-    validateCameraArray(cameras, MAX_CAMERAS, 0);
-    this._cameras = cameras.slice();
-    this._progress(callback, {
-      source: 'monolith', loaded: cameras.length, total: cameras.length,
-      shardsLoaded: 0, shardsTotal: 0, complete: true, generationValidated: true,
-      fallbackCause: cause || null
-    });
-    return { cameras: this.getCameras(), source: 'monolith', index: null, complete: true };
+    // Owns this._cameras while filling; single-camera lookups must not mutate it meanwhile.
+    this._corpusLoading = true;
+    try {
+      this._assertActive(requestId, signal);
+      this._index = null;
+      this._pendingIndex = null;
+      var cameras = await this._fetchJson(this.monolithUrl, signal, MAX_MONOLITH_BYTES);
+      this._assertActive(requestId, signal);
+      validateCameraArray(cameras, MAX_CAMERAS, 0);
+      this._cameras = cameras.slice();
+      this._progress(callback, {
+        source: 'monolith', loaded: cameras.length, total: cameras.length,
+        shardsLoaded: 0, shardsTotal: 0, complete: true, generationValidated: true,
+        fallbackCause: cause || null
+      });
+      return { cameras: this.getCameras(), source: 'monolith', index: null, complete: true };
+    } finally {
+      if (requestId === this._requestId) this._corpusLoading = false;
+    }
   };
 
   CameraStore.prototype._loadShards = async function (index, requestId, signal, options) {
+    // Owns this._cameras while filling; single-camera lookups must not mutate it meanwhile,
+    // or the appended camera trips the exact index.total count check below.
+    this._corpusLoading = true;
+    try {
     var healthTotals = {};
     var providerTotals = {};
     var verifiedTotal = 0;
@@ -637,6 +649,9 @@
     this._index = index;
     this._pendingIndex = null;
     return { cameras: this.getCameras(), source: 'shards', index: index, complete: true };
+    } finally {
+      if (requestId === this._requestId) this._corpusLoading = false;
+    }
   };
 
   CameraStore.prototype.load = async function (options) {
@@ -725,7 +740,13 @@
         throw new Error('Camera shard is invalid: ' + descriptor.id);
       }
       var camera = shard.find(function (item) { return item.id === id; }) || null;
-      if (camera && !this._cameras.some(function (item) { return item.id === id; })) this._cameras.push(camera);
+      // Only cache into this._cameras when no full corpus load owns the array. During a load the
+      // in-flight generation will already include this camera, and appending here would corrupt
+      // its exact index.total count check and force an unnecessary monolith fallback.
+      if (camera && requestId === this._requestId && !this._corpusLoading &&
+          !this._cameras.some(function (item) { return item.id === id; })) {
+        this._cameras.push(camera);
+      }
       return camera;
     } finally {
       if (this._lookupController === controller) this._lookupController = null;
