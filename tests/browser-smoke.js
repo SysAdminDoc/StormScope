@@ -695,6 +695,18 @@ async function main() {
     assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.id), 'btn-alerts');
     await page.locator('#btn-alerts').click();
     await page.locator('#alerts-panel').waitFor({ state: 'visible' });
+    // Escape closes the alerts drawer and returns focus to its nav button.
+    await page.keyboard.press('Escape');
+    await page.locator('#alerts-panel').waitFor({ state: 'hidden' });
+    assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.id), 'btn-alerts');
+    // Opening the Layers panel moves focus into it (the layer search), like Search/Situation.
+    await page.locator('#btn-layers').click();
+    await page.locator('#layers-panel').waitFor({ state: 'visible' });
+    assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.id), 'layer-filter-query');
+    await page.locator('#btn-layers').click();
+    await page.locator('#layers-panel').waitFor({ state: 'hidden' });
+    await page.locator('#btn-alerts').click();
+    await page.locator('#alerts-panel').waitFor({ state: 'visible' });
     await page.locator('#btn-place-search').click();
     await page.locator('#search-panel').waitFor({ state: 'visible' });
     assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.id), 'place-query');

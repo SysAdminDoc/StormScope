@@ -4919,6 +4919,16 @@
     return opening;
   }
 
+  // Close the alerts drawer if it is showing, returning focus to its nav button so
+  // Escape behaves consistently with the other header-toggled surfaces.
+  function closeAlertsDrawer() {
+    if (document.getElementById('alerts-panel').classList.contains('hidden')) return false;
+    alertsPanelDismissed = true;
+    syncAlertsPanelVisibility();
+    document.getElementById('btn-alerts').focus();
+    return true;
+  }
+
   // Close a header-toggled panel (search/layers) if it is open, returning focus
   // to its toggle button so keyboard and screen-reader users keep their place.
   function closeOpenPanel(panelId, toggleId) {
@@ -5242,7 +5252,9 @@
     });
 
     document.getElementById('btn-layers').addEventListener('click', function () {
-      toggleTopLevelPanel('layers-panel', 'btn-layers');
+      if (toggleTopLevelPanel('layers-panel', 'btn-layers')) {
+        document.getElementById('layer-filter-query').focus();
+      }
     });
 
     document.getElementById('toggle-radar').addEventListener('change', function () {
@@ -5545,7 +5557,8 @@
       if (closeOpenPanel('situation-panel', 'btn-summary')) return;
       if (hideAlertDetail()) return;
       if (closeOpenPanel('search-panel', 'btn-search')) return;
-      closeOpenPanel('layers-panel', 'btn-layers');
+      if (closeOpenPanel('layers-panel', 'btn-layers')) return;
+      closeAlertsDrawer();
     });
 
     map.on('click', function () {
