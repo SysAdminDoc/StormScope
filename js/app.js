@@ -97,6 +97,7 @@
   var alertRefreshTimer = null;
   var alertMoveTimer = null;
   var alertRetryMetadata = null;
+  var alertResultSignature = null;
   var alertDetailReturnFocus = null;
   var alertNationalPayload = null;
   var alertNationalFetchedAt = 0;
@@ -4390,7 +4391,14 @@
         StormScopeNwsAlerts.dedupeAlerts(viewportAlerts.concat(pointAlerts)),
         { minimumSeverity: alertMinimumSeverity() }
       );
-      alertRetryMetadata = StormScopeNwsAlerts.successMetadata();
+      var signature = activeAlerts.map(function (alert) {
+        return alert.dedupeKey + '@' + alert.sent;
+      }).sort().join('|');
+      var idle = activeAlerts.length === 0 || signature === alertResultSignature;
+      alertResultSignature = signature;
+      alertRetryMetadata = StormScopeNwsAlerts.successMetadata(undefined, {
+        idle: idle, previous: alertRetryMetadata
+      });
       renderAlerts();
       scheduleAlertRefresh(alertRetryMetadata.delayMs);
     } catch (error) {

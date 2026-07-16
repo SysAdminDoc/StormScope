@@ -273,3 +273,30 @@ test('produces bounded retry/backoff and success metadata', () => {
   assert.equal(alerts.parseRetryAfter('Sat, 11 Jul 2026 20:01:00 GMT', now), 60000);
   assert.equal(alerts.successMetadata(now).nextRetryAt, '2026-07-11T20:00:30.000Z');
 });
+
+test('empty or unchanged success responses back off geometrically and reset on change', () => {
+  const now = Date.parse('2026-07-11T20:00:00Z');
+  // A busy viewport (idle=false) stays at the 30 s base cadence.
+  const active = alerts.successMetadata(now, { idle: false, previous: null });
+  assert.equal(active.delayMs, 30000);
+  assert.equal(active.idleStreak, 0);
+  // Successive empty/unchanged polls double the delay up to the ceiling.
+  const idle1 = alerts.successMetadata(now, { idle: true, previous: active });
+  assert.equal(idle1.delayMs, 60000);
+  assert.equal(idle1.idleStreak, 1);
+  const idle2 = alerts.successMetadata(now, { idle: true, previous: idle1 });
+  assert.equal(idle2.delayMs, 120000);
+  const idle3 = alerts.successMetadata(now, { idle: true, previous: idle2 });
+  assert.equal(idle3.delayMs, 240000);
+  const idle4 = alerts.successMetadata(now, { idle: true, previous: idle3 });
+  assert.equal(idle4.delayMs, alerts.MAX_IDLE_REFRESH_MS); // capped at 300000
+  const idle5 = alerts.successMetadata(now, { idle: true, previous: idle4 });
+  assert.equal(idle5.delayMs, alerts.MAX_IDLE_REFRESH_MS);
+  // A change (new/updated alert) immediately returns to the base cadence.
+  const reset = alerts.successMetadata(now, { idle: false, previous: idle5 });
+  assert.equal(reset.delayMs, 30000);
+  assert.equal(reset.idleStreak, 0);
+  // Recovering from a failure (previous has no idleStreak) is treated as fresh.
+  const afterFailure = alerts.successMetadata(now, { idle: true, previous: { status: 503 } });
+  assert.equal(afterFailure.delayMs, 60000);
+});

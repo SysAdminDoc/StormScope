@@ -9,6 +9,9 @@
   var WEATHER_URL = 'https://www.weather.gov/';
   var MIN_REFRESH_MS = 30000;
   var MAX_BACKOFF_MS = 15 * 60 * 1000;
+  // Ceiling for the empty/unchanged success backoff so a quiet foreground viewport stops
+  // re-pulling the large national alerts response every 30 s.
+  var MAX_IDLE_REFRESH_MS = 5 * 60 * 1000;
   var SEVERITY_ORDER = Object.freeze({ Extreme: 0, Severe: 1, Moderate: 2, Minor: 3, Unknown: 4 });
   var URGENCY_ORDER = Object.freeze({ Immediate: 0, Expected: 1, Future: 2, Past: 3, Unknown: 4 });
   var CERTAINTY_ORDER = Object.freeze({ Observed: 0, Likely: 1, Possible: 2, Unlikely: 3, Unknown: 4 });
@@ -362,14 +365,24 @@
     });
   }
 
-  function successMetadata(now) {
+  function successMetadata(now, options) {
+    var settings = options || {};
     var nowMs = now == null ? Date.now() : Number(now);
+    var previousStreak = settings.previous == null ? 0 : Number(settings.previous.idleStreak);
+    if (!Number.isFinite(previousStreak) || previousStreak < 0) previousStreak = 0;
+    // Empty or byte-identical viewports geometrically back off (30 s → 60 s → 120 s → …)
+    // up to MAX_IDLE_REFRESH_MS; any change resets to the base cadence.
+    var idleStreak = settings.idle ? previousStreak + 1 : 0;
+    var delayMs = idleStreak > 0
+      ? Math.min(MAX_IDLE_REFRESH_MS, MIN_REFRESH_MS * Math.pow(2, Math.min(idleStreak, 5)))
+      : MIN_REFRESH_MS;
     return Object.freeze({
       attempt: 0,
       retryable: true,
       status: 200,
-      delayMs: MIN_REFRESH_MS,
-      nextRetryAt: new Date(nowMs + MIN_REFRESH_MS).toISOString(),
+      delayMs: delayMs,
+      idleStreak: idleStreak,
+      nextRetryAt: new Date(nowMs + delayMs).toISOString(),
       lastError: null
     });
   }
@@ -377,6 +390,7 @@
   root.StormScopeNwsAlerts = Object.freeze({
     API_URL: API_URL,
     MIN_REFRESH_MS: MIN_REFRESH_MS,
+    MAX_IDLE_REFRESH_MS: MAX_IDLE_REFRESH_MS,
     SEVERITY_ORDER: SEVERITY_ORDER,
     buildPointQuery: buildPointQuery,
     buildViewportQuery: buildViewportQuery,
