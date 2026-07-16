@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.123.0 - 2026-07-15
+
+- Layer profile and scene apply is now driven by the layer registry, so a new layer can no longer be silently dropped from saved views or scene links.
+- Shared scene links pin each layer to a fixed bit position, so reordering layers can never decode an existing link to the wrong layers.
+- Opening the Layers panel moves keyboard focus into its search, and Escape now closes the alerts drawer and restores focus like the other panels.
+- A single-camera lookup during the initial catalog load no longer inflates the generation count or forces an unnecessary full-dataset fallback.
+- NWS alert polling backs off geometrically over empty or unchanged viewports instead of re-requesting the national feed every 30 seconds.
+- Hazard and provider map popups stay within the map pane on narrow and short-height screens.
+- The camera weather panel now shows the NWS chance of precipitation and a next-12-hour high/low range, clearly labeled as forecast guidance. SW v96.
+
 ## v0.122.0 - 2026-07-14
 
 - Redesigned the responsive operations shell with a desktop navigation rail, mobile bottom navigation, dismissible alert drawer, location shortcut, clearer alert cards, and a high-information radar timeline. SW v95.
