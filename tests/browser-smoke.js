@@ -596,7 +596,17 @@ async function addNetworkFixtures(page, metrics, options) {
           windSpeed: '5 mph',
           windDirection: 'N',
           relativeHumidity: { value: 45 },
+          probabilityOfPrecipitation: { value: 20 },
           startTime: new Date(Date.now() + 55 * 60000).toISOString()
+        }, {
+          temperature: 60,
+          temperatureUnit: 'F',
+          shortForecast: 'Clear',
+          windSpeed: '4 mph',
+          windDirection: 'N',
+          relativeHumidity: { value: 50 },
+          probabilityOfPrecipitation: { value: 10 },
+          startTime: new Date(Date.now() + 115 * 60000).toISOString()
         }] } })
       });
       return;
@@ -1371,6 +1381,8 @@ async function main() {
     assert.equal(await page.getByRole('heading', { name: 'Hourly forecast' }).count(), 1);
     assert.match(await page.locator('#weather-data').textContent(), /68°F.*Mostly Clear.*10 mph N.*Observed Test Station \(KOBS\).*2 mi away.*NWS station observation/s);
     assert.match(await page.locator('#weather-data').textContent(), /72°F.*Clear.*NWS hourly forecast/s);
+    assert.match(await page.locator('#weather-data').textContent(), /Chance of precipitation \(forecast\)[\s\S]{0,80}20%/);
+    assert.match(await page.locator('#weather-data').textContent(), /Next 12 h high \/ low \(forecast\)[\s\S]{0,80}72°F \/ 60°F/);
     const modalImage = page.locator('#modal-feed img');
     await modalImage.waitFor({ state: 'visible' });
     await modalImage.dispatchEvent('load');

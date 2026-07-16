@@ -4192,7 +4192,21 @@
     var data = await fetchNwsJson(url, signal, 'forecast');
     var periods = data.properties && data.properties.periods;
     if (!periods || !periods.length) throw new Error('No forecast periods');
-    return { period: periods[0], updatedAt: data.properties.updateTime };
+    // Derive a next-12-hour high/low from the hourly periods already fetched (no extra request)
+    // so the panel can communicate the forecast range, not just a single point value.
+    var window = periods.slice(0, 12);
+    var temps = window.map(function (item) { return item.temperature; })
+      .filter(function (value) { return typeof value === 'number'; });
+    var range = temps.length
+      ? { high: Math.max.apply(null, temps), low: Math.min.apply(null, temps), unit: periods[0].temperatureUnit }
+      : null;
+    return { period: periods[0], updatedAt: data.properties.updateTime, range: range };
+  }
+
+  function forecastTemperature(value, unit) {
+    return unit === 'F'
+      ? StormScopeWeather.temperatureFromFahrenheit(value, weatherUnits)
+      : Math.round(value) + '°' + unit;
   }
 
   async function fetchNwsObservation(stationsUrl, lat, lon, signal) {
@@ -4237,12 +4251,18 @@
 
   function nwsForecastItems(forecast) {
     var current = forecast.period;
-    var temperature = current.temperatureUnit === 'F'
-      ? StormScopeWeather.temperatureFromFahrenheit(current.temperature, weatherUnits)
-      : Math.round(current.temperature) + '°' + current.temperatureUnit;
+    var temperature = forecastTemperature(current.temperature, current.temperatureUnit);
+    var precip = current.probabilityOfPrecipitation && current.probabilityOfPrecipitation.value;
+    var range = forecast.range
+      ? forecastTemperature(forecast.range.high, forecast.range.unit) + ' / ' +
+        forecastTemperature(forecast.range.low, forecast.range.unit)
+      : tr('weather.notAvailable');
     return [
       [tr('weather.temperature'), temperature],
+      [tr('weather.forecastRange'), range],
       [tr('weather.conditionsProvider'), current.shortForecast],
+      [tr('weather.precipChance'), precip != null
+        ? localNumber(precip) + '%' : tr('weather.notAvailable')],
       [tr('weather.wind'), StormScopeWeather.windFromMph(current.windSpeed, weatherUnits) + ' ' + localizedWindDirection(current.windDirection)],
       [tr('weather.humidity'), current.relativeHumidity && current.relativeHumidity.value != null
         ? localNumber(current.relativeHumidity.value) + '%' : tr('weather.notAvailable')],
