@@ -395,6 +395,7 @@ test('official context layers are optional, attributed, and cannot obscure warni
   assert.match(html, /https:\/\/services3\.arcgis\.com/);
   assert.match(contextLayers, /NOAA nowCOAST/);
   assert.match(contextLayers, /NIFC WFIGS/);
+  assert.match(contextLayers, /buildGoesFrameTimes/);
   assert.match(app, /contextRasterPane/);
   assert.match(app, /contextVectorPane/);
   assert.match(app, /style\.zIndex = '325'/);
@@ -402,6 +403,9 @@ test('official context layers are optional, attributed, and cannot obscure warni
   assert.match(app, /refreshLightning/);
   assert.match(app, /refreshWildfires/);
   assert.match(app, /StormScopeContextLayers\.buildWildfireQueries/);
+  assert.match(app, /satelliteRequestBudget/);
+  assert.match(app, /getSatelliteState/);
+  assert.match(html, /id="satellite-scrubber"/);
 });
 
 test('place/address geocoding is keyless, debounced, attributed, and session-only', () => {

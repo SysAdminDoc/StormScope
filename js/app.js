@@ -29,6 +29,7 @@
   var RAINVIEWER_COLOR_SCHEME = 2;
   var RAINVIEWER_MAX_NATIVE_ZOOM = 7;
   var RAINVIEWER_PRELOAD_RESERVE = 20;
+  var SATELLITE_ANIMATION_SPEED = 1200;
 
   var map, radarLayer, radarLayerNext, cameraCluster, basemapLayer;
   var themePreference = 'auto';
@@ -53,6 +54,7 @@
   var radarSampleToken = 0;
   var radarSemanticState = null;
   var rainViewerBudget = StormScopeRadarProviders.createRollingRequestBudget({ limit: 90, windowMs: 60000 });
+  var satelliteRequestBudget = StormScopeRadarProviders.createRollingRequestBudget({ limit: 30, windowMs: 60000 });
   var radarBudgetFallbackPending = false;
   var activeCamera = null;
   var priorFocusEl = null;
@@ -114,6 +116,14 @@
   var satelliteAbort = null;
   var satelliteRefreshTimer = null;
   var satelliteMoveTimer = null;
+  var satelliteAnimationTimer = null;
+  var satelliteFrameRequestTimer = null;
+  var satelliteGeneration = 0;
+  var satelliteFrames = [];
+  var satelliteFrameIndex = 0;
+  var satelliteFrameCache = Object.create(null);
+  var satellitePlaying = false;
+  var satelliteWasPlaying = false;
   var satelliteLatestTime = null;
   var satelliteStatusState = 'off';
   var satelliteAttributionAdded = false;
@@ -281,6 +291,7 @@
         radarAnimationSpeed = 0;
         setRadarPlaying(false);
       }
+      setSatellitePlaying(false);
       clearTimeout(radarPreloadTimer);
       if (radarLayerNext) map.removeLayer(radarLayerNext);
       radarLayerNext = null;
@@ -300,6 +311,7 @@
       refreshIndicator.title = refreshLabel;
     }
     updateRadarTimeDisplay();
+    renderSatelliteStatus();
     if (!lowDataMode && cameraCatalogDeferred && cameraStore) resumeCameraCatalog();
     if (mapComparison && mapComparison.isOpen()) mapComparison.refresh();
   }
@@ -881,22 +893,63 @@
   function renderSatelliteStatus() {
     if (satelliteStatusState === 'off') {
       setContextStatusElement('satellite-status', tr('context.satelliteOff'), 'off');
+      renderSatelliteControls();
       return;
     }
     if (satelliteStatusState === 'loading') {
       setContextStatusElement('satellite-status', tr('context.loading'), 'loading');
+      renderSatelliteControls();
       return;
     }
     if (satelliteStatusState === 'error') {
       setContextStatusElement('satellite-status', tr(satelliteLayer ? 'context.refreshFailed' : 'context.unavailable'), 'error');
+      renderSatelliteControls();
       return;
     }
     var frameFreshness = StormScopeContextLayers.freshness(
       satelliteLatestTime, StormScopeContextLayers.providers.satellite.staleMs
     );
     setContextStatusElement('satellite-status', tr('context.satelliteStatus', {
-      freshness: tr('context.' + frameFreshness.state), time: contextTimestamp(satelliteLatestTime)
+      freshness: tr('context.' + frameFreshness.state), time: contextTimestamp(satelliteLatestTime),
+      current: localNumber(satelliteFrameIndex + 1), total: localNumber(satelliteFrames.length)
     }), frameFreshness.state);
+    renderSatelliteControls();
+  }
+
+  function renderSatelliteControls() {
+    var controls = document.getElementById('satellite-loop-controls');
+    if (!controls) return;
+    var hasFrames = satelliteFrames.length > 0;
+    controls.classList.toggle('hidden', satelliteStatusState === 'off');
+    var index = hasFrames ? Math.max(0, Math.min(satelliteFrames.length - 1, satelliteFrameIndex)) : 0;
+    var loading = satelliteStatusState === 'loading';
+    var previous = document.getElementById('satellite-prev');
+    var next = document.getElementById('satellite-next');
+    var scrubber = document.getElementById('satellite-scrubber');
+    var play = document.getElementById('satellite-play');
+    previous.disabled = !hasFrames || loading;
+    next.disabled = !hasFrames || loading;
+    scrubber.disabled = !hasFrames || loading;
+    play.disabled = !hasFrames || loading || satelliteFrames.length < 2 || lowDataMode;
+    scrubber.max = String(Math.max(0, satelliteFrames.length - 1));
+    scrubber.value = String(index);
+    scrubber.setAttribute('aria-valuetext', hasFrames
+      ? tr('context.satelliteFramePosition', { current: localNumber(index + 1), total: localNumber(satelliteFrames.length) })
+      : tr('weather.unknown'));
+    document.getElementById('satellite-frame-position').textContent = tr('context.satelliteFramePosition', {
+      current: hasFrames ? localNumber(index + 1) : '0', total: localNumber(satelliteFrames.length)
+    });
+    document.getElementById('satellite-frame-time').textContent = hasFrames
+      ? contextTimestamp(satelliteFrames[index]) : tr('weather.unknown');
+    previous.title = tr('context.satellitePrevious');
+    previous.setAttribute('aria-label', tr('context.satellitePrevious'));
+    next.title = tr('context.satelliteNext');
+    next.setAttribute('aria-label', tr('context.satelliteNext'));
+    play.title = tr(satellitePlaying ? 'context.satellitePause' : 'context.satellitePlay');
+    play.setAttribute('aria-label', tr(satellitePlaying ? 'context.satellitePause' : 'context.satellitePlay'));
+    play.setAttribute('aria-pressed', String(satellitePlaying));
+    document.getElementById('satellite-play-label').textContent = tr(satellitePlaying
+      ? 'context.satellitePause' : 'context.satellitePlay');
   }
 
   function scheduleSatelliteRefresh() {
@@ -905,65 +958,195 @@
     satelliteRefreshTimer = setTimeout(refreshSatellite, StormScopeContextLayers.providers.satellite.refreshMs);
   }
 
-  async function refreshSatellite() {
-    if (!document.getElementById('toggle-satellite').checked || document.hidden) return;
+  function satelliteFrameKey(time) {
+    return String(Math.round(Number(time)));
+  }
+
+  function nearestSatelliteFrameIndex(times, target) {
+    if (!times.length || !Number.isFinite(Number(target))) return Math.max(0, times.length - 1);
+    var nearest = 0;
+    var distance = Infinity;
+    times.forEach(function (time, index) {
+      var nextDistance = Math.abs(Number(time) - Number(target));
+      if (nextDistance < distance) {
+        distance = nextDistance;
+        nearest = index;
+      }
+    });
+    return nearest;
+  }
+
+  function satelliteRequestCountAllowed(count) {
+    if (satelliteRequestBudget.consume(count)) return true;
+    throw new Error(tr('context.satelliteRequestBudget'));
+  }
+
+  function ensureSatelliteAttribution() {
+    if (satelliteAttributionAdded) return;
+    var provider = StormScopeContextLayers.providers.satellite;
+    map.attributionControl.addAttribution('<a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>');
+    satelliteAttributionAdded = true;
+  }
+
+  async function loadSatelliteFrame(index, signal, generation) {
+    var frameTime = satelliteFrames[index];
+    if (!Number.isFinite(Number(frameTime))) throw new Error('NOAA GOES frame is invalid');
+    var key = satelliteFrameKey(frameTime);
+    var cached = satelliteFrameCache[key];
+    if (cached) {
+      if (signal.aborted || generation !== satelliteGeneration) throw new DOMException('Aborted', 'AbortError');
+      if (satelliteLayer && satelliteLayer !== cached) map.removeLayer(satelliteLayer);
+      satelliteLayer = cached;
+      cached.addTo(map);
+      satelliteLatestTime = frameTime;
+      satelliteStatusState = 'ready';
+      ensureSatelliteAttribution();
+      renderSatelliteStatus();
+      return;
+    }
+    var bounds = map.getBounds();
+    var requests = StormScopeContextLayers.buildGoesExportRequests({
+      west: bounds.getWest(), south: bounds.getSouth(), east: bounds.getEast(), north: bounds.getNorth()
+    }, frameTime, map.getSize());
+    satelliteRequestCountAllowed(requests.length);
+    var overlays = requests.map(function (request) {
+      return L.imageOverlay(request.url, request.bounds, {
+        opacity: 0.55, pane: 'satellitePane', crossOrigin: 'anonymous', interactive: false
+      });
+    });
+    var nextLayer = L.layerGroup(overlays);
+    var loadPromise = Promise.all(overlays.map(function (overlay) {
+      return new Promise(function (resolve, reject) {
+        overlay.once('load', resolve);
+        overlay.once('error', function () { reject(new Error('NOAA GOES image failed')); });
+      });
+    }));
+    nextLayer.addTo(map);
+    try {
+      await loadPromise;
+      if (signal.aborted || generation !== satelliteGeneration) throw new DOMException('Aborted', 'AbortError');
+      satelliteFrameCache[key] = nextLayer;
+      if (satelliteLayer && satelliteLayer !== nextLayer) map.removeLayer(satelliteLayer);
+      satelliteLayer = nextLayer;
+      satelliteLatestTime = frameTime;
+      satelliteStatusState = 'ready';
+      ensureSatelliteAttribution();
+      renderSatelliteStatus();
+    } catch (error) {
+      if (map.hasLayer(nextLayer)) map.removeLayer(nextLayer);
+      throw error;
+    }
+  }
+
+  function beginSatelliteOperation() {
     if (satelliteAbort) satelliteAbort.abort();
     satelliteAbort = new AbortController();
-    var signal = satelliteAbort.signal;
-    var pendingOverlays = [];
+    satelliteGeneration += 1;
+    return { signal: satelliteAbort.signal, generation: satelliteGeneration };
+  }
+
+  async function refreshSatellite() {
+    if (!document.getElementById('toggle-satellite').checked || document.hidden) return;
+    var previousTime = satelliteFrames[satelliteFrameIndex];
+    var operation = beginSatelliteOperation();
     satelliteStatusState = 'loading';
     renderSatelliteStatus();
     try {
+      satelliteRequestCountAllowed(1);
       var provider = StormScopeContextLayers.providers.satellite;
-      var metadataResponse = await fetch(provider.imageServerUrl + '?f=pjson', { cache: 'no-store', signal: signal });
+      var metadataResponse = await fetch(provider.imageServerUrl + '?f=pjson', { cache: 'no-store', signal: operation.signal });
       if (!metadataResponse.ok) throw new Error('HTTP ' + metadataResponse.status);
       var metadata = StormScopeContextLayers.parseGoesMetadata(await metadataResponse.json());
-      var bounds = map.getBounds();
-      var requests = StormScopeContextLayers.buildGoesExportRequests({
-        west: bounds.getWest(), south: bounds.getSouth(), east: bounds.getEast(), north: bounds.getNorth()
-      }, metadata.latestTime, map.getSize());
-      var overlays = requests.map(function (request) {
-        return L.imageOverlay(request.url, request.bounds, {
-          opacity: 0.55, pane: 'satellitePane', crossOrigin: 'anonymous', interactive: false
-        });
-      });
-      pendingOverlays = overlays;
-      var nextLayer = L.layerGroup(overlays);
-      await Promise.all(overlays.map(function (overlay) {
-        return new Promise(function (resolve, reject) {
-          overlay.once('load', resolve);
-          overlay.once('error', function () { reject(new Error('NOAA GOES image failed')); });
-          overlay.addTo(map);
-        });
-      }));
-      if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
-      if (satelliteLayer) map.removeLayer(satelliteLayer);
-      satelliteLayer = nextLayer;
-      nextLayer.addTo(map);
-      pendingOverlays = [];
-      satelliteLatestTime = metadata.latestTime;
-      satelliteStatusState = 'ready';
-      if (!satelliteAttributionAdded) {
-        map.attributionControl.addAttribution('<a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>');
-        satelliteAttributionAdded = true;
-      }
-      renderSatelliteStatus();
+      if (operation.signal.aborted || operation.generation !== satelliteGeneration) throw new DOMException('Aborted', 'AbortError');
+      satelliteFrames = metadata.frameTimes.slice();
+      satelliteFrameIndex = nearestSatelliteFrameIndex(satelliteFrames, previousTime == null ? metadata.latestTime : previousTime);
+      satelliteFrameCache = Object.create(null);
+      renderSatelliteControls();
+      await loadSatelliteFrame(satelliteFrameIndex, operation.signal, operation.generation);
     } catch (error) {
-      pendingOverlays.forEach(function (overlay) { if (map.hasLayer(overlay)) map.removeLayer(overlay); });
       if (error.name === 'AbortError') return;
       satelliteStatusState = 'error';
       renderSatelliteStatus();
     } finally {
-      scheduleSatelliteRefresh();
+      if (operation.generation === satelliteGeneration) scheduleSatelliteRefresh();
     }
   }
 
+  function requestSatelliteFrame(index) {
+    if (!satelliteFrames.length || !document.getElementById('toggle-satellite').checked || document.hidden) {
+      return Promise.resolve(false);
+    }
+    satelliteFrameIndex = Math.max(0, Math.min(satelliteFrames.length - 1, Number(index) || 0));
+    var operation = beginSatelliteOperation();
+    satelliteStatusState = 'loading';
+    renderSatelliteStatus();
+    return loadSatelliteFrame(satelliteFrameIndex, operation.signal, operation.generation).then(function () {
+      return true;
+    }).catch(function (error) {
+      if (error.name === 'AbortError') return false;
+      if (operation.generation === satelliteGeneration) {
+        satelliteStatusState = 'error';
+        renderSatelliteStatus();
+      }
+      throw error;
+    }).finally(function () {
+      if (operation.generation === satelliteGeneration) scheduleSatelliteRefresh();
+    });
+  }
+
+  function scheduleSatelliteFrameRequest(index) {
+    clearTimeout(satelliteFrameRequestTimer);
+    satelliteFrameRequestTimer = setTimeout(function () {
+      satelliteFrameRequestTimer = null;
+      requestSatelliteFrame(index).catch(function () { /* status already rendered */ });
+    }, 220);
+  }
+
+  function stepSatellite(delta) {
+    if (!satelliteFrames.length) return Promise.resolve(false);
+    return requestSatelliteFrame((satelliteFrameIndex + delta + satelliteFrames.length) % satelliteFrames.length);
+  }
+
+  function scheduleSatelliteAnimation() {
+    clearTimeout(satelliteAnimationTimer);
+    satelliteAnimationTimer = null;
+    if (!satellitePlaying) return;
+    satelliteAnimationTimer = setTimeout(function () {
+      satelliteAnimationTimer = null;
+      stepSatellite(1).then(function () {
+        if (satellitePlaying) scheduleSatelliteAnimation();
+      }).catch(function () {
+        if (satellitePlaying) setSatellitePlaying(false);
+      });
+    }, SATELLITE_ANIMATION_SPEED);
+  }
+
+  function setSatellitePlaying(playing) {
+    satellitePlaying = Boolean(playing && satelliteFrames.length > 1 && !lowDataMode &&
+      document.getElementById('toggle-satellite') && document.getElementById('toggle-satellite').checked);
+    clearTimeout(satelliteAnimationTimer);
+    satelliteAnimationTimer = null;
+    if (satellitePlaying) scheduleSatelliteAnimation();
+    renderSatelliteControls();
+    syncWakeLockMonitoring();
+  }
+
   function disableSatellite() {
+    satelliteGeneration += 1;
     if (satelliteAbort) satelliteAbort.abort();
+    setSatellitePlaying(false);
     clearTimeout(satelliteRefreshTimer);
     clearTimeout(satelliteMoveTimer);
+    clearTimeout(satelliteFrameRequestTimer);
+    satelliteRefreshTimer = null;
+    satelliteMoveTimer = null;
+    satelliteFrameRequestTimer = null;
     if (satelliteLayer) map.removeLayer(satelliteLayer);
     satelliteLayer = null;
+    satelliteFrameCache = Object.create(null);
+    satelliteFrames = [];
+    satelliteFrameIndex = 0;
+    satelliteLatestTime = null;
     if (satelliteAttributionAdded) {
       var provider = StormScopeContextLayers.providers.satellite;
       map.attributionControl.removeAttribution('<a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>');
@@ -2840,7 +3023,7 @@
 
   function monitoringSessionActive() {
     var monitorModal = document.getElementById('monitor-modal');
-    return Boolean(radarPlaying || activeCamera || mapComparison && mapComparison.isOpen() ||
+    return Boolean(radarPlaying || satellitePlaying || activeCamera || mapComparison && mapComparison.isOpen() ||
       monitorModal && !monitorModal.classList.contains('hidden'));
   }
 
@@ -4271,7 +4454,9 @@
 
   function pauseOperationalWorkForComparison() {
     comparisonRadarWasPlaying = radarPlaying;
+    satelliteWasPlaying = satellitePlaying;
     setRadarPlaying(false);
+    setSatellitePlaying(false);
     clearInterval(radarRefreshTimer);
     radarRefreshTimer = null;
     operationalControllers.suspend();
@@ -4282,7 +4467,9 @@
     startRadarRefreshTimer();
     initRadar().then(function () {
       if (comparisonRadarWasPlaying && radarVisible && radarFrames.length) setRadarPlaying(true);
+      if (satelliteWasPlaying && satelliteFrames.length && !lowDataMode) setSatellitePlaying(true);
       comparisonRadarWasPlaying = false;
+      satelliteWasPlaying = false;
     });
     operationalControllers.refreshEnabled();
   }
@@ -5466,7 +5653,8 @@
       },
       satellite: {
         refresh: refreshSatellite, disable: disableSatellite,
-        aborts: function () { return satelliteAbort; }, timers: function () { return [satelliteRefreshTimer, satelliteMoveTimer]; }
+        aborts: function () { return satelliteAbort; },
+        timers: function () { return [satelliteRefreshTimer, satelliteMoveTimer, satelliteAnimationTimer, satelliteFrameRequestTimer]; }
       },
       tropical: {
         refresh: refreshTropical, disable: disableTropical,
@@ -5712,6 +5900,27 @@
       try { localStorage.setItem('stormscope-radar-speed', String(radarAnimationSpeed)); } catch (error) { /* optional */ }
       setRadarPlaying(wasPlaying && radarAnimationSpeed > 0);
       if (radarFrames.length) updateRadarTimeDisplay();
+    });
+    document.getElementById('satellite-prev').addEventListener('click', function () {
+      setSatellitePlaying(false);
+      clearTimeout(satelliteFrameRequestTimer);
+      satelliteFrameRequestTimer = null;
+      stepSatellite(-1).catch(function () { /* status already rendered */ });
+    });
+    document.getElementById('satellite-next').addEventListener('click', function () {
+      setSatellitePlaying(false);
+      clearTimeout(satelliteFrameRequestTimer);
+      satelliteFrameRequestTimer = null;
+      stepSatellite(1).catch(function () { /* status already rendered */ });
+    });
+    document.getElementById('satellite-play').addEventListener('click', function () {
+      setSatellitePlaying(!satellitePlaying);
+    });
+    document.getElementById('satellite-scrubber').addEventListener('input', function () {
+      setSatellitePlaying(false);
+      satelliteFrameIndex = Math.max(0, Math.min(satelliteFrames.length - 1, parseInt(this.value, 10) || 0));
+      renderSatelliteControls();
+      if (satelliteFrames.length) scheduleSatelliteFrameRequest(satelliteFrameIndex);
     });
     document.getElementById('data-mode').addEventListener('change', function () {
       applyDataMode(this.value, true);
@@ -6185,7 +6394,9 @@
       if (mapComparison) mapComparison.setDocumentHidden(document.hidden);
       if (document.hidden) {
         radarWasPlaying = radarPlaying;
+        satelliteWasPlaying = satellitePlaying;
         setRadarPlaying(false);
+        setSatellitePlaying(false);
         if (activeCamera) {
           destroyActiveFeed(container);
           var paused = document.createElement('div');
@@ -6203,7 +6414,9 @@
       startRadarRefreshTimer();
       initRadar().then(function () {
         if ((radarWasPlaying || comparisonRadarWasPlaying) && radarVisible && radarFrames.length) setRadarPlaying(true);
+        if (satelliteWasPlaying && satelliteFrames.length && !lowDataMode) setSatellitePlaying(true);
         radarWasPlaying = false;
+        satelliteWasPlaying = false;
         comparisonRadarWasPlaying = false;
       });
       if (feedPausedForVisibility && activeCamera) {
@@ -6223,6 +6436,7 @@
       clearInterval(radarRefreshTimer);
       clearTimeout(radarPreloadTimer);
       setRadarPlaying(false);
+      setSatellitePlaying(false);
       if (radarAbort) radarAbort.abort();
       if (weatherAbort) weatherAbort.abort();
       if (summaryWildfireAbort) summaryWildfireAbort.abort();
@@ -6504,6 +6718,14 @@
         tropicalZ: map.getPane('tropicalPane').style.zIndex,
         warningZ: map.getPane('overlayPane').style.zIndex || '400',
         cameraZ: map.getPane('markerPane').style.zIndex || '600'
+      };
+    },
+    getSatelliteState: function () {
+      return {
+        enabled: Boolean(satelliteLayer), status: satelliteStatusState,
+        frameCount: satelliteFrames.length, frameIndex: satelliteFrameIndex,
+        playing: satellitePlaying, latestTime: satelliteLatestTime,
+        lowData: lowDataMode, requestBudget: satelliteRequestBudget.snapshot()
       };
     },
     getSpcReportsState: function () {

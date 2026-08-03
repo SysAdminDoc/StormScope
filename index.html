@@ -293,7 +293,21 @@
     <div class="context-statuses">
       <div class="wpc-status-row"><i class="wpc-outlook-swatch" aria-hidden="true"></i><span id="wpc-outlook-status" role="status" aria-live="polite">WPC outlooks off</span><span class="context-source-links"><a href="https://www.wpc.ncep.noaa.gov/qpf/excessive_rainfall_outlook_ero.php" target="_blank" rel="noopener noreferrer">WPC ERO</a><a href="https://www.wpc.ncep.noaa.gov/nationalfloodoutlook/" target="_blank" rel="noopener noreferrer">Flood</a></span><p class="context-limitation">Planning guidance only—not a warning or an all-clear.</p></div>
       <div class="gauge-status-row"><i class="usgs-gauge-swatch" aria-hidden="true"></i><span id="usgs-gauge-status" role="status" aria-live="polite">USGS gauges off</span><a href="https://dashboard.waterdata.usgs.gov/app/nwd/en/" target="_blank" rel="noopener noreferrer">USGS</a><p class="context-limitation">Gauges appear only when an authoritative flood threshold is available.</p></div>
-      <div><i class="satellite-swatch" aria-hidden="true"></i><span id="satellite-status" role="status" aria-live="polite">Satellite off</span><a href="https://www.nesdis.noaa.gov/imagery/interactive-maps" target="_blank" rel="noopener noreferrer">NOAA</a></div>
+      <div class="satellite-status-row"><i class="satellite-swatch" aria-hidden="true"></i><span id="satellite-status" role="status" aria-live="polite">Satellite off</span><a href="https://www.nesdis.noaa.gov/imagery/interactive-maps" target="_blank" rel="noopener noreferrer">NOAA</a></div>
+      <div id="satellite-loop-controls" class="satellite-loop-controls hidden" data-layer-id="satellite">
+        <div class="satellite-loop-toolbar" role="toolbar" aria-label="GOES satellite frame controls" data-i18n-aria-label-key="context.satelliteControls">
+          <button id="satellite-prev" class="satellite-btn" type="button">‹</button>
+          <button id="satellite-play" class="satellite-btn satellite-btn-primary" type="button" aria-pressed="false"><span id="satellite-play-label">Play</span></button>
+          <button id="satellite-next" class="satellite-btn" type="button">›</button>
+          <span id="satellite-frame-time" class="satellite-frame-time">Unknown</span>
+        </div>
+        <label class="satellite-scrubber-row" for="satellite-scrubber">
+          <input id="satellite-scrubber" type="range" min="0" max="0" value="0" disabled aria-describedby="satellite-status satellite-frame-position">
+          <span class="satellite-range-label" data-i18n="radar.earlier">Earlier</span>
+          <span id="satellite-frame-position">Frame 0 of 0</span>
+          <span class="satellite-range-label satellite-range-label-latest" data-i18n="radar.latest">Latest</span>
+        </label>
+      </div>
       <div class="tropical-status-row"><i class="tropical-swatch" aria-hidden="true"></i><span id="tropical-status" role="status" aria-live="polite">Tropical cyclones off</span><a href="https://www.nhc.noaa.gov/" target="_blank" rel="noopener noreferrer">NOAA NHC</a><ul id="tropical-storm-list" class="tropical-storm-list" aria-label="Active NHC tropical cyclones"></ul></div>
       <div><i class="lightning-swatch" aria-hidden="true"></i><span id="lightning-status" role="status" aria-live="polite">Lightning off</span><a href="https://nowcoast.noaa.gov/" target="_blank" rel="noopener noreferrer">NOAA</a></div>
       <div><i class="wildfire-swatch" aria-hidden="true"></i><span id="wildfire-status" role="status" aria-live="polite">Wildfires off</span><a href="https://www.arcgis.com/home/item.html?id=d1c32af3212341869b3c810f1a215824" target="_blank" rel="noopener noreferrer">NIFC</a></div>

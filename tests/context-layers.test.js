@@ -7,6 +7,7 @@ const context = require('../js/context-layers.js');
 test('GOES metadata and export requests are time and viewport bounded', () => {
   const metadata = context.parseGoesMetadata({ timeInfo: { timeExtent: [1000, 2000] } });
   assert.equal(metadata.latestTime, 2000);
+  assert.deepEqual(metadata.frameTimes, [1000, 2000]);
   const requests = context.buildGoesExportRequests(
     { west: -125, south: 25, east: -66, north: 50 }, metadata.latestTime, { width: 1400, height: 1000 }
   );
@@ -21,6 +22,16 @@ test('GOES metadata and export requests are time and viewport bounded', () => {
     { west: 170, south: -20, east: 190, north: 20 }, 2000, { width: 600, height: 400 }
   ).length, 2);
   assert.throws(() => context.parseGoesMetadata({}), /frame time/);
+});
+
+test('GOES frame enumeration is evenly sampled and capped', () => {
+  const oneDay = 24 * 60 * 60 * 1000;
+  const times = context.buildGoesFrameTimes(0, oneDay, { maxFrames: 12, minFrameIntervalMs: 10 * 60 * 1000 });
+  assert.equal(times.length, 12);
+  assert.equal(times[0], 0);
+  assert.equal(times.at(-1), oneDay);
+  assert.ok(times.every((time, index) => index === 0 || time > times[index - 1]));
+  assert.throws(() => context.buildGoesFrameTimes(2000, 1000), /invalid/);
 });
 
 test('official context providers are keyless, attributed, and off by default', () => {

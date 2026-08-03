@@ -10,10 +10,13 @@
   var LIGHTNING_WMS = 'https://nowcoast.noaa.gov/geoserver/observations/lightning_detection/ows';
   var WILDFIRE_LAYER = 'https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0';
   var GOES_IMAGE_SERVER = 'https://satellitemaps.nesdis.noaa.gov/arcgis/rest/services/MERGEDGC_Last_24hr/ImageServer';
+  var GOES_MAX_FRAMES = 12;
+  var GOES_MIN_FRAME_INTERVAL_MS = 10 * 60 * 1000;
   var providers = Object.freeze({
     satellite: Object.freeze({
       id: 'satellite', label: 'NOAA NESDIS merged GOES GeoColor', defaultVisible: false,
       imageServerUrl: GOES_IMAGE_SERVER, refreshMs: 10 * 60 * 1000, staleMs: 35 * 60 * 1000,
+      maxFrames: GOES_MAX_FRAMES, minFrameIntervalMs: GOES_MIN_FRAME_INTERVAL_MS,
       coverage: '76.5°S–76.5°N, merged GOES East and West',
       attribution: Object.freeze({ text: 'NOAA NESDIS GeoColor', url: 'https://www.nesdis.noaa.gov/imagery/interactive-maps' })
     }),
@@ -52,6 +55,28 @@
     return { latestTime: times[times.length - 1], frameCount: times.length, times: times };
   }
 
+  function buildGoesFrameTimes(startTime, endTime, options) {
+    var start = Number(startTime);
+    var end = Number(endTime);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start > end) {
+      throw new TypeError('GOES time extent is invalid');
+    }
+    if (start === end) return [end];
+    options = options || {};
+    var maxFrames = Number.isInteger(options.maxFrames) && options.maxFrames >= 2
+      ? Math.min(24, options.maxFrames) : GOES_MAX_FRAMES;
+    var minimumInterval = Number.isFinite(Number(options.minFrameIntervalMs)) && Number(options.minFrameIntervalMs) > 0
+      ? Number(options.minFrameIntervalMs) : GOES_MIN_FRAME_INTERVAL_MS;
+    var frameCount = Math.max(2, Math.min(maxFrames, Math.floor((end - start) / minimumInterval) + 1));
+    var step = (end - start) / (frameCount - 1);
+    var times = [];
+    for (var index = 0; index < frameCount; index += 1) {
+      times.push(Math.round(start + step * index));
+    }
+    times[times.length - 1] = end;
+    return times.filter(function (time, index) { return index === 0 || time > times[index - 1]; });
+  }
+
   function normalizeLongitude(value) {
     var longitude = Number(value);
     while (longitude < -180) longitude += 360;
@@ -61,10 +86,18 @@
 
   function parseGoesMetadata(payload) {
     var extent = payload && payload.timeInfo && payload.timeInfo.timeExtent;
-    if (!Array.isArray(extent) || !Number.isFinite(Number(extent[1]))) {
+    if (!Array.isArray(extent) || !Number.isFinite(Number(extent[0])) || !Number.isFinite(Number(extent[1]))) {
       throw new TypeError('NOAA GOES metadata has no latest frame time');
     }
-    return { latestTime: Number(extent[1]), coverage: providers.satellite.coverage };
+    var frameTimes = buildGoesFrameTimes(extent[0], extent[1], {
+      maxFrames: providers.satellite.maxFrames,
+      minFrameIntervalMs: providers.satellite.minFrameIntervalMs
+    });
+    return {
+      earliestTime: Number(extent[0]), latestTime: Number(extent[1]),
+      frameCount: frameTimes.length, frameTimes: frameTimes,
+      coverage: providers.satellite.coverage
+    };
   }
 
   function goesRequest(west, south, east, north, latestTime, viewport) {
@@ -212,6 +245,7 @@
   return Object.freeze({
     providers: providers,
     parseGoesMetadata: parseGoesMetadata,
+    buildGoesFrameTimes: buildGoesFrameTimes,
     buildGoesExportRequests: buildGoesExportRequests,
     parseLightningCapabilities: parseLightningCapabilities,
     buildWildfireQueries: buildWildfireQueries,

@@ -299,12 +299,14 @@ async function addNetworkFixtures(page, metrics, options) {
       return;
     }
     if (url.startsWith('https://satellitemaps.nesdis.noaa.gov/arcgis/rest/services/MERGEDGC_Last_24hr/ImageServer/exportImage')) {
+      metrics.satelliteExports = (metrics.satelliteExports || 0) + 1;
       await route.fulfill({ contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: pixel });
       return;
     }
     if (url.startsWith('https://satellitemaps.nesdis.noaa.gov/arcgis/rest/services/MERGEDGC_Last_24hr/ImageServer')) {
+      metrics.satelliteMetadataRequests = (metrics.satelliteMetadataRequests || 0) + 1;
       await route.fulfill({ contentType: 'application/json', body: JSON.stringify({
-        timeInfo: { timeExtent: [Date.now() - 3600000, Date.now() - 600000] }
+        timeInfo: { timeExtent: [Date.now() - 3600000, Date.now()] }
       }) });
       return;
     }
@@ -712,7 +714,7 @@ async function main() {
       if (text.startsWith('Failed to load resource') && source && !source.startsWith(baseURL)) return;
       errors.push(text);
     });
-    const networkMetrics = { rainViewerRequests: 0 };
+    const networkMetrics = { rainViewerRequests: 0, satelliteExports: 0, satelliteMetadataRequests: 0 };
     await addNetworkFixtures(page, networkMetrics);
     await waitForApp(page);
 
@@ -1016,6 +1018,34 @@ async function main() {
     await page.locator('#toggle-wpc-outlooks').check();
     await page.locator('#toggle-usgs-gauges').check();
     await page.locator('#satellite-status').filter({ hasText: 'GOES GeoColor' }).waitFor({ state: 'visible' });
+    const satelliteLoopState = await page.evaluate(() => window._stormscope.getSatelliteState());
+    assert.equal(satelliteLoopState.status, 'ready');
+    assert.equal(satelliteLoopState.frameCount, 7);
+    assert.equal(satelliteLoopState.frameIndex, satelliteLoopState.frameCount - 1);
+    assert.equal(await page.locator('#satellite-scrubber').getAttribute('max'), '6');
+    await assertControlsReachable(page, '#satellite-loop-controls', ['#satellite-prev', '#satellite-play', '#satellite-next', '#satellite-scrubber']);
+    const satelliteExportsAfterInitial = networkMetrics.satelliteExports;
+    const satelliteInitialIndex = satelliteLoopState.frameIndex;
+    const satelliteNextIndex = (satelliteInitialIndex + 1) % satelliteLoopState.frameCount;
+    await page.locator('#satellite-next').click();
+    await page.waitForFunction((index) => {
+      const state = window._stormscope.getSatelliteState();
+      return state.status === 'ready' && state.frameIndex === index;
+    }, satelliteNextIndex);
+    assert.equal(networkMetrics.satelliteExports, satelliteExportsAfterInitial + 1);
+    const satelliteExportsAfterNext = networkMetrics.satelliteExports;
+    await page.locator('#satellite-prev').click();
+    await page.waitForFunction((index) => {
+      const state = window._stormscope.getSatelliteState();
+      return state.status === 'ready' && state.frameIndex === index;
+    }, satelliteInitialIndex);
+    assert.equal(networkMetrics.satelliteExports, satelliteExportsAfterNext, 'cached satellite frames must not re-request exports');
+    await page.locator('#satellite-play').click();
+    await page.waitForFunction(() => window._stormscope.getSatelliteState().playing === true);
+    await page.waitForFunction((index) => window._stormscope.getSatelliteState().frameIndex !== index, satelliteInitialIndex);
+    await page.locator('#satellite-play').click();
+    assert.equal((await page.evaluate(() => window._stormscope.getSatelliteState())).playing, false);
+    assert.ok((await page.evaluate(() => window._stormscope.getSatelliteState())).requestBudget.used <= 30);
     await page.locator('#lightning-status').filter({ hasText: '15 min density' }).waitFor({ state: 'visible' });
     await page.locator('#wildfire-status').filter({ hasText: '2 wildfire perimeters' }).waitFor({ state: 'visible' });
     await page.locator('#tropical-status').filter({ hasText: '1 active tropical cyclones' }).waitFor({ state: 'visible' });
