@@ -31,7 +31,9 @@
     { id: 'usgsGauges', bit: 9, legacyRequired: false },
     { id: 'earthquakes', bit: 10, legacyRequired: false },
     { id: 'convective', bit: 11, legacyRequired: false },
-    { id: 'watches', bit: 12, legacyRequired: false }
+    { id: 'watches', bit: 12, legacyRequired: false },
+    { id: 'mesoscale', bit: 13, legacyRequired: false },
+    { id: 'stormReports', bit: 14, legacyRequired: false }
   ];
   (function assertLayerBitCoverage() {
     var keys = registry.sceneKeys();
@@ -54,6 +56,7 @@
   var SEVERITIES = ['all', 'minor', 'moderate', 'severe', 'extreme'];
   var EARTHQUAKE_MAGNITUDES = ['significant', '4.5', '2.5', '1.0', 'all'];
   var EARTHQUAKE_PERIODS = ['hour', 'day', 'week', 'month'];
+  var STORM_REPORT_WINDOWS = [24, 48, 72];
   var SOURCES = ['', 'angelcam', 'dot', 'earthcam', 'faa', 'hazcams', 'ipcamlive', 'livebeaches',
     'mwra', 'noaa', 'nps', 'nrao', 'rtspme', 'smithsonian', 'state_park', 'university', 'usgs', 'youtube'];
   var FEED_TYPES = ['', 'image', 'hls', 'mjpeg', 'embed', 'youtube'];
@@ -113,6 +116,10 @@
     if (!Number.isInteger(convectiveDay)) throw new TypeError('convective day is invalid');
     var earthquake = source.earthquake == null ? { magnitude: '2.5', period: 'day' }
       : objectValue(source.earthquake, 'scene earthquake');
+    var stormReportWindow = source.stormReportWindow == null ? 24 : Number(source.stormReportWindow);
+    if (STORM_REPORT_WINDOWS.indexOf(stormReportWindow) === -1) {
+      throw new TypeError('storm report window is invalid');
+    }
     return {
       map: {
         lat: Math.round(finite(map.lat, 'latitude', -90, 90) * 100000) / 100000,
@@ -138,6 +145,7 @@
       activeCameraId: activeCameraId,
       outlookDay: outlookDay,
       convectiveDay: convectiveDay,
+      stormReportWindow: stormReportWindow,
       earthquake: {
         magnitude: choice(earthquake.magnitude, EARTHQUAKE_MAGNITUDES, 'earthquake magnitude'),
         period: choice(earthquake.period, EARTHQUAKE_PERIODS, 'earthquake period')
@@ -160,6 +168,7 @@
       c: scene.activeCameraId,
       o: scene.outlookDay,
       d: scene.convectiveDay,
+      s: STORM_REPORT_WINDOWS.indexOf(scene.stormReportWindow),
       e: [EARTHQUAKE_MAGNITUDES.indexOf(scene.earthquake.magnitude), EARTHQUAKE_PERIODS.indexOf(scene.earthquake.period)]
     };
   }
@@ -179,7 +188,8 @@
         FEED_TYPES[source.f[3]] == null || !Number.isInteger(source.f[4]) || !SORTS[source.f[4]] ||
         (source.f[5] !== 0 && source.f[5] !== 1) || (source.e != null && (!Array.isArray(source.e) || source.e.length !== 2 ||
           !Number.isInteger(source.e[0]) || EARTHQUAKE_MAGNITUDES[source.e[0]] == null ||
-          !Number.isInteger(source.e[1]) || EARTHQUAKE_PERIODS[source.e[1]] == null))) {
+          !Number.isInteger(source.e[1]) || EARTHQUAKE_PERIODS[source.e[1]] == null)) ||
+        (source.s != null && (!Number.isInteger(source.s) || STORM_REPORT_WINDOWS[source.s] == null))) {
       throw new TypeError('scene payload enum is invalid');
     }
     return normalizeScene({
@@ -194,6 +204,7 @@
       activeCameraId: source.c,
       outlookDay: source.o == null ? 1 : source.o,
       convectiveDay: source.d == null ? 1 : source.d,
+      stormReportWindow: source.s == null ? 24 : STORM_REPORT_WINDOWS[source.s],
       earthquake: source.e == null ? { magnitude: '2.5', period: 'day' } : {
         magnitude: EARTHQUAKE_MAGNITUDES[source.e[0]], period: EARTHQUAKE_PERIODS[source.e[1]]
       }

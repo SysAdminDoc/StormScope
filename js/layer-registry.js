@@ -81,6 +81,19 @@
     {
       id: 'watches', toggleId: 'toggle-watches', defaultEnabled: false, lifecycleId: 'watches',
       labelKey: 'layers.watches', groupId: 'warnings', groupLabelKey: 'layers.groupWarnings'
+    },
+    {
+      id: 'mesoscale', toggleId: 'toggle-mesoscale', defaultEnabled: false, lifecycleId: 'mesoscale',
+      labelKey: 'layers.mesoscale', groupId: 'warnings', groupLabelKey: 'layers.groupWarnings'
+    },
+    {
+      id: 'stormReports', toggleId: 'toggle-storm-reports', defaultEnabled: false, lifecycleId: 'storm-reports',
+      labelKey: 'layers.stormReports', groupId: 'hazards', groupLabelKey: 'layers.groupHazards',
+      controls: [{
+        key: 'window', controlId: 'storm-report-window', type: 'choice', choices: ['24', '48', '72'],
+        scenePath: 'stormReportWindow', profilePath: 'stormReportWindow', defaultValue: '24',
+        labelKey: 'layers.stormReportWindow'
+      }]
     }
   ];
 

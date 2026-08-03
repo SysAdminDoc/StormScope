@@ -10,11 +10,11 @@ const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 
 const EXPECTED_IDS = [
   'radar', 'cameras', 'coverage', 'alerts', 'lightning', 'wildfires', 'satellite', 'tropical',
-  'wpcOutlooks', 'usgsGauges', 'earthquakes', 'convective', 'watches'
+  'wpcOutlooks', 'usgsGauges', 'earthquakes', 'convective', 'watches', 'mesoscale', 'stormReports'
 ];
 const EXPECTED_LIFECYCLES = [
   'alerts', 'lightning', 'wildfires', 'satellite', 'tropical', 'wpc-outlooks', 'usgs-gauges',
-  'earthquakes', 'convective', 'watches'
+  'earthquakes', 'convective', 'watches', 'mesoscale', 'storm-reports'
 ];
 
 function fakeDocument() {
@@ -72,6 +72,7 @@ test('registry captures and applies layer controls for scene and workflow state'
   documentObject.elements['toggle-earthquakes'].checked = true;
   documentObject.elements['wpc-outlook-day'].value = '3';
   documentObject.elements['convective-day'].value = '2';
+  documentObject.elements['storm-report-window'].value = '48';
   documentObject.elements['earthquake-magnitude'].value = '4.5';
   documentObject.elements['earthquake-period'].value = 'week';
 
@@ -79,7 +80,7 @@ test('registry captures and applies layer controls for scene and workflow state'
   const expected = {
     outlookDay: 3,
     earthquake: { magnitude: '4.5', period: 'week' },
-    convectiveDay: 2
+    convectiveDay: 2, stormReportWindow: '48'
   };
   assert.deepEqual(registry.captureControlState(documentObject, 'scene'), expected);
   assert.deepEqual(registry.captureControlState(documentObject, 'profile'), expected);
@@ -87,12 +88,13 @@ test('registry captures and applies layer controls for scene and workflow state'
   registry.applyControlState(documentObject, {
     outlookDay: 1,
     earthquake: { magnitude: 'significant', period: 'month' },
-    convectiveDay: 3
+    convectiveDay: 3, stormReportWindow: '24'
   }, 'profile');
   assert.equal(documentObject.elements['wpc-outlook-day'].value, '1');
   assert.equal(documentObject.elements['earthquake-magnitude'].value, 'significant');
   assert.equal(documentObject.elements['earthquake-period'].value, 'month');
   assert.equal(documentObject.elements['convective-day'].value, '3');
+  assert.equal(documentObject.elements['storm-report-window'].value, '24');
   assert.throws(() => registry.applyControlState(documentObject, { convectiveDay: 4 }, 'scene'), /value is invalid/);
 });
 

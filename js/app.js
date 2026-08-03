@@ -181,6 +181,24 @@
   var watchCount = 0;
   var watchStatusState = 'off';
   var watchAttributionAdded = false;
+  var mesoscaleLayer = null;
+  var mesoscaleAbort = null;
+  var mesoscaleGeneration = 0;
+  var mesoscaleRefreshTimer = null;
+  var mesoscaleLatestAt = null;
+  var mesoscaleCount = 0;
+  var mesoscaleStatusState = 'off';
+  var mesoscaleAttributionAdded = false;
+  var stormReportLayer = null;
+  var stormReportAbort = null;
+  var stormReportGeneration = 0;
+  var stormReportRefreshTimer = null;
+  var stormReportMoveTimer = null;
+  var stormReportWindow = 24;
+  var stormReportLatestAt = null;
+  var stormReportCount = 0;
+  var stormReportStatusState = 'off';
+  var stormReportAttributionAdded = false;
   var summaryWildfireStatus = 'idle';
   var summaryWildfireCount = 0;
   var summaryWildfireUpdatedAt = null;
@@ -195,19 +213,19 @@
   var WORKFLOW_PRESETS = Object.freeze({
     severe: {
       center: { lat: 39.5, lon: -98.5 }, zoom: 5,
-      layers: { radar: true, cameras: true, coverage: true, alerts: true, satellite: false, lightning: true, wildfires: false, tropical: true, wpcOutlooks: true, usgsGauges: false, earthquakes: false, convective: false, watches: false },
+      layers: { radar: true, cameras: true, coverage: true, alerts: true, satellite: false, lightning: true, wildfires: false, tropical: true, wpcOutlooks: true, usgsGauges: false, earthquakes: false, convective: false, watches: false, mesoscale: false, stormReports: false },
       opacity: { radar: 0.7 }, radar: { palette: 'colorblind', speed: 800 }, alertSeverity: 'severe',
       cameraFilters: { query: '', state: '', source: '', type: '', sort: 'distance', healthy: true, favorites: false }, dataMode: 'auto', outlookDay: 1
     },
     wildfire: {
       center: { lat: 39, lon: -112 }, zoom: 5,
-      layers: { radar: false, cameras: true, coverage: false, alerts: true, satellite: true, lightning: false, wildfires: true, tropical: false, wpcOutlooks: false, usgsGauges: false, earthquakes: false, convective: false, watches: false },
+      layers: { radar: false, cameras: true, coverage: false, alerts: true, satellite: true, lightning: false, wildfires: true, tropical: false, wpcOutlooks: false, usgsGauges: false, earthquakes: false, convective: false, watches: false, mesoscale: false, stormReports: false },
       opacity: { radar: 0.55 }, radar: { palette: 'standard', speed: 0 }, alertSeverity: 'moderate',
       cameraFilters: { query: '', state: '', source: '', type: '', sort: 'distance', healthy: true, favorites: false }, dataMode: 'auto', outlookDay: 1
     },
     travel: {
       center: { lat: 38.5, lon: -96 }, zoom: 5,
-      layers: { radar: true, cameras: true, coverage: false, alerts: true, satellite: false, lightning: false, wildfires: false, tropical: false, wpcOutlooks: false, usgsGauges: false, earthquakes: false, convective: false, watches: false },
+      layers: { radar: true, cameras: true, coverage: false, alerts: true, satellite: false, lightning: false, wildfires: false, tropical: false, wpcOutlooks: false, usgsGauges: false, earthquakes: false, convective: false, watches: false, mesoscale: false, stormReports: false },
       opacity: { radar: 0.55 }, radar: { palette: 'colorblind', speed: 0 }, alertSeverity: 'moderate',
       cameraFilters: { query: '', state: '', source: '', type: '', sort: 'distance', healthy: true, favorites: false }, dataMode: 'auto', outlookDay: 1
     }
@@ -2431,6 +2449,292 @@
     renderWatchStatus();
   }
 
+  // ── SPC mesoscale discussions and NWS local storm reports ──
+
+  function freshnessLabel(value, staleMs) {
+    var freshness = StormScopeSpcReports.freshness(value, staleMs);
+    return freshness.state === 'stale' ? tr('context.stale')
+      : freshness.state === 'fresh' ? tr('context.fresh') : tr('weather.unknown');
+  }
+
+  function renderMesoscaleStatus() {
+    if (mesoscaleStatusState === 'off') {
+      setContextStatusElement('mesoscale-status', tr('context.mesoscaleOff'), 'off');
+      return;
+    }
+    if (mesoscaleStatusState === 'loading') {
+      setContextStatusElement('mesoscale-status', tr('context.loading'), 'loading');
+      return;
+    }
+    if (mesoscaleStatusState === 'error') {
+      setContextStatusElement('mesoscale-status', tr(mesoscaleLayer ? 'context.refreshFailed' : 'context.unavailable'), 'error');
+      return;
+    }
+    var provider = StormScopeSpcReports.providers.mesoscale;
+    setContextStatusElement('mesoscale-status', tr('context.mesoscaleStatus', {
+      count: localNumber(mesoscaleCount), freshness: freshnessLabel(mesoscaleLatestAt, provider.staleMs),
+      time: mesoscaleLatestAt ? contextTimestamp(mesoscaleLatestAt) : tr('weather.unknown')
+    }), 'ready');
+  }
+
+  function mesoscalePopup(feature) {
+    var properties = feature.properties || {};
+    var container = document.createElement('div');
+    container.className = 'context-popup';
+    var title = document.createElement('strong');
+    title.textContent = tr('context.mesoscaleFeature', { number: properties.discussionNumber || tr('weather.unknown') });
+    container.appendChild(title);
+    if (properties.issuedAt) {
+      var issued = document.createElement('span');
+      issued.textContent = tr('context.mesoscaleIssued', { time: contextTimestamp(properties.issuedAt) });
+      container.appendChild(issued);
+    }
+    if (properties.discussionInfo) {
+      var info = document.createElement('span');
+      info.textContent = tr('context.mesoscaleInfo', { info: properties.discussionInfo });
+      container.appendChild(info);
+    }
+    var guidance = document.createElement('span');
+    guidance.textContent = tr('context.mesoscaleGuidance');
+    container.appendChild(guidance);
+    var link = document.createElement('a');
+    link.href = safeExternalUrl(properties.officialUrl);
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = tr('context.mesoscaleSource');
+    container.appendChild(link);
+    return container;
+  }
+
+  function scheduleMesoscaleRefresh() {
+    clearTimeout(mesoscaleRefreshTimer);
+    mesoscaleRefreshTimer = null;
+    if (!document.getElementById('toggle-mesoscale').checked) return;
+    mesoscaleRefreshTimer = setTimeout(refreshMesoscale, StormScopeSpcReports.providers.mesoscale.refreshMs);
+  }
+
+  function contextQueryBounds() {
+    var bounds = map.getBounds();
+    return { west: bounds.getWest(), south: bounds.getSouth(), east: bounds.getEast(), north: bounds.getNorth() };
+  }
+
+  async function refreshMesoscale() {
+    if (!document.getElementById('toggle-mesoscale').checked || document.hidden) return;
+    if (mesoscaleAbort) mesoscaleAbort.abort();
+    mesoscaleAbort = new AbortController();
+    var generation = ++mesoscaleGeneration;
+    var signal = mesoscaleAbort.signal;
+    mesoscaleStatusState = 'loading';
+    renderMesoscaleStatus();
+    try {
+      var result = await StormScopeSpcReports.fetchAllPages(function (url, options) {
+        return fetch(url, options);
+      }, 'mesoscale', null, contextQueryBounds(), signal);
+      if (generation !== mesoscaleGeneration) return;
+      var nextLayer = L.geoJSON(result.collection, {
+        pane: 'contextVectorPane',
+        style: function () { return StormScopeSpcReports.mesoscaleStyle(); },
+        onEachFeature: function (feature, layer) {
+          layer.bindPopup(function () { return mesoscalePopup(feature); }, { autoPan: false, maxWidth: 390, maxHeight: 420 });
+        }
+      }).addTo(map);
+      if (mesoscaleLayer) map.removeLayer(mesoscaleLayer);
+      mesoscaleLayer = nextLayer;
+      if (!mesoscaleAttributionAdded) {
+        var provider = StormScopeSpcReports.providers.mesoscale;
+        map.attributionControl.addAttribution('<a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>');
+        mesoscaleAttributionAdded = true;
+      }
+      mesoscaleLatestAt = result.latestAt || Date.now();
+      mesoscaleCount = result.collection.features.length;
+      mesoscaleStatusState = 'ready';
+      renderMesoscaleStatus();
+    } catch (error) {
+      if (error.name === 'AbortError') return;
+      if (generation !== mesoscaleGeneration) return;
+      mesoscaleStatusState = 'error';
+      renderMesoscaleStatus();
+    } finally {
+      if (generation === mesoscaleGeneration) scheduleMesoscaleRefresh();
+    }
+  }
+
+  function disableMesoscale() {
+    mesoscaleGeneration += 1;
+    if (mesoscaleAbort) mesoscaleAbort.abort();
+    clearTimeout(mesoscaleRefreshTimer);
+    mesoscaleRefreshTimer = null;
+    if (mesoscaleLayer) map.removeLayer(mesoscaleLayer);
+    mesoscaleLayer = null;
+    if (mesoscaleAttributionAdded) {
+      var provider = StormScopeSpcReports.providers.mesoscale;
+      map.attributionControl.removeAttribution('<a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>');
+      mesoscaleAttributionAdded = false;
+    }
+    mesoscaleLatestAt = null;
+    mesoscaleCount = 0;
+    mesoscaleStatusState = 'off';
+    renderMesoscaleStatus();
+  }
+
+  function renderStormReportStatus() {
+    if (stormReportStatusState === 'off') {
+      setContextStatusElement('storm-report-status', tr('context.stormReportsOff'), 'off');
+      return;
+    }
+    if (stormReportStatusState === 'loading') {
+      setContextStatusElement('storm-report-status', tr('context.loading'), 'loading');
+      return;
+    }
+    if (stormReportStatusState === 'error') {
+      setContextStatusElement('storm-report-status', tr(stormReportLayer ? 'context.refreshFailed' : 'context.unavailable'), 'error');
+      return;
+    }
+    var provider = StormScopeSpcReports.providers.reports;
+    setContextStatusElement('storm-report-status', tr('context.stormReportsStatus', {
+      count: localNumber(stormReportCount), window: localNumber(stormReportWindow),
+      freshness: freshnessLabel(stormReportLatestAt, provider.staleMs),
+      time: stormReportLatestAt ? contextTimestamp(stormReportLatestAt) : tr('weather.unknown')
+    }), 'ready');
+  }
+
+  function stormReportPopup(feature) {
+    var properties = feature.properties || {};
+    var container = document.createElement('div');
+    container.className = 'context-popup';
+    var title = document.createElement('strong');
+    title.textContent = tr('context.stormReportFeature', { type: properties.reportType || tr('weather.unknown') });
+    container.appendChild(title);
+    if (properties.location || properties.state) {
+      var location = document.createElement('span');
+      location.textContent = tr('context.stormReportLocation', {
+        location: [properties.location, properties.state].filter(Boolean).join(', ')
+      });
+      container.appendChild(location);
+    }
+    if (properties.magnitude) {
+      var magnitude = document.createElement('span');
+      magnitude.textContent = tr('context.stormReportMagnitude', {
+        magnitude: properties.magnitude, unit: properties.units || ''
+      }).trim();
+      container.appendChild(magnitude);
+    }
+    if (properties.reportedAt) {
+      var reported = document.createElement('span');
+      reported.textContent = tr('context.stormReportReported', { time: contextTimestamp(properties.reportedAt) });
+      container.appendChild(reported);
+    }
+    if (properties.sourceLabel) {
+      var source = document.createElement('span');
+      source.textContent = tr('context.stormReportSource', { source: properties.sourceLabel });
+      container.appendChild(source);
+    }
+    if (properties.remarks) {
+      var remarks = document.createElement('span');
+      remarks.textContent = tr('context.stormReportRemarks', { remarks: properties.remarks });
+      container.appendChild(remarks);
+    }
+    var link = document.createElement('a');
+    link.href = safeExternalUrl(properties.officialUrl);
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = tr('context.stormReportOfficial');
+    container.appendChild(link);
+    return container;
+  }
+
+  function createStormReportCluster() {
+    return L.markerClusterGroup({
+      maxClusterRadius: 44,
+      spiderfyOnMaxZoom: true,
+      showCoverageOnHover: false,
+      disableClusteringAtZoom: 11,
+      iconCreateFunction: function (cluster) {
+        var count = cluster.getChildCount();
+        return L.divIcon({
+          html: '<div aria-label="' + count + ' local storm reports"><span>' + count + '</span></div>',
+          className: 'storm-report-cluster', iconSize: L.point(34, 34)
+        });
+      }
+    });
+  }
+
+  function scheduleStormReportRefresh() {
+    clearTimeout(stormReportRefreshTimer);
+    stormReportRefreshTimer = null;
+    if (!document.getElementById('toggle-storm-reports').checked) return;
+    stormReportRefreshTimer = setTimeout(refreshStormReports, StormScopeSpcReports.providers.reports.refreshMs);
+  }
+
+  async function refreshStormReports() {
+    if (!document.getElementById('toggle-storm-reports').checked || document.hidden) return;
+    if (stormReportAbort) stormReportAbort.abort();
+    stormReportAbort = new AbortController();
+    var generation = ++stormReportGeneration;
+    var signal = stormReportAbort.signal;
+    stormReportStatusState = 'loading';
+    renderStormReportStatus();
+    try {
+      var result = await StormScopeSpcReports.fetchAllPages(function (url, options) {
+        return fetch(url, options);
+      }, 'reports', stormReportWindow, contextQueryBounds(), signal);
+      if (generation !== stormReportGeneration) return;
+      var nextLayer = createStormReportCluster();
+      var points = L.geoJSON(result.collection, {
+        pointToLayer: function (feature, latlng) {
+          var style = StormScopeSpcReports.reportStyle(feature.properties.reportType);
+          return L.marker(latlng, {
+            pane: 'contextVectorPane',
+            icon: L.divIcon({ html: '<span aria-hidden="true"></span>', className: style.className, iconSize: L.point(14, 14), iconAnchor: L.point(7, 7) })
+          });
+        },
+        onEachFeature: function (feature, layer) {
+          layer.bindPopup(function () { return stormReportPopup(feature); }, { autoPan: false, maxWidth: 360, maxHeight: 420 });
+        }
+      });
+      points.eachLayer(function (layer) { nextLayer.addLayer(layer); });
+      nextLayer.addTo(map);
+      if (stormReportLayer) map.removeLayer(stormReportLayer);
+      stormReportLayer = nextLayer;
+      if (!stormReportAttributionAdded) {
+        var provider = StormScopeSpcReports.providers.reports;
+        map.attributionControl.addAttribution('<a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>');
+        stormReportAttributionAdded = true;
+      }
+      stormReportLatestAt = result.latestAt || Date.now();
+      stormReportCount = result.collection.features.length;
+      stormReportStatusState = 'ready';
+      renderStormReportStatus();
+    } catch (error) {
+      if (error.name === 'AbortError') return;
+      if (generation !== stormReportGeneration) return;
+      stormReportStatusState = 'error';
+      renderStormReportStatus();
+    } finally {
+      if (generation === stormReportGeneration) scheduleStormReportRefresh();
+    }
+  }
+
+  function disableStormReports() {
+    stormReportGeneration += 1;
+    if (stormReportAbort) stormReportAbort.abort();
+    clearTimeout(stormReportRefreshTimer);
+    clearTimeout(stormReportMoveTimer);
+    stormReportRefreshTimer = null;
+    stormReportMoveTimer = null;
+    if (stormReportLayer) map.removeLayer(stormReportLayer);
+    stormReportLayer = null;
+    if (stormReportAttributionAdded) {
+      var provider = StormScopeSpcReports.providers.reports;
+      map.attributionControl.removeAttribution('<a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>');
+      stormReportAttributionAdded = false;
+    }
+    stormReportLatestAt = null;
+    stormReportCount = 0;
+    stormReportStatusState = 'off';
+    renderStormReportStatus();
+  }
+
   function centerTileCoordinate(zoom) {
     var center = map.getCenter();
     var scale = Math.pow(2, zoom);
@@ -3178,6 +3482,7 @@
       opacity: { radar: scene.radar.opacity },
       outlookDay: scene.outlookDay,
       convectiveDay: scene.convectiveDay,
+      stormReportWindow: scene.stormReportWindow,
       earthquake: scene.earthquake
     });
     radarPalette = scene.radar.palette;
@@ -3259,6 +3564,7 @@
     StormScopeLayerRegistry.applyControlState(document, snapshot, 'profile');
     wpcOutlookDay = Number(document.getElementById('wpc-outlook-day').value);
     convectiveDay = Number(document.getElementById('convective-day').value);
+    stormReportWindow = Number(document.getElementById('storm-report-window').value);
     map.setView([snapshot.center.lat, snapshot.center.lon], snapshot.zoom, { animate: false });
     var layers = snapshot.layers || {};
     var layerBindings = operationalLayerRuntimeBindings();
@@ -5187,6 +5493,16 @@
       watches: {
         refresh: refreshSevereWatches, disable: disableSevereWatches,
         aborts: function () { return watchAbort; }, timers: function () { return watchRefreshTimer; }
+      },
+      mesoscale: {
+        refresh: refreshMesoscale, disable: disableMesoscale,
+        aborts: function () { return mesoscaleAbort; }, timers: function () { return mesoscaleRefreshTimer; }
+      },
+      stormReports: {
+        refresh: refreshStormReports, disable: disableStormReports,
+        aborts: function () { return stormReportAbort; },
+        timers: function () { return [stormReportRefreshTimer, stormReportMoveTimer]; },
+        onControl: function (_control, value) { stormReportWindow = Number(value); }
       }
     };
   }
@@ -5372,6 +5688,8 @@
       renderTropicalStatus();
       renderWpcStatus();
       renderGaugeStatus();
+      renderMesoscaleStatus();
+      renderStormReportStatus();
       if (activeCamera) {
         updateModalCameraHealth(activeCamera);
         fetchWeather(activeCamera.lat, activeCamera.lon, activeCamera);
@@ -5611,6 +5929,10 @@
       if (document.getElementById('toggle-usgs-gauges').checked) {
         clearTimeout(usgsGaugeMoveTimer);
         usgsGaugeMoveTimer = setTimeout(refreshUsgsGauges, 900);
+      }
+      if (document.getElementById('toggle-storm-reports').checked) {
+        clearTimeout(stormReportMoveTimer);
+        stormReportMoveTimer = setTimeout(refreshStormReports, 900);
       }
       if (document.getElementById('camera-sort').value === 'distance') scheduleSearchRender();
       scheduleLastViewSave();
@@ -6184,6 +6506,15 @@
         cameraZ: map.getPane('markerPane').style.zIndex || '600'
       };
     },
+    getSpcReportsState: function () {
+      return {
+        mesoscale: Boolean(mesoscaleLayer), mesoscaleStatus: mesoscaleStatusState, mesoscaleCount: mesoscaleCount,
+        stormReports: Boolean(stormReportLayer), stormReportsStatus: stormReportStatusState,
+        stormReportCount: stormReportCount, stormReportWindow: stormReportWindow
+      };
+    },
+    refreshMesoscale: refreshMesoscale,
+    refreshStormReports: refreshStormReports,
     refreshTropical: refreshTropical,
     refreshWpcOutlooks: refreshWpcOutlooks,
     refreshUsgsGauges: refreshUsgsGauges

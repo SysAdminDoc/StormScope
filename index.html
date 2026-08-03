@@ -133,6 +133,10 @@
       <input type="checkbox" id="toggle-watches">
       <span>Severe &amp; Tornado Watches</span>
     </label>
+    <label class="toggle-row" data-layer-id="mesoscale">
+      <input type="checkbox" id="toggle-mesoscale">
+      <span>SPC Mesoscale Discussions</span>
+    </label>
     <h4 class="panel-subhead" data-layer-section="outlooks">Storm outlooks</h4>
     <label class="toggle-row" data-layer-id="convective">
       <input type="checkbox" id="toggle-convective">
@@ -167,6 +171,18 @@
       <input type="checkbox" id="toggle-wildfires">
       <span>Current Wildfire Perimeters</span>
     </label>
+    <label class="toggle-row" data-layer-id="stormReports">
+      <input type="checkbox" id="toggle-storm-reports">
+      <span>NWS Local Storm Reports</span>
+    </label>
+    <div class="select-row context-layer-option" data-layer-id="stormReports">
+      <label for="storm-report-window">Local report window</label>
+      <select id="storm-report-window">
+        <option value="24">Past 24 hours</option>
+        <option value="48">Past 48 hours</option>
+        <option value="72">Past 72 hours</option>
+      </select>
+    </div>
     <label class="toggle-row" data-layer-id="usgsGauges">
       <input type="checkbox" id="toggle-usgs-gauges">
       <span>USGS Flood Gauges</span>
@@ -284,6 +300,8 @@
       <div><i class="earthquake-swatch" aria-hidden="true"></i><span id="earthquake-status" role="status" aria-live="polite">Earthquakes off</span><a href="https://earthquake.usgs.gov/earthquakes/map/" target="_blank" rel="noopener noreferrer">USGS</a></div>
       <div><i class="convective-swatch" aria-hidden="true"></i><span id="convective-status" role="status" aria-live="polite">Convective outlooks off</span><a href="https://www.spc.noaa.gov/products/outlook/" target="_blank" rel="noopener noreferrer">SPC</a><p class="context-limitation">Severe-storm risk guidance—not a warning.</p></div>
       <div><i class="watch-swatch" aria-hidden="true"></i><span id="watch-status" role="status" aria-live="polite">Watches off</span><a href="https://www.spc.noaa.gov/products/watch/" target="_blank" rel="noopener noreferrer">SPC</a></div>
+      <div><i class="mesoscale-swatch" aria-hidden="true"></i><span id="mesoscale-status" role="status" aria-live="polite">Mesoscale discussions off</span><a href="https://www.spc.noaa.gov/products/md/" target="_blank" rel="noopener noreferrer">SPC</a><p class="context-limitation">Short-fuse guidance—not a warning.</p></div>
+      <div><i class="storm-report-swatch" aria-hidden="true"></i><span id="storm-report-status" role="status" aria-live="polite">Local storm reports off</span><a href="https://www.weather.gov/gis/" target="_blank" rel="noopener noreferrer">NWS</a><p class="context-limitation">Reports are observational and may be unverified.</p></div>
     </div>
     <section class="local-overlays-panel" aria-labelledby="local-overlays-heading">
       <div class="local-overlays-heading-row">
@@ -564,6 +582,7 @@
   <script src="js/flood-outlooks.js"></script>
   <script src="js/convective-outlooks.js"></script>
   <script src="js/severe-watches.js"></script>
+  <script src="js/spc-reports.js"></script>
   <script src="js/geocode.js"></script>
   <script src="js/local-overlays.js"></script>
   <script src="js/earthquakes.js"></script>

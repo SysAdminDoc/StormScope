@@ -90,7 +90,7 @@ async function exerciseLayerNavigation(page, options) {
   const groupQuery = options.locale === 'es' ? 'Contexto de peligros' : 'Hazard context';
 
   await query.fill(groupQuery);
-  assert.match(await count.textContent(), /\b4\b/);
+   assert.match(await count.textContent(), /\b5\b/);
   assert.equal(await page.locator('[data-layer-id="lightning"]').first().isVisible(), true);
   assert.equal(await page.locator('[data-layer-id="earthquakes"]').first().isVisible(), true);
   assert.equal(await page.locator('[data-layer-id="radar"]').first().isVisible(), false);
@@ -356,6 +356,32 @@ async function addNetworkFixtures(page, metrics, options) {
             properties: { objectid: 1, prod_type: 'Tornado Watch', issuance: Date.now() - 1800000, expiration: future, url: 'https://www.spc.noaa.gov/products/watch/ww0042.html' } },
           { type: 'Feature', geometry: { type: 'Polygon', coordinates: [[[-95, 37], [-91, 37], [-91, 41], [-95, 41], [-95, 37]]] },
             properties: { objectid: 2, prod_type: 'Severe Thunderstorm Watch', expiration: future, url: 'http://insecure.example/x' } }
+        ] })
+      });
+      return;
+    }
+    if (url.startsWith('https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/spc_mesoscale_discussion/MapServer/0/query')) {
+      await route.fulfill({
+        contentType: 'application/geo+json', headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ type: 'FeatureCollection', exceededTransferLimit: false, features: [
+          { type: 'Feature', geometry: { type: 'Polygon', coordinates: [[[-101, 36], [-96, 36], [-96, 41], [-101, 41], [-101, 36]]] },
+            properties: { objectid: 1, name: 'MD 1234', folderpath: 'Severe weather potential',
+              popupinfo: 'https://www.spc.noaa.gov/products/md/md1234.html', idp_filedate: Date.now() - 900000 } }
+        ] })
+      });
+      return;
+    }
+    if (url.startsWith('https://mapservices.weather.noaa.gov/vector/rest/services/obs/nws_local_storm_reports/MapServer/') && url.includes('/query')) {
+      await route.fulfill({
+        contentType: 'application/geo+json', headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ type: 'FeatureCollection', exceededTransferLimit: false, features: [
+          { type: 'Feature', geometry: { type: 'Point', coordinates: [-98, 39] },
+            properties: { objectid: 1, wfo_id: 'TOP', wfo: 'Topeka', descript: 'Hail', loc_desc: 'Fixtureville', state: 'KS',
+              magnitude: '1.25', units: 'inch', remarks: '<img src=x onerror=window.__lsrInjected=true>',
+              lsr_validtime: Date.now() - 600000 } },
+          { type: 'Feature', geometry: { type: 'Point', coordinates: [-97, 38] },
+            properties: { objectid: 2, wfo_id: 'OUN', wfo: 'Norman', descript: 'Thunderstorm Wind', loc_desc: 'Testburg', state: 'OK',
+              magnitude: '60', units: 'mph', lsr_validtime: Date.now() - 1200000 } }
         ] })
       });
       return;
@@ -1089,6 +1115,63 @@ async function main() {
     await page.locator('#toggle-watches').uncheck();
     assert.equal((await page.evaluate(() => window._stormscope.getContextState())).watches, false);
 
+    // SPC mesoscale discussions: polygon guidance is distinct from watches and warnings.
+    await page.locator('#toggle-mesoscale').check();
+    await page.locator('#mesoscale-status').filter({ hasText: '1 mesoscale discussions' }).waitFor({ state: 'visible' });
+    const mesoscaleState = await page.evaluate(() => window._stormscope.getSpcReportsState());
+    assert.equal(mesoscaleState.mesoscale, true);
+    assert.equal(mesoscaleState.mesoscaleStatus, 'ready');
+    assert.equal(mesoscaleState.mesoscaleCount, 1);
+    const mesoscalePopupOpened = await page.evaluate(() => {
+      let opened = false;
+      window._stormscope.getMap().eachLayer(layer => {
+        if (opened || !layer.feature || layer.feature.properties.discussionNumber !== 'MD 1234') return;
+        layer.openPopup();
+        opened = true;
+      });
+      return opened;
+    });
+    assert.equal(mesoscalePopupOpened, true);
+    await page.locator('.leaflet-popup-content').filter({ hasText: 'MD 1234' }).waitFor({ state: 'visible' });
+    assert.equal(await page.locator('.leaflet-popup-content a').getAttribute('href'), 'https://www.spc.noaa.gov/products/md/md1234.html');
+    await page.evaluate(() => window._stormscope.getMap().closePopup());
+    await page.locator('#toggle-mesoscale').uncheck();
+    assert.equal((await page.evaluate(() => window._stormscope.getSpcReportsState())).mesoscale, false);
+
+    // NWS local storm reports: bounded point queries use a selectable time window and cluster.
+    await page.locator('#toggle-storm-reports').check();
+    await page.locator('#storm-report-status').filter({ hasText: '2 local storm reports' }).waitFor({ state: 'visible' });
+    const reportState = await page.evaluate(() => window._stormscope.getSpcReportsState());
+    assert.equal(reportState.stormReports, true);
+    assert.equal(reportState.stormReportsStatus, 'ready');
+    assert.equal(reportState.stormReportCount, 2);
+    assert.equal(reportState.stormReportWindow, 24);
+    await page.locator('#storm-report-window').selectOption('48');
+    await page.waitForFunction(() => window._stormscope.getSpcReportsState().stormReportWindow === 48);
+    const reportPopupOpened = await page.evaluate(() => {
+      let opened = false;
+      window._stormscope.getMap().eachLayer(layer => {
+        if (opened || typeof layer.getLayers !== 'function') return;
+        const child = layer.getLayers().find(item => item.feature && item.feature.properties && item.feature.properties.reportType === 'Hail');
+        if (child) {
+          if (typeof layer.zoomToShowLayer === 'function') {
+            layer.zoomToShowLayer(child, () => child.openPopup());
+          } else {
+            child.openPopup();
+          }
+          opened = true;
+        }
+      });
+      return opened;
+    });
+    assert.equal(reportPopupOpened, true);
+    const reportPopup = page.locator('.leaflet-popup-content');
+    await reportPopup.filter({ hasText: 'Hail' }).waitFor({ state: 'visible' });
+    assert.match(await reportPopup.textContent(), /<img src=x onerror=window\.__lsrInjected=true>/);
+    assert.equal(await reportPopup.locator('img').count(), 0);
+    await page.locator('#toggle-storm-reports').uncheck();
+    assert.equal((await page.evaluate(() => window._stormscope.getSpcReportsState())).stormReports, false);
+
     const tropicalPopupOpened = await page.evaluate(() => {
       let opened = false;
       window._stormscope.getMap().eachLayer(layer => {
@@ -1549,7 +1632,7 @@ async function main() {
     await page.locator('#earthquake-period').selectOption('week');
     assert.deepEqual(await page.evaluate(() => window._stormscope.getLayerRegistryState().ids), [
       'radar', 'cameras', 'coverage', 'alerts', 'lightning', 'wildfires', 'satellite', 'tropical',
-      'wpcOutlooks', 'usgsGauges', 'earthquakes', 'convective', 'watches'
+      'wpcOutlooks', 'usgsGauges', 'earthquakes', 'convective', 'watches', 'mesoscale', 'stormReports'
     ]);
     await page.locator('#camera-favorites').evaluate(element => {
       element.checked = true;
@@ -1702,7 +1785,7 @@ async function main() {
     const sharedScene = {
       map: { lat: 39.75, lon: -98.25, zoom: 6 },
       layers: { radar: true, cameras: true, coverage: false, alerts: true, lightning: false, wildfires: false, satellite: false, tropical: false,
-        wpcOutlooks: false, usgsGauges: false, earthquakes: false, convective: false, watches: false },
+        wpcOutlooks: false, usgsGauges: false, earthquakes: false, convective: false, watches: false, mesoscale: false, stormReports: false },
       radar: { opacity: 0.48, palette: 'contrast', speed: 400, frameTime: sceneFixture.frameTime },
       alertSeverity: 'severe',
       cameraFilters: {

@@ -32,6 +32,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 - **NHC Tropical Cyclones** — Optional official advisory centers, forecast points/tracks/cones, and coastal watches/warnings with explicit partial/no-active states and nearby cameras
 - **WPC Flood Outlooks & Gauges** — Selected Day 1–3 excessive-rainfall and five-day significant-river outlooks remain independent; viewport gauges appear only after a USGS observation is joined to matching official NOAA NWPS flood thresholds
 - **Severe & Tornado Watches** — Optional, default-off SPC watch polygons (the area under threat, distinct from CAP warnings) from the keyless NOAA ArcGIS service; expired and non-severe watches are dropped, tornado watches sit above severe-thunderstorm watches, and popups link the official SPC watch
+- **SPC Mesoscale Discussions & Local Storm Reports** — Optional, default-off short-fuse SPC discussion polygons and clustered NWS report points with bounded 24/48/72-hour windows, freshness, safe official links, and separate guidance/observation framing
 - **SPC Convective Outlooks** — Optional, default-off Day 1–3 categorical severe-storm risk polygons (general thunderstorm through high) from the keyless NOAA SPC ArcGIS service, with official colors, issue/valid times, and DOM-only popups that distinguish risk guidance from warnings
 - **USGS Earthquakes** — Optional, default-off layer from the keyless USGS GeoJSON feeds with selectable magnitude and period, magnitude-scaled markers, and DOM-only popups showing place, magnitude, depth, time, and the official event link
 - **Private Local Overlays** — Strict bounded GeoJSON/GPX imports render with fixed safe styling, remain session-only by default, persist in IndexedDB only after Keep locally, export canonically, and never enter shared scene links or network requests
@@ -193,6 +194,7 @@ Report suspected vulnerabilities privately to [matt_parker@outlook.com](mailto:m
 
 - **Radar**: RainViewer primary with official NOAA/NWS MRMS fallback; distributors may package one strictly allowlisted RainViewer-v2-compatible primary instead. The UI identifies the active source, age, resolution, coverage, and degradation reason
 - **Hazard context**: NOAA nowCOAST 15-minute lightning density and NIFC WFIGS current wildfire perimeters, both optional and keyless
+- **Short-fuse storm context**: NOAA/NWS SPC Mesoscale Discussions plus NWS Local Storm Reports, both optional, viewport-bounded, and keyless
 - **Tropical context**: NOAA NHC forecast points, tracks, cones, and coastal watches/warnings from the official tropical weather summary ArcGIS service, optional and keyless
 - **Flood planning context**: NOAA WPC excessive-rainfall/significant-river outlooks plus strictly threshold-authorized USGS/NWPS gauge joins, optional and keyless; the UI explicitly distinguishes outlook guidance from warnings and all-clear claims
 - **Local overlays**: GeoJSON/GPX files are validated and rendered entirely on-device; they are never uploaded, linked from properties, cached by the service worker, or included in scene URLs

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Added optional SPC Mesoscale Discussion polygons and clustered NWS Local Storm Reports with bounded 24/48/72-hour queries, freshness/last-good recovery, safe official popups, scene/profile persistence, and English/Spanish UI.
+
 ## v0.123.0 - 2026-07-15
 
 - Layer profile and scene apply is now driven by the layer registry, so a new layer can no longer be silently dropped from saved views or scene links.
@@ -8,7 +12,7 @@
 - A single-camera lookup during the initial catalog load no longer inflates the generation count or forces an unnecessary full-dataset fallback.
 - NWS alert polling backs off geometrically over empty or unchanged viewports instead of re-requesting the national feed every 30 seconds.
 - Hazard and provider map popups stay within the map pane on narrow and short-height screens.
-- The camera weather panel now shows the NWS chance of precipitation and a next-12-hour high/low range, clearly labeled as forecast guidance. SW v96.
+- The camera weather panel now shows the NWS chance of precipitation and a next-12-hour high/low range, clearly labeled as forecast guidance. SW v97.
 
 ## v0.122.0 - 2026-07-14
 

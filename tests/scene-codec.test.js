@@ -9,14 +9,14 @@ function scene(overrides = {}) {
     map: { lat: 39.123456, lon: -98.654321, zoom: 7 },
     layers: {
       radar: true, cameras: true, coverage: false, alerts: true,
-      lightning: false, wildfires: true, satellite: false, tropical: true, wpcOutlooks: true, usgsGauges: false, earthquakes: false, convective: false, watches: false
+      lightning: false, wildfires: true, satellite: false, tropical: true, wpcOutlooks: true, usgsGauges: false, earthquakes: false, convective: false, watches: false, mesoscale: false, stormReports: false
     },
     radar: { opacity: 0.72, palette: 'colorblind', speed: 400, frameTime: 1783796400000 },
     alertSeverity: 'severe',
     cameraFilters: { query: 'río', state: 'New Mexico', source: 'dot', type: 'image', sort: 'distance', healthy: true },
     activeCameraId: 31415,
     outlookDay: 2,
-    convectiveDay: 3,
+    convectiveDay: 3, stormReportWindow: 48,
     earthquake: { magnitude: '4.5', period: 'week' }
   }, overrides);
 }
@@ -29,14 +29,14 @@ test('versioned scene token round-trips every documented public field', () => {
     map: { lat: 39.12346, lon: -98.65432, zoom: 7 },
     layers: {
       radar: true, cameras: true, coverage: false, alerts: true,
-      lightning: false, wildfires: true, satellite: false, tropical: true, wpcOutlooks: true, usgsGauges: false, earthquakes: false, convective: false, watches: false
+      lightning: false, wildfires: true, satellite: false, tropical: true, wpcOutlooks: true, usgsGauges: false, earthquakes: false, convective: false, watches: false, mesoscale: false, stormReports: false
     },
     radar: { opacity: 0.72, palette: 'colorblind', speed: 400, frameTime: 1783796400000 },
     alertSeverity: 'severe',
     cameraFilters: { query: 'río', state: 'New Mexico', source: 'dot', type: 'image', sort: 'distance', healthy: true },
     activeCameraId: '31415',
     outlookDay: 2,
-    convectiveDay: 3,
+    convectiveDay: 3, stormReportWindow: 48,
     earthquake: { magnitude: '4.5', period: 'week' }
   });
   assert.deepEqual(codec.fromHash('#' + codec.toHash(scene())), codec.decode(token));
@@ -59,7 +59,9 @@ test('scene layer bit positions are pinned and independent of registry order', (
     { id: 'usgsGauges', bit: 9, legacyRequired: false },
     { id: 'earthquakes', bit: 10, legacyRequired: false },
     { id: 'convective', bit: 11, legacyRequired: false },
-    { id: 'watches', bit: 12, legacyRequired: false }
+    { id: 'watches', bit: 12, legacyRequired: false },
+    { id: 'mesoscale', bit: 13, legacyRequired: false },
+    { id: 'stormReports', bit: 14, legacyRequired: false }
   ]);
 
   // Enabling exactly one layer must set exactly its pinned bit in the wire payload `l`.
@@ -98,9 +100,12 @@ test('decodes legacy scene tokens with appended layers disabled and Day 1 select
   assert.equal(decoded.layers.earthquakes, false);
   assert.equal(decoded.layers.convective, false);
   assert.equal(decoded.layers.watches, false);
+  assert.equal(decoded.layers.mesoscale, false);
+  assert.equal(decoded.layers.stormReports, false);
   assert.equal(decoded.layers.wildfires, true);
   assert.equal(decoded.outlookDay, 1);
   assert.equal(decoded.convectiveDay, 1);
+  assert.equal(decoded.stormReportWindow, 24);
   assert.deepEqual(decoded.earthquake, { magnitude: '2.5', period: 'day' });
 });
 
@@ -113,10 +118,11 @@ test('invalid, oversized, future, and old scene URLs fail closed', () => {
   assert.throws(() => codec.encode(scene({ radar: { opacity: 1, palette: 'animated', speed: 800, frameTime: null } })), /palette/);
   assert.throws(() => codec.encode(scene({ radar: { opacity: 1, palette: 'standard', speed: 123, frameTime: null } })), /speed/);
   assert.throws(() => codec.encode(scene({ convectiveDay: 4 })), /convective day/);
+  assert.throws(() => codec.encode(scene({ stormReportWindow: 36 })), /storm report window/);
   assert.throws(() => codec.encode(scene({ earthquake: { magnitude: '3.0', period: 'day' } })), /magnitude/);
   assert.throws(() => codec.encode(scene({ earthquake: { magnitude: '2.5', period: 'year' } })), /period/);
   const excessiveLayerBits = Buffer.from(JSON.stringify({
-    v: 1, m: [0, 0, 1], l: 8192, r: [50, 0, 0, null], a: 0, f: ['', '', 0, 0, 0, 0], c: null
+    v: 1, m: [0, 0, 1], l: 32768, r: [50, 0, 0, null], a: 0, f: ['', '', 0, 0, 0, 0], c: null
   }), 'utf8').toString('base64url');
   assert.throws(() => codec.decode('1.' + excessiveLayerBits), /shape/);
   assert.equal(codec.fromHash('#unrelated=value'), null);

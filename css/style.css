@@ -1451,6 +1451,41 @@ button:focus-visible {
   font-size: 12px;
 }
 
+.storm-report-cluster {
+  background: rgba(245, 158, 11, 0.24);
+  border: 1px solid rgba(245, 158, 11, 0.9);
+  border-radius: 50%;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.storm-report-cluster div {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(180, 83, 9, 0.92);
+  display: grid;
+  place-items: center;
+}
+
+.storm-report-marker {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(17, 24, 39, 0.8), 0 1px 4px rgba(0, 0, 0, 0.7);
+}
+
+.storm-report-tornado { background: #db2777; }
+.storm-report-hail { background: #7c3aed; }
+.storm-report-wind { background: #ea580c; }
+.storm-report-other { background: #0891b2; }
+
 /* --- Camera Marker --- */
 .camera-marker {
   display: flex;

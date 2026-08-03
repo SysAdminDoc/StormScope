@@ -10,6 +10,7 @@ const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'css', 'style.css'), 'utf8');
 const contextLayers = fs.readFileSync(path.join(root, 'js', 'context-layers.js'), 'utf8');
 const contextControllers = fs.readFileSync(path.join(root, 'js', 'context-layer-controllers.js'), 'utf8');
+const spcReports = fs.readFileSync(path.join(root, 'js', 'spc-reports.js'), 'utf8');
 const cameraRecordSource = fs.readFileSync(path.join(root, 'js', 'camera-record.js'), 'utf8');
 const cameraFeedSource = fs.readFileSync(path.join(root, 'js', 'camera-feed.js'), 'utf8');
 const serviceWorker = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
@@ -95,6 +96,10 @@ test('extracted lifecycle modules load before app, remain offline, and own one t
   assert.match(contextControllers, /function createControllerSet/);
   assert.match(app, /teardownResources\.forEach\(function \(resource\) \{ resource\.destroy\(\); \}\)/);
   assert.doesNotMatch(app, /function loadHLSFeed/);
+  const reportsPosition = html.indexOf('js/spc-reports.js');
+  assert.ok(reportsPosition >= 0 && appPosition > reportsPosition);
+  assert.match(serviceWorker, /\.\/js\/spc-reports\.js/);
+  assert.match(spcReports, /function fetchAllPages/);
 });
 
 test('static CSP removes inline script execution and mirrors trusted frame hosts', () => {
