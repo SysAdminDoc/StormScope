@@ -1411,6 +1411,10 @@ button:focus-visible {
   gap: 12px;
 }
 
+.weather-data-flat > .weather-section {
+  grid-column: 1 / -1;
+}
+
 .weather-section + .weather-section {
   border-top: 1px solid var(--border);
   padding-top: 12px;

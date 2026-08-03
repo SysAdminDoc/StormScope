@@ -49,6 +49,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 - **253 Provider Embed Feeds** — 20 EarthCam embed pages, 162 active NPS embed pages, 18 FAA WeatherCam pages, 17 Hazcams weather players, 6 DRBA ferry players, 4 AngelCam players, 4 direct LiveBeaches/Brownrice players, 21 first-party IPCamLive embeds, and 1 first-party RTSP.me lake feed
 - **Click-to-View** — YouTube embeds, EarthCam live snapshots, HLS video streams, and auto-refreshing image feeds in a modal viewer
 - **Observed and Forecast Weather** — US cameras pair the nearest valid NWS station observation, age, source, and distance with independently recoverable hourly forecast context; Open-Meteo provides current-condition fallback elsewhere or when both NWS branches fail
+- **Air Quality Context** — Camera weather panels show current US AQI, the primary pollutant sub-index, update time, and Open-Meteo Air Quality attribution with independent failure recovery
 - **Light and Dark Themes** — Glassmorphism UI with a matching CartoDB dark/light basemap; the Appearance control offers Match system (respects `prefers-color-scheme`), Always dark, and Always light, and the choice persists locally
 - **No API Keys** — Runs entirely client-side with free, keyless APIs
 - **Installable PWA** — Offline camera/radar fallback, visible cache/freshness state, safe cache recovery, and deterministic update activation

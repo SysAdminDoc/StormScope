@@ -10,6 +10,7 @@ const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'css', 'style.css'), 'utf8');
 const contextLayers = fs.readFileSync(path.join(root, 'js', 'context-layers.js'), 'utf8');
 const solarTerminator = fs.readFileSync(path.join(root, 'js', 'solar-terminator.js'), 'utf8');
+const weather = fs.readFileSync(path.join(root, 'js', 'weather.js'), 'utf8');
 const contextControllers = fs.readFileSync(path.join(root, 'js', 'context-layer-controllers.js'), 'utf8');
 const spcReports = fs.readFileSync(path.join(root, 'js', 'spc-reports.js'), 'utf8');
 const cameraRecordSource = fs.readFileSync(path.join(root, 'js', 'camera-record.js'), 'utf8');
@@ -363,6 +364,7 @@ test('RainViewer requests are guarded before tile and sampling fetches', () => {
 
 test('weather routing, units, freshness, and accessibility contracts are integrated', () => {
   assert.match(html, /js\/weather\.js/);
+  assert.match(html, /https:\/\/air-quality-api\.open-meteo\.com/);
   assert.match(html, /id="weather-units"/);
   assert.match(html, /id="map" role="region"/);
   assert.match(app, /StormScopeWeather\.shouldUseNws/);
@@ -370,6 +372,12 @@ test('weather routing, units, freshness, and accessibility contracts are integra
   assert.match(app, /Promise\.allSettled/);
   assert.match(app, /observations\/latest\?require_qc=true/);
   assert.match(app, /StormScopeWeather\.normalizeNwsObservation/);
+  assert.match(app, /StormScopeWeather\.buildAirQualityUrl/);
+  assert.match(app, /StormScopeWeather\.normalizeAirQuality/);
+  assert.match(app, /weather\.airQualityUnavailable/);
+  assert.match(weather, /function buildAirQualityUrl/);
+  assert.match(weather, /function normalizeAirQuality/);
+  assert.match(i18n.catalogs.en['weather.openMeteoAirQuality'], /Open-Meteo Air Quality/);
   assert.match(app, /weather\.openMeteoFallback/);
   assert.equal(i18n.catalogs.en['weather.openMeteoFallback'], 'Open-Meteo fallback');
   assert.equal(i18n.catalogs.en['weather.forecastIssued'], 'Forecast issued');

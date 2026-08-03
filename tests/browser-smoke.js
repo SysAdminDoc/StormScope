@@ -639,6 +639,20 @@ async function addNetworkFixtures(page, metrics, options) {
       });
       return;
     }
+    if (url.startsWith('https://air-quality-api.open-meteo.com/')) {
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ utc_offset_seconds: -18000, current: {
+          time: '2026-07-14T12:00', us_aqi: 43,
+          pm2_5: 7.5, pm10: 9.2, ozone: 66, nitrogen_dioxide: 12.3,
+          sulphur_dioxide: 1, carbon_monoxide: 123,
+          us_aqi_pm2_5: 41, us_aqi_pm10: 8, us_aqi_ozone: 43,
+          us_aqi_nitrogen_dioxide: 6, us_aqi_sulphur_dioxide: 1,
+          us_aqi_carbon_monoxide: 1
+        } })
+      });
+      return;
+    }
     if (url.startsWith('https://api.open-meteo.com/')) {
       await route.fulfill({
         contentType: 'application/json',
@@ -1507,6 +1521,9 @@ async function main() {
     assert.match(await page.locator('#weather-data').textContent(), /72°F.*Clear.*NWS hourly forecast/s);
     assert.match(await page.locator('#weather-data').textContent(), /Chance of precipitation \(forecast\)[\s\S]{0,80}20%/);
     assert.match(await page.locator('#weather-data').textContent(), /Next 12 h high \/ low \(forecast\)[\s\S]{0,80}72°F \/ 60°F/);
+    assert.match(await page.locator('#weather-data').textContent(), /US AQI[\s\S]{0,120}43 \• Good/);
+    assert.match(await page.locator('#weather-data').textContent(), /Primary pollutant[\s\S]{0,120}Ozone \• 66 μg\/m³ \(AQI 43\)/);
+    assert.match(await page.locator('#weather-data').textContent(), /Open-Meteo Air Quality/);
     const modalImage = page.locator('#modal-feed img');
     await modalImage.waitFor({ state: 'visible' });
     await modalImage.dispatchEvent('load');
@@ -1539,6 +1556,14 @@ async function main() {
     await page.getByRole('button', { name: 'Close camera viewer' }).click();
     await page.locator('#camera-modal').waitFor({ state: 'hidden' });
     assert.equal(await page.locator('#modal-feed video, #modal-feed iframe, #modal-feed img').count(), 0);
+
+    const failedAirQualityFixture = route => route.fulfill({ status: 503, body: 'air quality unavailable' });
+    await page.route('https://air-quality-api.open-meteo.com/**', failedAirQualityFixture);
+    await visibleResults.nth(observedCamera.observedIndex).locator('.camera-result-open').click();
+    await page.getByText('Air quality unavailable.', { exact: true }).waitFor({ state: 'visible' });
+    assert.match(await page.locator('#weather-data').textContent(), /72°F.*NWS hourly forecast/s);
+    await page.getByRole('button', { name: 'Close camera viewer' }).click();
+    await page.unroute('https://air-quality-api.open-meteo.com/**', failedAirQualityFixture);
 
     const emptyStationsFixture = route => route.fulfill({
       status: 200, contentType: 'application/geo+json', body: JSON.stringify({ features: [] })

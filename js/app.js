@@ -4684,18 +4684,40 @@
     if (weatherAbort) weatherAbort.abort();
     weatherAbort = new AbortController();
     var signal = weatherAbort.signal;
+    var airQualityPromise = fetchAirQuality(lat, lon, signal).then(function (data) {
+      return { data: data };
+    }).catch(function (error) {
+      return error && error.name === 'AbortError' ? { aborted: true } : { error: error };
+    });
 
     if (StormScopeWeather.shouldUseNws(cam)) {
       try {
         await fetchWeatherNWS(lat, lon, cam, signal, weatherLoading, weatherData);
-        return;
       } catch (error) {
         if (error.name === 'AbortError') return;
         await fetchWeatherOpenMeteo(lat, lon, cam, signal, weatherLoading, weatherData, true);
-        return;
       }
+    } else {
+      await fetchWeatherOpenMeteo(lat, lon, cam, signal, weatherLoading, weatherData, false);
     }
-    await fetchWeatherOpenMeteo(lat, lon, cam, signal, weatherLoading, weatherData, false);
+
+    var airQualityResult = await airQualityPromise;
+    if (activeCamera !== cam || airQualityResult.aborted) return;
+    appendWeatherSection(weatherData, {
+      heading: tr('weather.airQualityHeading'),
+      items: airQualityResult.data ? airQualityItems(airQualityResult.data) : null,
+      status: airQualityResult.data ? null : tr('weather.airQualityUnavailable')
+    });
+    weatherLoading.classList.add('hidden');
+    weatherData.classList.remove('hidden');
+  }
+
+  async function fetchAirQuality(lat, lon, signal) {
+    var response = await fetch(StormScopeWeather.buildAirQualityUrl(lat, lon), { signal: signal });
+    if (!response.ok) throw new Error('Open-Meteo Air Quality failed');
+    var data = StormScopeWeather.normalizeAirQuality(await response.json());
+    if (!data) throw new Error('No current air quality data');
+    return data;
   }
 
   async function fetchWeatherNWS(lat, lon, cam, signal, weatherLoading, weatherData) {
@@ -4814,6 +4836,25 @@
     ];
   }
 
+  function airQualityItems(airQuality) {
+    var primary = airQuality.primaryPollutant;
+    var primaryValue = primary
+      ? tr('weather.aqiPrimaryValue', {
+        pollutant: tr('weather.aqi.pollutant.' + primary.id),
+        concentration: primary.concentration === null
+          ? tr('weather.notAvailable') : localNumber(primary.concentration) + ' μg/m³',
+        aqi: primary.aqi === null ? tr('weather.notAvailable') : localNumber(primary.aqi)
+      })
+      : tr('weather.notAvailable');
+    return [
+      [tr('weather.aqi'), localNumber(airQuality.usAqi) + ' • ' + tr('weather.aqi.category.' + airQuality.category)],
+      [tr('weather.aqiPrimary'), primaryValue],
+      [tr('weather.aqiUpdated'), StormScopeWeather.formatOpenMeteoTime(
+        airQuality.time, airQuality.utcOffsetSeconds, appLocale, tr('weather.unknown'))],
+      [tr('weather.source'), tr('weather.openMeteoAirQuality')]
+    ];
+  }
+
   async function fetchWeatherOpenMeteo(lat, lon, cam, signal, weatherLoading, weatherData, isFallback) {
     try {
       var metric = weatherUnits === 'metric';
@@ -4870,39 +4911,47 @@
     dataEl.classList.remove('hidden');
   }
 
+  function createWeatherSection(section) {
+    var container = document.createElement('section');
+    container.className = 'weather-section';
+    var heading = document.createElement('h4');
+    heading.textContent = section.heading;
+    container.appendChild(heading);
+    if (section.status) {
+      var status = document.createElement('p');
+      status.className = 'weather-section-status';
+      status.textContent = section.status;
+      container.appendChild(status);
+    } else {
+      var grid = document.createElement('div');
+      grid.className = 'weather-section-grid';
+      section.items.forEach(function (row) {
+        var item = document.createElement('div');
+        item.className = 'weather-item';
+        var label = document.createElement('span');
+        label.className = 'weather-label';
+        label.textContent = row[0];
+        var value = document.createElement('span');
+        value.className = 'weather-value';
+        value.textContent = row[1];
+        item.appendChild(label);
+        item.appendChild(value);
+        grid.appendChild(item);
+      });
+      container.appendChild(grid);
+    }
+    return container;
+  }
+
+  function appendWeatherSection(dataEl, section) {
+    dataEl.appendChild(createWeatherSection(section));
+  }
+
   function showWeatherSections(loadingEl, dataEl, sections) {
     dataEl.replaceChildren();
     dataEl.classList.remove('weather-data-flat');
     sections.forEach(function (section) {
-      var container = document.createElement('section');
-      container.className = 'weather-section';
-      var heading = document.createElement('h4');
-      heading.textContent = section.heading;
-      container.appendChild(heading);
-      if (section.status) {
-        var status = document.createElement('p');
-        status.className = 'weather-section-status';
-        status.textContent = section.status;
-        container.appendChild(status);
-      } else {
-        var grid = document.createElement('div');
-        grid.className = 'weather-section-grid';
-        section.items.forEach(function (row) {
-          var item = document.createElement('div');
-          item.className = 'weather-item';
-          var label = document.createElement('span');
-          label.className = 'weather-label';
-          label.textContent = row[0];
-          var value = document.createElement('span');
-          value.className = 'weather-value';
-          value.textContent = row[1];
-          item.appendChild(label);
-          item.appendChild(value);
-          grid.appendChild(item);
-        });
-        container.appendChild(grid);
-      }
-      dataEl.appendChild(container);
+      appendWeatherSection(dataEl, section);
     });
     loadingEl.classList.add('hidden');
     dataEl.classList.remove('hidden');

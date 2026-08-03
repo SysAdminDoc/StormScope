@@ -194,12 +194,94 @@
     return formatTime(new Date(wallClock - offset * 1000).toISOString(), locale, unknown);
   }
 
+  var AIR_QUALITY_POLLUTANTS = [
+    { id: 'pm25', valueKey: 'pm2_5', aqiKey: 'us_aqi_pm2_5' },
+    { id: 'pm10', valueKey: 'pm10', aqiKey: 'us_aqi_pm10' },
+    { id: 'ozone', valueKey: 'ozone', aqiKey: 'us_aqi_ozone' },
+    { id: 'nitrogenDioxide', valueKey: 'nitrogen_dioxide', aqiKey: 'us_aqi_nitrogen_dioxide' },
+    { id: 'sulphurDioxide', valueKey: 'sulphur_dioxide', aqiKey: 'us_aqi_sulphur_dioxide' },
+    { id: 'carbonMonoxide', valueKey: 'carbon_monoxide', aqiKey: 'us_aqi_carbon_monoxide' }
+  ];
+
+  function boundedNumber(value, minimum, maximum) {
+    if (value === null || value === undefined || value === '' || typeof value === 'boolean') return null;
+    var number = Number(value);
+    return Number.isFinite(number) && number >= minimum && number <= maximum ? number : null;
+  }
+
+  function airQualityCoordinate(value, minimum, maximum) {
+    var number = Number(value);
+    if (!Number.isFinite(number) || number < minimum || number > maximum) {
+      throw new RangeError('Air quality coordinates are out of bounds');
+    }
+    return number.toFixed(4);
+  }
+
+  function buildAirQualityUrl(lat, lon) {
+    var current = AIR_QUALITY_POLLUTANTS.map(function (pollutant) {
+      return pollutant.valueKey;
+    }).concat(AIR_QUALITY_POLLUTANTS.map(function (pollutant) {
+      return pollutant.aqiKey;
+    }));
+    return 'https://air-quality-api.open-meteo.com/v1/air-quality?latitude=' +
+      airQualityCoordinate(lat, -90, 90) + '&longitude=' + airQualityCoordinate(lon, -180, 180) +
+      '&current=us_aqi,' + current.join(',') + '&timezone=auto';
+  }
+
+  function airQualityCategory(value) {
+    var aqi = boundedNumber(value, 0, 500);
+    if (aqi === null) return null;
+    if (aqi <= 50) return 'good';
+    if (aqi <= 100) return 'moderate';
+    if (aqi <= 150) return 'unhealthySensitive';
+    if (aqi <= 200) return 'unhealthy';
+    if (aqi <= 300) return 'veryUnhealthy';
+    return 'hazardous';
+  }
+
+  function normalizeAirQuality(payload) {
+    var current = payload && payload.current;
+    var usAqi = boundedNumber(current && current.us_aqi, 0, 500);
+    if (!current || usAqi === null) return null;
+
+    var pollutants = AIR_QUALITY_POLLUTANTS.map(function (pollutant, index) {
+      var concentration = boundedNumber(current[pollutant.valueKey], 0, 100000);
+      var aqi = boundedNumber(current[pollutant.aqiKey], 0, 500);
+      if (concentration === null && aqi === null) return null;
+      return {
+        id: pollutant.id,
+        concentration: concentration,
+        aqi: aqi,
+        order: index
+      };
+    }).filter(Boolean);
+    var withSubIndex = pollutants.filter(function (pollutant) { return pollutant.aqi !== null; });
+    var ranked = (withSubIndex.length ? withSubIndex : pollutants.slice()).sort(function (left, right) {
+      var leftValue = left.aqi === null ? left.concentration : left.aqi;
+      var rightValue = right.aqi === null ? right.concentration : right.aqi;
+      return rightValue - leftValue || left.order - right.order;
+    });
+    var primary = ranked.length ? ranked[0] : null;
+    if (primary) delete primary.order;
+
+    return {
+      time: typeof current.time === 'string' ? current.time.slice(0, 64) : null,
+      utcOffsetSeconds: boundedNumber(payload.utc_offset_seconds, -86400, 86400),
+      usAqi: Math.round(usAqi),
+      category: airQualityCategory(usAqi),
+      primaryPollutant: primary
+    };
+  }
+
   return {
+    airQualityCategory: airQualityCategory,
+    buildAirQualityUrl: buildAirQualityUrl,
     distanceFromKm: distanceFromKm,
     formatTime: formatTime,
     formatOpenMeteoTime: formatOpenMeteoTime,
     inNwsCoverageBounds: inNwsCoverageBounds,
     normalizeUnits: normalizeUnits,
+    normalizeAirQuality: normalizeAirQuality,
     normalizeNwsObservation: normalizeNwsObservation,
     rankObservationStations: rankObservationStations,
     shouldUseNws: shouldUseNws,
