@@ -21,6 +21,10 @@
       labelKey: 'layers.coverage', groupId: 'base', groupLabelKey: 'layers.groupBase'
     },
     {
+      id: 'terminator', toggleId: 'toggle-terminator', defaultEnabled: false, lifecycleId: 'terminator',
+      labelKey: 'layers.terminator', groupId: 'base', groupLabelKey: 'layers.groupBase'
+    },
+    {
       id: 'alerts', toggleId: 'toggle-alerts', defaultEnabled: true, lifecycleId: 'alerts',
       labelKey: 'layers.alerts', groupId: 'warnings', groupLabelKey: 'layers.groupWarnings',
       searchKeys: ['alerts.minimum']

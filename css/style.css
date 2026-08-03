@@ -685,11 +685,12 @@ button:focus-visible {
 .satellite-scrubber-row input { width: 100%; min-width: 0; accent-color: var(--accent); grid-column: 1 / -1; }
 .satellite-range-label { color: var(--text-dim); font-size: 9px; }
 .satellite-range-label-latest { justify-self: end; }
-.satellite-swatch, .tropical-swatch, .wpc-outlook-swatch, .usgs-gauge-swatch, .lightning-swatch, .wildfire-swatch, .earthquake-swatch { width: 9px; height: 9px; border-radius: 2px; }
+.satellite-swatch, .terminator-swatch, .tropical-swatch, .wpc-outlook-swatch, .usgs-gauge-swatch, .lightning-swatch, .wildfire-swatch, .earthquake-swatch { width: 9px; height: 9px; border-radius: 2px; }
 .earthquake-swatch { border-radius: 50%; border: 2px solid #f76707; background: rgba(247, 103, 7, 0.25); }
 .convective-swatch { border: 2px solid #c9a400; background: rgba(246, 246, 127, 0.4); }
 .watch-swatch { border: 2px dashed #d6006e; background: rgba(214, 0, 110, 0.12); }
 .satellite-swatch { background: linear-gradient(135deg, #2a9d8f, #e9c46a); }
+.terminator-swatch { border: 1px solid #91a7c2; background: rgba(7, 21, 41, 0.8); }
 .tropical-swatch { position: relative; box-sizing: border-box; width: 10px; height: 10px; border: 2px dashed #f4a261; border-radius: 50%; background: transparent; }
 .tropical-swatch::after { position: absolute; inset: 2px; border-radius: 50%; background: #ff2d55; content: ''; }
 .wpc-outlook-swatch { box-sizing: border-box; border: 2px dashed #f4d35e; border-radius: 1px; transform: rotate(45deg); background: transparent; }

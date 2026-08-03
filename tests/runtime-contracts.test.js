@@ -9,6 +9,7 @@ const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'css', 'style.css'), 'utf8');
 const contextLayers = fs.readFileSync(path.join(root, 'js', 'context-layers.js'), 'utf8');
+const solarTerminator = fs.readFileSync(path.join(root, 'js', 'solar-terminator.js'), 'utf8');
 const contextControllers = fs.readFileSync(path.join(root, 'js', 'context-layer-controllers.js'), 'utf8');
 const spcReports = fs.readFileSync(path.join(root, 'js', 'spc-reports.js'), 'utf8');
 const cameraRecordSource = fs.readFileSync(path.join(root, 'js', 'camera-record.js'), 'utf8');
@@ -381,6 +382,8 @@ test('weather routing, units, freshness, and accessibility contracts are integra
 
 test('official context layers are optional, attributed, and cannot obscure warnings or cameras', () => {
   assert.match(html, /js\/context-layers\.js/);
+  assert.match(html, /js\/solar-terminator\.js/);
+  assert.match(serviceWorker, /\.\/js\/solar-terminator\.js/);
   assert.match(html, /js\/tropical-cyclones\.js/);
   assert.match(serviceWorker, /\.\/js\/tropical-cyclones\.js/);
   assert.match(html, /js\/flood-outlooks\.js/);
@@ -389,12 +392,16 @@ test('official context layers are optional, attributed, and cannot obscure warni
   assert.match(serviceWorker, /\.\/js\/local-overlays\.js/);
   assert.match(html, /<input[^>]*type="checkbox"[^>]*id="toggle-lightning"[^>]*>/);
   assert.match(html, /<input[^>]*type="checkbox"[^>]*id="toggle-wildfires"[^>]*>/);
+  assert.match(html, /<input[^>]*type="checkbox"[^>]*id="toggle-terminator"[^>]*>/);
   assert.match(html, /id="lightning-status"[^>]*role="status"/);
   assert.match(html, /id="wildfire-status"[^>]*role="status"/);
   assert.match(html, /https:\/\/nowcoast\.noaa\.gov/);
   assert.match(html, /https:\/\/services3\.arcgis\.com/);
   assert.match(contextLayers, /NOAA nowCOAST/);
   assert.match(contextLayers, /NIFC WFIGS/);
+  assert.match(solarTerminator, /function buildNightPolygon/);
+  assert.match(app, /StormScopeSolarTerminator\.buildNightPolygon/);
+  assert.match(app, /function getTerminatorState|updatedAt: terminatorUpdatedAt/);
   assert.match(contextLayers, /buildGoesFrameTimes/);
   assert.match(app, /contextRasterPane/);
   assert.match(app, /contextVectorPane/);

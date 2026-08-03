@@ -1011,6 +1011,17 @@ async function main() {
     await page.locator('#clear-local-overlays').click();
     await page.locator('#local-overlay-status').filter({ hasText: 'Removed 2 local overlays.' }).waitFor({ state: 'visible' });
     assert.equal(await page.locator('.local-overlay-item').count(), 0);
+    assert.equal((await page.evaluate(() => window._stormscope.getTerminatorState())).status, 'off');
+    await page.locator('#toggle-terminator').check();
+    await page.locator('#terminator-status').filter({ hasText: 'Day/night terminator' }).waitFor({ state: 'visible' });
+    const terminatorState = await page.evaluate(() => window._stormscope.getTerminatorState());
+    assert.equal(terminatorState.status, 'ready');
+    assert.equal(terminatorState.enabled, true);
+    assert.ok(Number.isFinite(terminatorState.updatedAt));
+    await page.locator('#toggle-terminator').uncheck();
+    assert.deepEqual(await page.evaluate(() => window._stormscope.getTerminatorState()), {
+      enabled: false, status: 'off', updatedAt: null
+    });
     await page.locator('#toggle-satellite').check();
     await page.locator('#toggle-lightning').check();
     await page.locator('#toggle-wildfires').check();
@@ -1661,7 +1672,7 @@ async function main() {
     await page.locator('#earthquake-magnitude').selectOption('4.5');
     await page.locator('#earthquake-period').selectOption('week');
     assert.deepEqual(await page.evaluate(() => window._stormscope.getLayerRegistryState().ids), [
-      'radar', 'cameras', 'coverage', 'alerts', 'lightning', 'wildfires', 'satellite', 'tropical',
+      'radar', 'cameras', 'coverage', 'terminator', 'alerts', 'lightning', 'wildfires', 'satellite', 'tropical',
       'wpcOutlooks', 'usgsGauges', 'earthquakes', 'convective', 'watches', 'mesoscale', 'stormReports'
     ]);
     await page.locator('#camera-favorites').evaluate(element => {
@@ -1814,7 +1825,7 @@ async function main() {
     });
     const sharedScene = {
       map: { lat: 39.75, lon: -98.25, zoom: 6 },
-      layers: { radar: true, cameras: true, coverage: false, alerts: true, lightning: false, wildfires: false, satellite: false, tropical: false,
+      layers: { radar: true, cameras: true, coverage: false, terminator: false, alerts: true, lightning: false, wildfires: false, satellite: false, tropical: false,
         wpcOutlooks: false, usgsGauges: false, earthquakes: false, convective: false, watches: false, mesoscale: false, stormReports: false },
       radar: { opacity: 0.48, palette: 'contrast', speed: 400, frameTime: sceneFixture.frameTime },
       alertSeverity: 'severe',

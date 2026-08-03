@@ -16,7 +16,7 @@
  */
 'use strict';
 
-var VERSION = 'v98';
+var VERSION = 'v99';
 var RUNTIME_CACHE_VERSION = 'v2';
 var SHELL_CACHE = 'stormscope-shell-' + VERSION;
 var TILE_CACHE = 'stormscope-tiles-' + RUNTIME_CACHE_VERSION;
@@ -56,6 +56,7 @@ var SHELL_ASSETS = [
   './js/camera-feed.js',
   './js/map-comparison.js',
   './js/context-layers.js',
+  './js/solar-terminator.js',
   './js/context-layer-controllers.js',
   './js/tropical-cyclones.js',
   './js/flood-outlooks.js',

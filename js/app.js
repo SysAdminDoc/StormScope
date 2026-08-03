@@ -30,6 +30,7 @@
   var RAINVIEWER_MAX_NATIVE_ZOOM = 7;
   var RAINVIEWER_PRELOAD_RESERVE = 20;
   var SATELLITE_ANIMATION_SPEED = 1200;
+  var TERMINATOR_REFRESH_INTERVAL = 60 * 1000;
 
   var map, radarLayer, radarLayerNext, cameraCluster, basemapLayer;
   var themePreference = 'auto';
@@ -127,6 +128,10 @@
   var satelliteLatestTime = null;
   var satelliteStatusState = 'off';
   var satelliteAttributionAdded = false;
+  var terminatorLayer = null;
+  var terminatorRefreshTimer = null;
+  var terminatorUpdatedAt = null;
+  var terminatorStatusState = 'off';
   var tropicalLayer = null;
   var tropicalAbort = null;
   var tropicalRefreshTimer = null;
@@ -867,6 +872,50 @@
     element.textContent = message;
     element.classList.toggle('error', state === 'error');
     element.classList.toggle('stale', state === 'stale');
+  }
+
+  function renderTerminatorStatus() {
+    if (terminatorStatusState === 'off') {
+      setContextStatusElement('terminator-status', tr('context.terminatorOff'), 'off');
+      return;
+    }
+    setContextStatusElement('terminator-status', tr('context.terminatorStatus', {
+      time: contextTimestamp(terminatorUpdatedAt)
+    }), 'fresh');
+  }
+
+  function scheduleTerminatorRefresh() {
+    clearTimeout(terminatorRefreshTimer);
+    terminatorRefreshTimer = null;
+    if (!document.getElementById('toggle-terminator').checked) return;
+    terminatorRefreshTimer = setTimeout(refreshTerminator, TERMINATOR_REFRESH_INTERVAL);
+  }
+
+  function refreshTerminator() {
+    if (!document.getElementById('toggle-terminator').checked || document.hidden) return;
+    var now = Date.now();
+    var nextLayer = L.polygon(StormScopeSolarTerminator.buildNightPolygon(now), {
+      pane: 'contextVectorPane', color: '#071529', weight: 0, opacity: 0,
+      fillColor: '#071529', fillOpacity: 0.28, stroke: false, interactive: false,
+      className: 'day-night-terminator'
+    }).addTo(map);
+    if (typeof nextLayer.bringToBack === 'function') nextLayer.bringToBack();
+    if (terminatorLayer) map.removeLayer(terminatorLayer);
+    terminatorLayer = nextLayer;
+    terminatorUpdatedAt = now;
+    terminatorStatusState = 'ready';
+    renderTerminatorStatus();
+    scheduleTerminatorRefresh();
+  }
+
+  function disableTerminator() {
+    clearTimeout(terminatorRefreshTimer);
+    terminatorRefreshTimer = null;
+    if (terminatorLayer) map.removeLayer(terminatorLayer);
+    terminatorLayer = null;
+    terminatorUpdatedAt = null;
+    terminatorStatusState = 'off';
+    renderTerminatorStatus();
   }
 
   function renderLightningStatus() {
@@ -5637,6 +5686,10 @@
 
   function operationalLayerRuntimeBindings() {
     return {
+      terminator: {
+        refresh: refreshTerminator, disable: disableTerminator,
+        aborts: function () { return null; }, timers: function () { return terminatorRefreshTimer; }
+      },
       alerts: {
         isEnabled: function () { return alertsVisible; },
         refresh: fetchNwsAlerts,
@@ -6727,6 +6780,9 @@
         playing: satellitePlaying, latestTime: satelliteLatestTime,
         lowData: lowDataMode, requestBudget: satelliteRequestBudget.snapshot()
       };
+    },
+    getTerminatorState: function () {
+      return { enabled: Boolean(terminatorLayer), status: terminatorStatusState, updatedAt: terminatorUpdatedAt };
     },
     getSpcReportsState: function () {
       return {
