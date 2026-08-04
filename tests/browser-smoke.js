@@ -476,6 +476,35 @@ async function addNetworkFixtures(page, metrics, options) {
       });
       return;
     }
+    if (url.startsWith('https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/cpc_') && url.includes('/query')) {
+      const requestUrl = new URL(url);
+      const pathname = requestUrl.pathname;
+      const feed = pathname.includes('cpc_drought_outlk') && pathname.endsWith('/1/query') ? 'droughtMonthly'
+        : pathname.includes('cpc_drought_outlk') ? 'droughtSeasonal'
+          : pathname.includes('cpc_6_10_day_outlk') && pathname.endsWith('/0/query') ? 'sixTenTemperature'
+            : pathname.includes('cpc_6_10_day_outlk') ? 'sixTenPrecipitation'
+              : pathname.includes('cpc_8_14_day_outlk') && pathname.endsWith('/0/query') ? 'eightFourteenTemperature'
+                : 'eightFourteenPrecipitation';
+      metrics.cpcRequests = (metrics.cpcRequests || 0) + 1;
+      const now = Date.now();
+      const drought = feed.startsWith('drought');
+      const category = feed.includes('Precipitation') ? 'Below' : feed.includes('Temperature') ? 'Above' : 'Development';
+      const properties = drought
+        ? { objectid: metrics.cpcRequests, outlook: category, target: feed === 'droughtMonthly' ? 'Aug 2026' : 'October 31',
+          fcst_date: '08/01/2026', idp_filedate: now - 5 * 60000, idp_ingestdate: now - 4 * 60000 }
+        : { objectid: metrics.cpcRequests, fcst_date: now - 5 * 60000, start_date: now,
+          end_date: now + 5 * 86400000, prob: 36, cat: category,
+          idp_filedate: now - 5 * 60000, idp_ingestdate: now - 4 * 60000, idp_source: 'CPC fixture' };
+      await route.fulfill({
+        contentType: 'application/geo+json',
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ type: 'FeatureCollection', features: [{
+          type: 'Feature', geometry: { type: 'Polygon', coordinates: [[[-101, 38], [-96, 38], [-96, 42], [-101, 42], [-101, 38]]] },
+          properties
+        }] })
+      });
+      return;
+    }
     if (url.startsWith('https://satellitemaps.nesdis.noaa.gov/arcgis/rest/services/MERGEDGC_Last_24hr/ImageServer/exportImage')) {
       metrics.satelliteExports = (metrics.satelliteExports || 0) + 1;
       await route.fulfill({ contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: pixel });
@@ -1634,6 +1663,33 @@ async function main() {
     await page.locator('#tropical-status').filter({ hasText: '1 active tropical cyclones' }).waitFor({ state: 'visible' });
     await page.locator('#wpc-outlook-status').filter({ hasText: '2 official outlook areas' }).waitFor({ state: 'visible' });
     await page.locator('#wssi-status').filter({ hasText: '2 official WSSI impact areas' }).waitFor({ state: 'visible' });
+    await page.locator('#toggle-cpc-outlooks').check();
+    await page.locator('#cpc-outlook-status').filter({ hasText: '6 NOAA CPC outlook areas' }).waitFor({ state: 'visible' });
+    const cpcReady = await page.evaluate(() => window._stormscope.getCpcOutlookState());
+    assert.equal(cpcReady.enabled, true);
+    assert.equal(cpcReady.status, 'ready');
+    assert.equal(cpcReady.count, 6);
+    assert.equal(cpcReady.droughtCount, 2);
+    assert.equal(cpcReady.outlookCount, 4);
+    assert.equal(networkMetrics.cpcRequests, 6);
+    const cpcPopupOpened = await page.evaluate(() => {
+      let opened = false;
+      window._stormscope.getMap().eachLayer(layer => {
+        if (opened || typeof layer.getLayers !== 'function') return;
+        const child = layer.getLayers().find(item => item.feature && item.feature.properties &&
+          item.feature.properties.cpcFeed === 'droughtMonthly');
+        if (child) { child.openPopup(); opened = true; }
+      });
+      return opened;
+    });
+    assert.equal(cpcPopupOpened, true);
+    await page.locator('.cpc-outlook-popup').waitFor({ state: 'visible' });
+    assert.match(await page.locator('.cpc-outlook-popup').textContent(), /Category/);
+    await page.locator('#toggle-cpc-outlooks').uncheck();
+    assert.deepEqual(await page.evaluate(() => window._stormscope.getCpcOutlookState()), {
+      enabled: false, status: 'off', count: 0, droughtCount: 0, outlookCount: 0,
+      updatedAt: null, layer: null, zoom: null, lastGood: false, partial: false
+    });
     await page.locator('#usgs-gauge-status').filter({ hasText: '1 NOAA NWPS river gauges' }).waitFor({ state: 'visible' });
     assert.ok(networkMetrics.riverGaugeRequests >= 2);
     assert.ok(networkMetrics.riverGaugeMaxRecordCount <= 200);
@@ -2382,7 +2438,7 @@ async function main() {
     await page.locator('#earthquake-period').selectOption('week');
     assert.deepEqual(await page.evaluate(() => window._stormscope.getLayerRegistryState().ids), [
       'radar', 'cameras', 'coverage', 'terminator', 'snow', 'alerts', 'lightning', 'surfaceObservations', 'wildfires', 'satellite', 'spaceWeather', 'marineBuoys', 'tropical',
-      'wpcOutlooks', 'wssi', 'usgsGauges', 'earthquakes', 'convective', 'fireWeather', 'watches', 'mesoscale', 'stormReports'
+      'wpcOutlooks', 'wssi', 'cpcOutlooks', 'usgsGauges', 'earthquakes', 'convective', 'fireWeather', 'watches', 'mesoscale', 'stormReports'
     ]);
     await page.locator('#camera-favorites').evaluate(element => {
       element.checked = true;
@@ -2534,7 +2590,7 @@ async function main() {
     });
     const sharedScene = {
       map: { lat: 39.75, lon: -98.25, zoom: 6 },
-      layers: { radar: true, cameras: true, coverage: false, terminator: false, snow: false, surfaceObservations: false, alerts: true, lightning: false, wildfires: false, satellite: false, spaceWeather: false, marineBuoys: false, tropical: false,
+      layers: { radar: true, cameras: true, coverage: false, terminator: false, snow: false, surfaceObservations: false, alerts: true, lightning: false, wildfires: false, satellite: false, spaceWeather: false, marineBuoys: false, cpcOutlooks: false, tropical: false,
         wpcOutlooks: false, wssi: false, usgsGauges: false, earthquakes: false, convective: false, fireWeather: false, watches: false, mesoscale: false, stormReports: false },
       radar: { opacity: 0.48, palette: 'contrast', speed: 400, frameTime: sceneFixture.frameTime },
       alertSeverity: 'severe',

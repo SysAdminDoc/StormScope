@@ -33,6 +33,7 @@
   var riverGaugesController = null;
   var spaceWeatherController = null;
   var marineBuoysController = null;
+  var cpcOutlooksController = null;
   var satelliteRequestBudget = StormScopeRadarProviders.createRollingRequestBudget({ limit: 30, windowMs: 60000 });
   var activeCamera = null;
   var priorFocusEl = null;
@@ -475,6 +476,21 @@
     }
   });
   teardownResources.push(marineBuoysController);
+
+  cpcOutlooksController = StormScopeCpcOutlooks.create({
+    document: document,
+    L: L,
+    translate: tr,
+    localNumber: localNumber,
+    contextTimestamp: contextTimestamp,
+    formatAge: function (minutes) { return StormScopeI18n.formatAge(minutes, appLocale); },
+    getMap: function () { return map; },
+    isEnabled: function () { return document.getElementById('toggle-cpc-outlooks').checked; },
+    isDocumentHidden: function () { return document.hidden; },
+    setStatus: function (message, state) { setContextStatusElement('cpc-outlook-status', message, state); },
+    safeExternalUrl: safeExternalUrl
+  });
+  teardownResources.push(cpcOutlooksController);
 
   function localTime(value) {
     return StormScopeWeather.formatTime(value, appLocale, tr('weather.unknown'));
@@ -7488,6 +7504,10 @@
         refresh: refreshWssi, disable: disableWssi,
         aborts: function () { return wssiAbort; }, timers: function () { return wssiRefreshTimer; }
       },
+      cpcOutlooks: {
+        refresh: cpcOutlooksController.refresh, disable: cpcOutlooksController.disable,
+        aborts: cpcOutlooksController.getAbort, timers: cpcOutlooksController.getTimers
+      },
       usgsGauges: {
         refresh: refreshUsgsGauges, disable: riverGaugesController.disable,
         aborts: riverGaugesController.getAbort, timers: riverGaugesController.getTimers
@@ -7726,6 +7746,7 @@
       renderFireWeatherStatus();
       spaceWeatherController.renderStatus();
       marineBuoysController.renderStatus();
+      cpcOutlooksController.renderStatus();
       renderMesoscaleStatus();
       renderStormReportStatus();
       renderSurfaceObservationStatus();
@@ -8018,6 +8039,9 @@
       }
       if (document.getElementById('toggle-marine-buoys').checked) {
         marineBuoysController.scheduleMoveRefresh();
+      }
+      if (document.getElementById('toggle-cpc-outlooks').checked) {
+        cpcOutlooksController.scheduleMoveRefresh();
       }
       if (document.getElementById('toggle-fire-weather').checked) {
         clearTimeout(fireWeatherMoveTimer);
@@ -8646,6 +8670,8 @@
     refreshSpaceWeather: function () { return spaceWeatherController.refresh(); },
     getMarineBuoyState: function () { return marineBuoysController.getState(); },
     refreshMarineBuoys: function () { return marineBuoysController.refresh(); },
+    getCpcOutlookState: function () { return cpcOutlooksController.getState(); },
+    refreshCpcOutlooks: function () { return cpcOutlooksController.refresh(); },
     getSnowState: function () {
       return { enabled: Boolean(snowLayer), status: snowStatusState, updatedAt: snowFetchedAt };
     },

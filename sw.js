@@ -85,6 +85,7 @@ var SHELL_ASSETS = [
   './js/situation-snapshot.js',
   './js/space-weather.js',
   './js/marine-buoys.js',
+  './js/cpc-outlooks.js',
   './js/radar-motion.js',
   './js/radar-motion-worker.js',
   './js/radar-controller.js',

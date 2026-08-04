@@ -856,7 +856,7 @@ button:focus-visible {
 .satellite-scrubber-row input { width: 100%; min-width: 0; accent-color: var(--accent); grid-column: 1 / -1; }
 .satellite-range-label { color: var(--text-dim); font-size: 9px; }
 .satellite-range-label-latest { justify-self: end; }
-.satellite-swatch, .terminator-swatch, .snow-swatch, .tropical-swatch, .wpc-outlook-swatch, .usgs-gauge-swatch, .lightning-swatch, .wildfire-swatch, .earthquake-swatch, .surface-observation-swatch, .fire-weather-swatch, .space-weather-swatch, .marine-buoy-swatch { width: 9px; height: 9px; border-radius: 2px; }
+.satellite-swatch, .terminator-swatch, .snow-swatch, .tropical-swatch, .wpc-outlook-swatch, .usgs-gauge-swatch, .lightning-swatch, .wildfire-swatch, .earthquake-swatch, .surface-observation-swatch, .fire-weather-swatch, .space-weather-swatch, .marine-buoy-swatch, .cpc-outlook-swatch { width: 9px; height: 9px; border-radius: 2px; }
 .earthquake-swatch { border-radius: 50%; border: 2px solid #f76707; background: rgba(247, 103, 7, 0.25); }
 .convective-swatch { border: 2px solid #c9a400; background: rgba(246, 246, 127, 0.4); }
 .fire-weather-swatch { border: 2px dashed #e69800; background: linear-gradient(135deg, rgba(230, 152, 0, 0.45), rgba(230, 0, 169, 0.45)); }
@@ -870,6 +870,7 @@ button:focus-visible {
 .tropical-swatch::after { position: absolute; inset: 2px; border-radius: 50%; background: #ff2d55; content: ''; }
 .wpc-outlook-swatch { box-sizing: border-box; border: 2px dashed #f4d35e; border-radius: 1px; transform: rotate(45deg); background: transparent; }
 .wssi-swatch { box-sizing: border-box; border: 2px solid #7853a1; border-radius: 2px; background: linear-gradient(135deg, #d2dfe7, #f7962f, #e61f26); }
+.cpc-outlook-swatch { box-sizing: border-box; border: 2px solid #2673a8; background: linear-gradient(135deg, #f5b642, #77b7d9, #cbd5e1); }
 .usgs-gauge-swatch { position: relative; box-sizing: border-box; border: 2px solid #4cc9f0; border-radius: 50%; background: transparent; }
 .usgs-gauge-swatch::after { position: absolute; top: 3px; left: 0; width: 100%; border-top: 1px solid currentColor; color: #4cc9f0; content: ''; }
 .lightning-swatch { background: linear-gradient(135deg, #00e5ff, #ff2d55); }

@@ -76,6 +76,11 @@
       labelKey: 'layers.wssi', groupId: 'outlooks', groupLabelKey: 'layers.groupOutlooks'
     },
     {
+      id: 'cpcOutlooks', toggleId: 'toggle-cpc-outlooks', defaultEnabled: false, lifecycleId: 'cpc-outlooks',
+      labelKey: 'layers.cpcOutlooks', groupId: 'outlooks', groupLabelKey: 'layers.groupOutlooks',
+      searchKeys: ['context.cpcLimitation', 'context.cpcSource']
+    },
+    {
       id: 'usgsGauges', toggleId: 'toggle-usgs-gauges', defaultEnabled: false, lifecycleId: 'usgs-gauges',
       labelKey: 'layers.usgsGauges', groupId: 'hazards', groupLabelKey: 'layers.groupHazards',
       searchKeys: ['context.gaugeObserved', 'context.gaugeForecast', 'context.gaugesLimitation']

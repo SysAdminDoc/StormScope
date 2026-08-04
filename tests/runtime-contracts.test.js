@@ -25,6 +25,7 @@ const winterOutlooksSource = fs.readFileSync(path.join(root, 'js', 'winter-outlo
 const fireWeatherSource = fs.readFileSync(path.join(root, 'js', 'fire-weather.js'), 'utf8');
 const spaceWeatherSource = fs.readFileSync(path.join(root, 'js', 'space-weather.js'), 'utf8');
 const marineBuoysSource = fs.readFileSync(path.join(root, 'js', 'marine-buoys.js'), 'utf8');
+const cpcOutlooksSource = fs.readFileSync(path.join(root, 'js', 'cpc-outlooks.js'), 'utf8');
 const spatialQuery = fs.readFileSync(path.join(root, 'js', 'spatial-query.js'), 'utf8');
 const spatialQuerySource = spatialQuery;
 const privateAnnotationSource = fs.readFileSync(path.join(root, 'js', 'private-annotations.js'), 'utf8');
@@ -817,6 +818,33 @@ test('NDBC marine buoy observations are optional, viewport-bounded, DOM-only, an
   assert.match(layerRegistrySource, /id: 'marineBuoys', toggleId: 'toggle-marine-buoys'/);
   assert.equal(i18n.catalogs.en['layers.marineBuoys'], 'NOAA NDBC Marine Buoys');
   assert.ok(i18n.catalogs.es['context.marineBuoysLimitation']);
+});
+
+test('NOAA CPC drought and extended-range outlooks are optional, bounded, and lifecycle-owned', () => {
+  const marineBuoysPosition = html.indexOf('js/marine-buoys.js');
+  const cpcPosition = html.indexOf('js/cpc-outlooks.js');
+  const appPosition = html.indexOf('js/app.js');
+  assert.ok(marineBuoysPosition >= 0 && cpcPosition > marineBuoysPosition && appPosition > cpcPosition);
+  assert.match(serviceWorker, /\.\/js\/cpc-outlooks\.js/);
+  assert.match(cpcOutlooksSource, /cpc_drought_outlk\/MapServer/);
+  assert.match(cpcOutlooksSource, /cpc_6_10_day_outlk\/MapServer/);
+  assert.match(cpcOutlooksSource, /cpc_8_14_day_outlk\/MapServer/);
+  assert.match(cpcOutlooksSource, /MAX_RECORDS = 200/);
+  assert.match(cpcOutlooksSource, /MAX_FEATURES = 2000/);
+  assert.match(cpcOutlooksSource, /function buildQueries\(bounds, zoom\)/);
+  assert.match(cpcOutlooksSource, /function normalizeCollection/);
+  assert.match(cpcOutlooksSource, /Promise\.allSettled/);
+  assert.match(cpcOutlooksSource, /contextVectorPane/);
+  assert.match(cpcOutlooksSource, /safeExternalUrl/);
+  assert.match(html, /id="toggle-cpc-outlooks"/);
+  assert.match(html, /id="cpc-outlook-status"[^>]*role="status"/);
+  assert.match(html, /https:\/\/www\.cpc\.ncep\.noaa\.gov\//);
+  assert.match(app, /StormScopeCpcOutlooks\.create/);
+  assert.match(app, /cpcOutlooksController\.scheduleMoveRefresh/);
+  assert.match(app, /cpcOutlooksController\.renderStatus/);
+  assert.match(layerRegistrySource, /id: 'cpcOutlooks', toggleId: 'toggle-cpc-outlooks'/);
+  assert.equal(i18n.catalogs.en['layers.cpcOutlooks'], 'NOAA CPC Drought & Extended-Range Outlooks');
+  assert.ok(i18n.catalogs.es['context.cpcLimitation']);
 });
 
 test('USGS earthquakes are an optional, attributed, keyless layer wired end to end', () => {
