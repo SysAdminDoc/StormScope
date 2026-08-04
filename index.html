@@ -374,6 +374,61 @@
       </div>
       <div id="local-overlay-status" class="local-overlay-status" role="status" aria-live="polite"></div>
     </section>
+    <section class="private-annotation-panel" aria-labelledby="private-annotations-heading">
+      <h4 id="private-annotations-heading" data-i18n="annotations.heading">Private measurements &amp; annotations</h4>
+      <p class="private-annotation-privacy" data-i18n="annotations.privacy">Annotations stay in this session unless you explicitly choose Keep locally. They are never uploaded or included in shared scenes.</p>
+      <div class="select-row">
+        <label for="annotation-tool" data-i18n="annotations.toolLabel">Tool</label>
+        <select id="annotation-tool">
+          <option value="none" data-i18n="annotations.toolNone">None</option>
+          <option value="point" data-i18n="annotations.toolPoint">Point</option>
+          <option value="line" data-i18n="annotations.toolLine">Line</option>
+          <option value="polygon" data-i18n="annotations.toolPolygon">Polygon</option>
+          <option value="text" data-i18n="annotations.toolText">Text</option>
+          <option value="measure" data-i18n="annotations.toolMeasure">Measure distance / bearing</option>
+        </select>
+      </div>
+      <div id="annotation-drawing-controls" class="private-annotation-controls hidden">
+        <div class="private-annotation-coordinate-grid">
+          <label for="annotation-lat" data-i18n="annotations.latitude">Latitude</label>
+          <input id="annotation-lat" type="number" min="-90" max="90" step="any" inputmode="decimal">
+          <label for="annotation-lon" data-i18n="annotations.longitude">Longitude</label>
+          <input id="annotation-lon" type="number" min="-180" max="180" step="any" inputmode="decimal">
+        </div>
+        <label for="annotation-label" data-i18n="annotations.label">Label / text</label>
+        <input id="annotation-label" type="text" maxlength="240" data-i18n-placeholder-key="annotations.labelPlaceholder" placeholder="Optional label">
+        <div class="private-annotation-actions">
+          <button id="annotation-add-point" type="button" data-i18n="annotations.addPoint">Add point</button>
+          <button id="annotation-add-vertex" type="button" data-i18n="annotations.addVertex">Add vertex</button>
+          <button id="annotation-finish" type="button" data-i18n="annotations.finish">Finish</button>
+        </div>
+      </div>
+      <div id="annotation-measure-controls" class="private-annotation-measure hidden">
+        <div class="private-annotation-measure-heading" data-i18n="annotations.measureEndpoints">Measure from start to end</div>
+        <div class="private-annotation-coordinate-grid">
+          <label for="measure-start-lat" data-i18n="annotations.measureStartLatitude">Start latitude</label>
+          <input id="measure-start-lat" type="number" min="-90" max="90" step="any" inputmode="decimal">
+          <label for="measure-start-lon" data-i18n="annotations.measureStartLongitude">Start longitude</label>
+          <input id="measure-start-lon" type="number" min="-180" max="180" step="any" inputmode="decimal">
+          <label for="measure-end-lat" data-i18n="annotations.measureEndLatitude">End latitude</label>
+          <input id="measure-end-lat" type="number" min="-90" max="90" step="any" inputmode="decimal">
+          <label for="measure-end-lon" data-i18n="annotations.measureEndLongitude">End longitude</label>
+          <input id="measure-end-lon" type="number" min="-180" max="180" step="any" inputmode="decimal">
+        </div>
+        <button id="annotation-measure-run" type="button" data-i18n="annotations.measureRun">Measure</button>
+        <output id="annotation-measure-result" class="private-annotation-measure-result" role="status" aria-live="polite"></output>
+      </div>
+      <div id="annotation-draft-status" class="private-annotation-draft-status" role="status" aria-live="polite"></div>
+      <ul id="private-annotation-list" class="private-annotation-list" aria-label="Private annotations">
+        <li class="private-annotation-empty" data-i18n="annotations.empty">No private annotations yet.</li>
+      </ul>
+      <div class="private-annotation-bulk-actions">
+        <button id="private-annotation-undo" type="button" disabled data-i18n="annotations.undo">Undo last</button>
+        <button id="private-annotation-clear" type="button" disabled data-i18n="annotations.clear">Clear all</button>
+        <button id="private-annotation-export" type="button" disabled data-i18n="annotations.export">Export annotations</button>
+      </div>
+      <div id="private-annotation-status" class="private-annotation-status" role="status" aria-live="polite"></div>
+    </section>
     <section class="wake-lock-panel" aria-labelledby="wake-lock-heading">
       <h4 id="wake-lock-heading" data-i18n="wake.heading">Monitoring display</h4>
       <label class="toggle-row">
@@ -638,6 +693,7 @@
   <script src="js/spc-reports.js"></script>
   <script src="js/geocode.js"></script>
   <script src="js/local-overlays.js"></script>
+  <script src="js/private-annotations.js"></script>
   <script src="js/earthquakes.js"></script>
   <script src="js/diagnostics.js"></script>
   <script src="js/spatial-query.js"></script>

@@ -18,6 +18,7 @@ const cameraRecordSource = fs.readFileSync(path.join(root, 'js', 'camera-record.
 const cameraFeedSource = fs.readFileSync(path.join(root, 'js', 'camera-feed.js'), 'utf8');
 const serviceWorker = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const spatialQuery = fs.readFileSync(path.join(root, 'js', 'spatial-query.js'), 'utf8');
+const privateAnnotationSource = fs.readFileSync(path.join(root, 'js', 'private-annotations.js'), 'utf8');
 const wakeLockSource = fs.readFileSync(path.join(root, 'js', 'wake-lock.js'), 'utf8');
 const layerRegistrySource = fs.readFileSync(path.join(root, 'js', 'layer-registry.js'), 'utf8');
 const situationSnapshotSource = fs.readFileSync(path.join(root, 'js', 'situation-snapshot.js'), 'utf8');
@@ -498,6 +499,37 @@ test('official context layers are optional, attributed, and cannot obscure warni
   assert.match(layerRegistrySource, /id: 'snow', toggleId: 'toggle-snow'/);
   assert.match(layerRegistrySource, /id: 'surfaceObservations', toggleId: 'toggle-surface-observations'/);
   assert.match(html, /id="satellite-scrubber"/);
+});
+
+test('private measurements and annotations stay bounded and outside shared or diagnostic state', () => {
+  assert.match(html, /js\/private-annotations\.js/);
+  assert.match(serviceWorker, /\.\/js\/private-annotations\.js/);
+  assert.match(html, /id="annotation-tool"/);
+  assert.match(html, /id="annotation-measure-run"/);
+  assert.match(html, /id="private-annotation-export"/);
+  assert.match(app, /StormScopePrivateAnnotations\.createAnnotation/);
+  assert.match(app, /StormScopePrivateAnnotations\.validateAnnotation/);
+  assert.match(app, /function annotationTransaction\(mode, operation\)/);
+  assert.match(app, /function getPrivateAnnotationState|getPrivateAnnotationState: function/);
+  assert.match(privateAnnotationSource, /MAX_ANNOTATIONS = 100/);
+  assert.match(privateAnnotationSource, /MAX_VERTICES = 256/);
+  assert.match(privateAnnotationSource, /function measureLine/);
+  assert.match(css, /\.private-annotation-label/);
+  for (const locale of ['en', 'es']) {
+    for (const key of ['annotations.heading', 'annotations.privacy', 'annotations.toolMeasure',
+      'annotations.measureResult', 'annotations.keep', 'annotations.statusStorageError',
+      'annotations.type.measurement']) {
+      assert.ok(i18n.catalogs[locale][key], `${locale} catalog should define ${key}`);
+    }
+  }
+  const sceneStart = app.indexOf('function captureSharedScene()');
+  const sceneEnd = app.indexOf('function scheduleSceneHashWrite()', sceneStart);
+  assert.ok(sceneStart >= 0 && sceneEnd > sceneStart);
+  assert.doesNotMatch(app.slice(sceneStart, sceneEnd), /privateAnnotation|annotation-tool/);
+  const diagnosticsStart = app.indexOf('async function exportDiagnostics()');
+  const diagnosticsEnd = app.indexOf('function initDiagnostics()', diagnosticsStart);
+  assert.ok(diagnosticsStart >= 0 && diagnosticsEnd > diagnosticsStart);
+  assert.doesNotMatch(app.slice(diagnosticsStart, diagnosticsEnd), /privateAnnotation|annotation-tool/);
 });
 
 test('place/address geocoding is keyless, debounced, attributed, and session-only', () => {

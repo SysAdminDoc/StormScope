@@ -1204,6 +1204,68 @@ async function main() {
     await page.locator('#clear-local-overlays').click();
     await page.locator('#local-overlay-status').filter({ hasText: 'Removed 2 local overlays.' }).waitFor({ state: 'visible' });
     assert.equal(await page.locator('.local-overlay-item').count(), 0);
+    await page.locator('#annotation-tool').selectOption('point');
+    await page.locator('#annotation-lat').fill('38.5');
+    await page.locator('#annotation-lon').fill('-90.5');
+    await page.locator('#annotation-label').fill('Point marker');
+    await page.locator('#annotation-add-point').click();
+    await page.locator('.private-annotation-item').filter({ hasText: 'Point marker' }).waitFor({ state: 'visible' });
+    assert.deepEqual(await page.evaluate(() => window._stormscope.getPrivateAnnotationState()), {
+      count: 1, draftVertices: 0, tool: 'point', paneZ: '385'
+    });
+    await page.locator('#annotation-tool').selectOption('measure');
+    await page.locator('#measure-start-lat').fill('38.5');
+    await page.locator('#measure-start-lon').fill('-90.5');
+    await page.locator('#measure-end-lat').fill('38.5');
+    await page.locator('#measure-end-lon').fill('-89.5');
+    await page.locator('#annotation-measure-run').focus();
+    await page.keyboard.press('Enter');
+    await page.locator('#annotation-measure-result').filter({ hasText: 'bearing' }).waitFor({ state: 'visible' });
+    assert.equal(await page.locator('.private-annotation-item').count(), 2);
+    await page.locator('#annotation-tool').selectOption('line');
+    await page.locator('#annotation-lat').fill('38');
+    await page.locator('#annotation-lon').fill('-91');
+    await page.locator('#annotation-add-vertex').click();
+    await page.locator('#annotation-lat').fill('39');
+    await page.locator('#annotation-lon').fill('-90');
+    await page.locator('#annotation-add-vertex').click();
+    assert.equal((await page.evaluate(() => window._stormscope.getPrivateAnnotationState())).draftVertices, 2);
+    await page.locator('#annotation-finish').click();
+    assert.equal(await page.locator('.private-annotation-item').count(), 3);
+    await page.locator('#annotation-tool').selectOption('polygon');
+    for (const [lat, lon] of [['37', '-92'], ['37', '-91'], ['38', '-91']]) {
+      await page.locator('#annotation-lat').fill(lat);
+      await page.locator('#annotation-lon').fill(lon);
+      await page.locator('#annotation-add-vertex').click();
+    }
+    await page.locator('#annotation-finish').click();
+    assert.equal(await page.locator('.private-annotation-item').count(), 4,
+      await page.locator('#private-annotation-status').textContent());
+    await page.locator('#annotation-tool').selectOption('text');
+    await page.locator('#annotation-lat').fill('40');
+    await page.locator('#annotation-lon').fill('-88');
+    await page.locator('#annotation-label').fill('Text marker');
+    await page.locator('#annotation-add-point').click();
+    assert.equal(await page.locator('.private-annotation-item').count(), 5);
+    await page.locator('#private-annotation-undo').click();
+    assert.equal(await page.locator('.private-annotation-item').count(), 4);
+    await page.locator('.private-annotation-item').first().getByRole('button', { name: 'Keep locally', exact: true }).click();
+    await page.locator('#private-annotation-status').filter({ hasText: 'will be kept locally' }).waitFor({ state: 'visible' });
+    assert.doesNotMatch(JSON.stringify(await page.evaluate(() => window._stormscope.captureSharedScene())), /Point marker|private-annotation/);
+    const persistedAnnotationPage = await context.newPage();
+    persistedAnnotationPage.baseURL = baseURL;
+    await addNetworkFixtures(persistedAnnotationPage);
+    await waitForApp(persistedAnnotationPage);
+    await persistedAnnotationPage.getByRole('button', { name: 'Toggle layers panel' }).click();
+    await persistedAnnotationPage.locator('.private-annotation-item').filter({ hasText: 'Point marker' }).waitFor({ state: 'visible' });
+    assert.equal(await persistedAnnotationPage.locator('.private-annotation-item').count(), 1);
+    await persistedAnnotationPage.close();
+    const annotationDownload = page.waitForEvent('download');
+    await page.locator('#private-annotation-export').click();
+    assert.equal((await annotationDownload).suggestedFilename(), 'stormscope-private-annotations.json');
+    await page.locator('#private-annotation-clear').click();
+    await page.locator('#private-annotation-status').filter({ hasText: 'Cleared private annotations' }).waitFor({ state: 'visible' });
+    assert.equal(await page.locator('.private-annotation-item').count(), 0);
     assert.equal((await page.evaluate(() => window._stormscope.getTerminatorState())).status, 'off');
     await page.locator('#toggle-terminator').check();
     await page.locator('#terminator-status').filter({ hasText: 'Day/night terminator' }).waitFor({ state: 'visible' });

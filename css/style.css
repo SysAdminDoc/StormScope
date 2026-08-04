@@ -851,6 +851,30 @@ button:focus-visible {
   cursor: pointer;
 }
 
+.private-annotation-panel { display: grid; gap: 7px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 11px; }
+.private-annotation-panel h4 { margin: 0; color: var(--text); font-size: 13px; }
+.private-annotation-privacy, .private-annotation-draft-status, .private-annotation-status { margin: 0; line-height: 1.4; }
+.private-annotation-status { min-height: 1.4em; }
+.private-annotation-status.error { color: var(--danger); }
+.private-annotation-controls, .private-annotation-measure { display: grid; gap: 7px; }
+.private-annotation-coordinate-grid { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 8px; align-items: center; }
+.private-annotation-coordinate-grid input, .private-annotation-controls > input { min-width: 0; box-sizing: border-box; width: 100%; }
+.private-annotation-actions, .private-annotation-bulk-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.private-annotation-panel button { min-height: 32px; min-width: 0; padding: 5px 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-dark); color: var(--text); font: inherit; cursor: pointer; }
+.private-annotation-panel button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.private-annotation-panel button:disabled { opacity: 0.45; cursor: not-allowed; }
+.private-annotation-list { display: grid; gap: 5px; max-height: 220px; overflow: auto; margin: 0; padding: 0; list-style: none; overscroll-behavior: contain; }
+.private-annotation-empty { padding: 7px; border: 1px dashed var(--border); border-radius: 7px; text-align: center; }
+.private-annotation-item { display: grid; gap: 3px; padding: 7px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-inset); }
+.private-annotation-name, .private-annotation-meta { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.private-annotation-name { color: var(--text); font-weight: 700; }
+.private-annotation-meta { line-height: 1.35; }
+.private-annotation-item-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin-top: 3px; }
+.private-annotation-item-actions button { padding-inline: 4px; }
+.private-annotation-measure-result { display: block; min-height: 1.4em; color: var(--text); line-height: 1.4; }
+.private-annotation-label { background: transparent; border: 0; pointer-events: none; }
+.private-annotation-label span { display: block; padding: 3px 6px; border: 1px solid #111827; border-radius: 5px; background: #ffe66d; color: #111827; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35); font-size: 11px; font-weight: 700; white-space: nowrap; }
+
 .incident-cameras ul {
   display: grid;
   gap: 7px;
@@ -2049,6 +2073,8 @@ button:focus-visible {
 
   .local-overlay-list { max-height: 110px; }
   .local-overlay-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .private-annotation-list { max-height: 110px; }
+  .private-annotation-actions, .private-annotation-bulk-actions, .private-annotation-item-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
   .alerts-panel {
     left: calc(6px + env(safe-area-inset-left));

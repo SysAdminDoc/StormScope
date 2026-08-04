@@ -175,6 +175,11 @@
   var localOverlayRecords = [];
   var localOverlayDatabase = null;
   var LOCAL_OVERLAY_DB = 'stormscope-local-overlays';
+  var privateAnnotationRecords = [];
+  var privateAnnotationLayer = null;
+  var privateAnnotationDraftLayer = null;
+  var privateAnnotationDraft = [];
+  var privateAnnotationTool = 'none';
   var lightningLayer = null;
   var lightningAbort = null;
   var lightningRefreshTimer = null;
@@ -410,6 +415,8 @@
     map.getPane('contextVectorPane').style.zIndex = '390';
     map.createPane('localOverlayPane');
     map.getPane('localOverlayPane').style.zIndex = '380';
+    map.createPane('privateAnnotationPane');
+    map.getPane('privateAnnotationPane').style.zIndex = '385';
     map.createPane('tropicalPane');
     map.getPane('tropicalPane').style.zIndex = '395';
 
@@ -2222,16 +2229,22 @@
   }
 
   function openLocalOverlayDatabase() {
-    if (!window.indexedDB) return Promise.resolve([]);
+    if (!window.indexedDB) return Promise.resolve({ overlays: [], annotations: [] });
     return new Promise(function (resolve, reject) {
-      var request = indexedDB.open(LOCAL_OVERLAY_DB, 1);
+      var request = indexedDB.open(LOCAL_OVERLAY_DB, 2);
       request.onupgradeneeded = function () {
         if (!request.result.objectStoreNames.contains('overlays')) request.result.createObjectStore('overlays', { keyPath: 'id' });
+        if (!request.result.objectStoreNames.contains('annotations')) request.result.createObjectStore('annotations', { keyPath: 'id' });
       };
       request.onerror = function () { reject(request.error || new Error('storage unavailable')); };
       request.onsuccess = function () {
         localOverlayDatabase = request.result;
-        overlayTransaction('readonly', function (store) { return store.getAll(); }).then(resolve, reject);
+        Promise.all([
+          overlayTransaction('readonly', function (store) { return store.getAll(); }),
+          annotationTransaction('readonly', function (store) { return store.getAll(); })
+        ]).then(function (records) {
+          resolve({ overlays: records[0], annotations: records[1] });
+        }, reject);
       };
     });
   }
@@ -2418,6 +2431,407 @@
     document.getElementById('clear-local-overlays').disabled = !localOverlayRecords.length;
   }
 
+  function annotationTransaction(mode, operation) {
+    if (!localOverlayDatabase) return Promise.reject(new Error('storage unavailable'));
+    return new Promise(function (resolve, reject) {
+      var transaction = localOverlayDatabase.transaction('annotations', mode);
+      var request = operation(transaction.objectStore('annotations'));
+      var result;
+      request.onsuccess = function () { result = request.result; };
+      request.onerror = function () { reject(request.error || new Error('storage failed')); };
+      transaction.onabort = function () { reject(transaction.error || new Error('storage aborted')); };
+      transaction.oncomplete = function () { resolve(result); };
+    });
+  }
+
+  function annotationStoredRecord(record) {
+    return StormScopePrivateAnnotations.validateAnnotation(record);
+  }
+
+  function privateAnnotationTypeLabel(type) {
+    return tr('annotations.type.' + type);
+  }
+
+  function privateAnnotationName(record) {
+    return record.label || privateAnnotationTypeLabel(record.type);
+  }
+
+  function privateAnnotationDistanceText(distanceKm) {
+    var value = weatherUnits === 'metric' ? distanceKm : distanceKm * 0.621371;
+    return StormScopeI18n.formatNumber(value, { maximumFractionDigits: 1 }, appLocale) +
+      (weatherUnits === 'metric' ? ' km' : ' mi');
+  }
+
+  function privateAnnotationBearingText(bearingDegrees) {
+    return StormScopeI18n.formatNumber(bearingDegrees, { maximumFractionDigits: 1 }, appLocale) +
+      '° ' + localizedWindDirection(bearingDegrees);
+  }
+
+  function privateAnnotationLatLngs(record) {
+    var coordinates = record.geometry.coordinates;
+    if (record.type === 'polygon') coordinates = coordinates[0];
+    return coordinates.map(function (coordinate) { return [coordinate[1], coordinate[0]]; });
+  }
+
+  function privateAnnotationPopup(record) {
+    var container = document.createElement('div');
+    container.className = 'context-popup private-annotation-popup';
+    var title = document.createElement('strong');
+    title.textContent = privateAnnotationName(record);
+    container.appendChild(title);
+    var type = document.createElement('span');
+    type.textContent = privateAnnotationTypeLabel(record.type);
+    container.appendChild(type);
+    if (record.type === 'measurement' && record.measurement) {
+      var details = document.createElement('dl');
+      var distanceTerm = document.createElement('dt');
+      var distanceValue = document.createElement('dd');
+      distanceTerm.textContent = tr('annotations.distance');
+      distanceValue.textContent = privateAnnotationDistanceText(record.measurement.distanceKm);
+      details.appendChild(distanceTerm);
+      details.appendChild(distanceValue);
+      var bearingTerm = document.createElement('dt');
+      var bearingValue = document.createElement('dd');
+      bearingTerm.textContent = tr('annotations.bearing');
+      bearingValue.textContent = privateAnnotationBearingText(record.measurement.bearingDegrees);
+      details.appendChild(bearingTerm);
+      details.appendChild(bearingValue);
+      container.appendChild(details);
+    }
+    return container;
+  }
+
+  function ensurePrivateAnnotationLayer() {
+    if (!privateAnnotationLayer) privateAnnotationLayer = L.layerGroup().addTo(map);
+    return privateAnnotationLayer;
+  }
+
+  function removePrivateAnnotationLayer(record) {
+    if (!record.layer) return;
+    if (privateAnnotationLayer) privateAnnotationLayer.removeLayer(record.layer);
+    else map.removeLayer(record.layer);
+    record.layer = null;
+  }
+
+  function drawPrivateAnnotation(record) {
+    removePrivateAnnotationLayer(record);
+    var pane = 'privateAnnotationPane';
+    if (record.type === 'point') {
+      record.layer = L.circleMarker([record.geometry.coordinates[1], record.geometry.coordinates[0]], {
+        pane: pane, radius: 7, color: '#111827', weight: 2, fillColor: '#ffe66d', fillOpacity: 0.95
+      });
+    } else if (record.type === 'text') {
+      record.layer = L.marker([record.geometry.coordinates[1], record.geometry.coordinates[0]], {
+        pane: pane,
+        icon: L.divIcon({
+          className: 'private-annotation-label',
+          html: '<span>' + escapeHtml(record.label) + '</span>',
+          iconSize: null
+        })
+      });
+    } else if (record.type === 'polygon') {
+      record.layer = L.polygon(privateAnnotationLatLngs(record), {
+        pane: pane, color: '#ffe66d', weight: 2, fillColor: '#ffe66d', fillOpacity: 0.12
+      });
+    } else {
+      record.layer = L.polyline(privateAnnotationLatLngs(record), {
+        pane: pane, color: '#ffe66d', weight: 3,
+        dashArray: record.type === 'measurement' ? '6 5' : null
+      });
+    }
+    ensurePrivateAnnotationLayer().addLayer(record.layer);
+    record.layer.bindPopup(function () { return privateAnnotationPopup(record); }, { autoPan: false, maxWidth: 360 });
+  }
+
+  function updatePrivateAnnotationDraftLayer() {
+    if (privateAnnotationDraftLayer) {
+      map.removeLayer(privateAnnotationDraftLayer);
+      privateAnnotationDraftLayer = null;
+    }
+    if (!privateAnnotationDraft.length) return;
+    var coordinates = privateAnnotationDraft.slice();
+    if (privateAnnotationTool === 'polygon' && coordinates.length > 2) coordinates.push(coordinates[0]);
+    privateAnnotationDraftLayer = L.polyline(coordinates.map(function (coordinate) {
+      return [coordinate[1], coordinate[0]];
+    }), {
+      pane: 'privateAnnotationPane', color: '#ffe66d', weight: 3, dashArray: '4 5'
+    }).addTo(map);
+  }
+
+  function setPrivateAnnotationStatus(key, variables, error) {
+    var status = document.getElementById('private-annotation-status');
+    status.textContent = tr(key, variables);
+    status.classList.toggle('error', Boolean(error));
+  }
+
+  function renderPrivateAnnotationList() {
+    var list = document.getElementById('private-annotation-list');
+    list.replaceChildren();
+    if (!privateAnnotationRecords.length) {
+      var empty = document.createElement('li');
+      empty.className = 'private-annotation-empty';
+      empty.textContent = tr('annotations.empty');
+      list.appendChild(empty);
+    }
+    privateAnnotationRecords.forEach(function (record) {
+      var item = document.createElement('li');
+      item.className = 'private-annotation-item';
+      item.dataset.annotationId = record.id;
+      var name = document.createElement('strong');
+      name.className = 'private-annotation-name';
+      name.textContent = privateAnnotationName(record);
+      var meta = document.createElement('span');
+      meta.className = 'private-annotation-meta';
+      meta.textContent = privateAnnotationTypeLabel(record.type);
+      if (record.type === 'measurement' && record.measurement) {
+        meta.textContent += ' • ' + tr('annotations.distance') + ': ' + privateAnnotationDistanceText(record.measurement.distanceKm) +
+          ' • ' + tr('annotations.bearing') + ': ' + privateAnnotationBearingText(record.measurement.bearingDegrees);
+      }
+      var actions = document.createElement('div');
+      actions.className = 'private-annotation-item-actions';
+      function action(label, handler) {
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = label;
+        button.addEventListener('click', function () { handler(button); });
+        actions.appendChild(button);
+      }
+      action(tr('annotations.zoom'), function () { zoomPrivateAnnotation(record); });
+      action(tr(record.persisted ? 'annotations.stopKeeping' : 'annotations.keep'), function (button) {
+        button.disabled = true;
+        var operation = record.persisted
+          ? annotationTransaction('readwrite', function (store) { return store.delete(record.id); })
+          : annotationTransaction('readwrite', function (store) { return store.put(annotationStoredRecord(record)); });
+        operation.then(function () {
+          record.persisted = !record.persisted;
+          setPrivateAnnotationStatus(record.persisted ? 'annotations.statusKept' : 'annotations.statusNotKept', {
+            name: privateAnnotationName(record)
+          });
+          renderPrivateAnnotationList();
+        }).catch(function () {
+          button.disabled = false;
+          setPrivateAnnotationStatus('annotations.statusStorageError', null, true);
+        });
+      });
+      action(tr('annotations.remove'), function (button) {
+        button.disabled = true;
+        removePrivateAnnotation(record, button);
+      });
+      item.appendChild(name);
+      item.appendChild(meta);
+      item.appendChild(actions);
+      list.appendChild(item);
+    });
+    document.getElementById('private-annotation-undo').disabled = !privateAnnotationRecords.length && !privateAnnotationDraft.length;
+    document.getElementById('private-annotation-clear').disabled = !privateAnnotationRecords.length;
+    document.getElementById('private-annotation-export').disabled = !privateAnnotationRecords.length;
+  }
+
+  function zoomPrivateAnnotation(record) {
+    if (!record.layer) return;
+    if (record.type === 'point' || record.type === 'text') {
+      map.setView(record.layer.getLatLng(), Math.min(12, Math.max(map.getZoom(), 8)));
+    } else map.fitBounds(record.layer.getBounds(), { padding: [30, 30], maxZoom: 12 });
+  }
+
+  function removePrivateAnnotation(record, button) {
+    var removal = record.persisted
+      ? annotationTransaction('readwrite', function (store) { return store.delete(record.id); })
+      : Promise.resolve();
+    removal.then(function () {
+      removePrivateAnnotationLayer(record);
+      privateAnnotationRecords = privateAnnotationRecords.filter(function (itemRecord) { return itemRecord !== record; });
+      renderPrivateAnnotationList();
+    }).catch(function () {
+      if (button) button.disabled = false;
+      setPrivateAnnotationStatus('annotations.statusStorageError', null, true);
+    });
+  }
+
+  function addPrivateAnnotation(record) {
+    if (privateAnnotationRecords.length >= StormScopePrivateAnnotations.MAX_ANNOTATIONS) {
+      setPrivateAnnotationStatus('annotations.statusLimit', null, true);
+      return false;
+    }
+    record.persisted = false;
+    record.layer = null;
+    privateAnnotationRecords.push(record);
+    drawPrivateAnnotation(record);
+    renderPrivateAnnotationList();
+    setPrivateAnnotationStatus('annotations.statusAdded', { type: privateAnnotationTypeLabel(record.type) });
+    return true;
+  }
+
+  function currentAnnotationCoordinate() {
+    var latitude = Number(document.getElementById('annotation-lat').value);
+    var longitude = Number(document.getElementById('annotation-lon').value);
+    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+        !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+      setPrivateAnnotationStatus('annotations.statusInvalidCoordinate', null, true);
+      return null;
+    }
+    return [longitude, latitude];
+  }
+
+  function updatePrivateAnnotationDraftStatus() {
+    var status = document.getElementById('annotation-draft-status');
+    status.textContent = privateAnnotationDraft.length
+      ? tr('annotations.draftVertices', { count: localNumber(privateAnnotationDraft.length) }) : '';
+    updatePrivateAnnotationDraftLayer();
+    renderPrivateAnnotationList();
+  }
+
+  function addPrivateAnnotationFromForm() {
+    var coordinate = currentAnnotationCoordinate();
+    if (!coordinate) return;
+    var label = document.getElementById('annotation-label').value;
+    var type = privateAnnotationTool;
+    if (type === 'text' && !String(label).trim()) {
+      setPrivateAnnotationStatus('annotations.statusNeedLabel', null, true);
+      return;
+    }
+    if (type !== 'point' && type !== 'text') return;
+    try {
+      addPrivateAnnotation(StormScopePrivateAnnotations.createAnnotation(type, coordinate, label));
+    } catch (error) { setPrivateAnnotationStatus('annotations.statusError', null, true); }
+  }
+
+  function addPrivateAnnotationVertex() {
+    var coordinate = currentAnnotationCoordinate();
+    if (!coordinate) return;
+    if (privateAnnotationDraft.length >= StormScopePrivateAnnotations.MAX_VERTICES - 1) {
+      setPrivateAnnotationStatus('annotations.statusLimit', null, true);
+      return;
+    }
+    privateAnnotationDraft.push(coordinate);
+    updatePrivateAnnotationDraftStatus();
+  }
+
+  function finishPrivateAnnotation() {
+    var type = privateAnnotationTool;
+    var minimum = type === 'polygon' ? 3 : 2;
+    if (privateAnnotationDraft.length < minimum) {
+      setPrivateAnnotationStatus('annotations.statusNeedVertices', { count: localNumber(minimum) }, true);
+      return;
+    }
+    var coordinates = privateAnnotationDraft.slice();
+    if (type === 'polygon') coordinates.push(coordinates[0]);
+    try {
+      var geometryCoordinates = type === 'polygon' ? [coordinates] : coordinates;
+      if (addPrivateAnnotation(StormScopePrivateAnnotations.createAnnotation(type, geometryCoordinates,
+        document.getElementById('annotation-label').value))) {
+        privateAnnotationDraft = [];
+        updatePrivateAnnotationDraftStatus();
+      }
+    } catch (error) { setPrivateAnnotationStatus('annotations.statusError', null, true); }
+  }
+
+  function runPrivateMeasurement() {
+    var start = [Number(document.getElementById('measure-start-lon').value), Number(document.getElementById('measure-start-lat').value)];
+    var end = [Number(document.getElementById('measure-end-lon').value), Number(document.getElementById('measure-end-lat').value)];
+    if (!start.every(Number.isFinite) || !end.every(Number.isFinite) ||
+        start[0] < -180 || start[0] > 180 || start[1] < -90 || start[1] > 90 ||
+        end[0] < -180 || end[0] > 180 || end[1] < -90 || end[1] > 90) {
+      setPrivateAnnotationStatus('annotations.statusInvalidCoordinate', null, true);
+      return;
+    }
+    try {
+      var measurement = StormScopePrivateAnnotations.measureLine([start, end]);
+      var distance = privateAnnotationDistanceText(measurement.distanceKm);
+      var bearing = privateAnnotationBearingText(measurement.bearingDegrees);
+      document.getElementById('annotation-measure-result').textContent = tr('annotations.measureResult', {
+        distance: distance, bearing: bearing
+      });
+      if (addPrivateAnnotation(StormScopePrivateAnnotations.createAnnotation('measurement', [start, end],
+        document.getElementById('annotation-label').value))) {
+        setPrivateAnnotationStatus('annotations.statusMeasured', { distance: distance, bearing: bearing });
+      }
+    } catch (error) { setPrivateAnnotationStatus('annotations.statusError', null, true); }
+  }
+
+  function updatePrivateAnnotationToolUi() {
+    var select = document.getElementById('annotation-tool');
+    privateAnnotationTool = select.value;
+    var drawing = document.getElementById('annotation-drawing-controls');
+    var measure = document.getElementById('annotation-measure-controls');
+    var drawingVisible = ['point', 'line', 'polygon', 'text'].indexOf(privateAnnotationTool) !== -1;
+    drawing.classList.toggle('hidden', !drawingVisible);
+    measure.classList.toggle('hidden', privateAnnotationTool !== 'measure');
+    document.getElementById('annotation-add-point').classList.toggle('hidden', ['point', 'text'].indexOf(privateAnnotationTool) === -1);
+    document.getElementById('annotation-add-vertex').classList.toggle('hidden', ['line', 'polygon'].indexOf(privateAnnotationTool) === -1);
+    document.getElementById('annotation-finish').classList.toggle('hidden', ['line', 'polygon'].indexOf(privateAnnotationTool) === -1);
+    document.getElementById('annotation-finish').textContent = tr(privateAnnotationTool === 'polygon'
+      ? 'annotations.finishPolygon' : 'annotations.finishLine');
+    privateAnnotationDraft = [];
+    updatePrivateAnnotationDraftStatus();
+  }
+
+  function handlePrivateAnnotationMapClick(event) {
+    if (privateAnnotationTool === 'none' || privateAnnotationTool === 'measure') return false;
+    document.getElementById('annotation-lat').value = event.latlng.lat.toFixed(5);
+    document.getElementById('annotation-lon').value = event.latlng.lng.toFixed(5);
+    if (privateAnnotationTool === 'point' || privateAnnotationTool === 'text') addPrivateAnnotationFromForm();
+    else addPrivateAnnotationVertex();
+    return true;
+  }
+
+  function undoPrivateAnnotation() {
+    if (privateAnnotationDraft.length) {
+      privateAnnotationDraft.pop();
+      updatePrivateAnnotationDraftStatus();
+      setPrivateAnnotationStatus('annotations.statusDraftUndone');
+      return;
+    }
+    var record = privateAnnotationRecords[privateAnnotationRecords.length - 1];
+    if (!record) return;
+    var removal = record.persisted
+      ? annotationTransaction('readwrite', function (store) { return store.delete(record.id); })
+      : Promise.resolve();
+    removal.then(function () {
+      removePrivateAnnotationLayer(record);
+      privateAnnotationRecords.pop();
+      renderPrivateAnnotationList();
+      setPrivateAnnotationStatus('annotations.statusUndone');
+    }).catch(function () { setPrivateAnnotationStatus('annotations.statusStorageError', null, true); });
+  }
+
+  function clearPrivateAnnotations() {
+    if (!privateAnnotationRecords.length) return;
+    var clear = localOverlayDatabase
+      ? annotationTransaction('readwrite', function (store) { return store.clear(); }) : Promise.resolve();
+    clear.then(function () {
+      privateAnnotationRecords.forEach(removePrivateAnnotationLayer);
+      privateAnnotationRecords = [];
+      privateAnnotationDraft = [];
+      updatePrivateAnnotationDraftStatus();
+      renderPrivateAnnotationList();
+      setPrivateAnnotationStatus('annotations.statusCleared');
+    }).catch(function () { setPrivateAnnotationStatus('annotations.statusStorageError', null, true); });
+  }
+
+  function exportPrivateAnnotations() {
+    try {
+      downloadLocalOverlay('stormscope-private-annotations.json',
+        StormScopePrivateAnnotations.exportBundle(privateAnnotationRecords), 'application/json');
+      setPrivateAnnotationStatus('annotations.statusExported');
+    } catch (error) { setPrivateAnnotationStatus('annotations.statusError', null, true); }
+  }
+
+  function initPrivateAnnotations(records) {
+    renderPrivateAnnotationList();
+    (records || []).forEach(function (value) {
+      if (privateAnnotationRecords.length >= StormScopePrivateAnnotations.MAX_ANNOTATIONS) return;
+      try {
+        var record = StormScopePrivateAnnotations.validateAnnotation(value);
+        record.persisted = true;
+        record.layer = null;
+        privateAnnotationRecords.push(record);
+        drawPrivateAnnotation(record);
+      } catch (error) { /* invalid records fail closed */ }
+    });
+    renderPrivateAnnotationList();
+  }
+
   function importLocalOverlay(file) {
     if (!file) return;
     setLocalOverlayStatus('overlays.reading');
@@ -2453,8 +2867,9 @@
 
   function initLocalOverlays() {
     renderLocalOverlayList();
-    openLocalOverlayDatabase().then(function (records) {
-      records.forEach(function (value) {
+    renderPrivateAnnotationList();
+    openLocalOverlayDatabase().then(function (result) {
+      (result.overlays || []).forEach(function (value) {
         if (localOverlayRecords.length >= StormScopeLocalOverlays.MAX_OVERLAYS) return;
         try {
           var record = StormScopeLocalOverlays.validateRecord(value);
@@ -2464,8 +2879,9 @@
           drawLocalOverlay(record);
         } catch (error) { /* invalid records fail closed */ }
       });
+      initPrivateAnnotations(result.annotations || []);
       renderLocalOverlayList();
-    }).catch(function () { localOverlayDatabase = null; });
+    }).catch(function () { localOverlayDatabase = null; initPrivateAnnotations([]); });
   }
 
   function wildfirePopup(feature) {
@@ -7226,6 +7642,15 @@
       } catch (error) { setLocalOverlayStatus('overlays.error.export', null, true); }
     });
     document.getElementById('clear-local-overlays').addEventListener('click', clearLocalOverlays);
+    document.getElementById('annotation-tool').addEventListener('change', updatePrivateAnnotationToolUi);
+    document.getElementById('annotation-add-point').addEventListener('click', addPrivateAnnotationFromForm);
+    document.getElementById('annotation-add-vertex').addEventListener('click', addPrivateAnnotationVertex);
+    document.getElementById('annotation-finish').addEventListener('click', finishPrivateAnnotation);
+    document.getElementById('annotation-measure-run').addEventListener('click', runPrivateMeasurement);
+    document.getElementById('private-annotation-undo').addEventListener('click', undoPrivateAnnotation);
+    document.getElementById('private-annotation-clear').addEventListener('click', clearPrivateAnnotations);
+    document.getElementById('private-annotation-export').addEventListener('click', exportPrivateAnnotations);
+    updatePrivateAnnotationToolUi();
     document.getElementById('copy-scene').addEventListener('click', function () { copyCurrentScene(); });
     document.getElementById('share-scene').addEventListener('click', function () { shareCurrentScene(); });
     window.addEventListener('hashchange', applyLocationScene);
@@ -7243,7 +7668,8 @@
       closeAlertsDrawer();
     });
 
-    map.on('click', function () {
+    map.on('click', function (event) {
+      if (handlePrivateAnnotationMapClick(event)) return;
       TOP_LEVEL_PANELS.forEach(function (entry) {
         document.getElementById(entry.panel).classList.add('hidden');
         document.getElementById(entry.toggle).setAttribute('aria-expanded', 'false');
@@ -7584,6 +8010,8 @@
       resetPlaceSearch();
       if (cameraStore) cameraStore.cancel();
       if (monitorRegistry) monitorRegistry.destroyAll();
+      if (privateAnnotationDraftLayer) map.removeLayer(privateAnnotationDraftLayer);
+      if (privateAnnotationLayer) map.removeLayer(privateAnnotationLayer);
       if (localOverlayDatabase) localOverlayDatabase.close();
       clearTimeout(saveLastViewTimer);
       Object.keys(recoveryActionTimers).forEach(cancelRecoveryAction);
@@ -7868,6 +8296,14 @@
         tropicalZ: map.getPane('tropicalPane').style.zIndex,
         warningZ: map.getPane('overlayPane').style.zIndex || '400',
         cameraZ: map.getPane('markerPane').style.zIndex || '600'
+      };
+    },
+    getPrivateAnnotationState: function () {
+      return {
+        count: privateAnnotationRecords.length,
+        draftVertices: privateAnnotationDraft.length,
+        tool: privateAnnotationTool,
+        paneZ: map.getPane('privateAnnotationPane').style.zIndex
       };
     },
     getSatelliteState: function () {
