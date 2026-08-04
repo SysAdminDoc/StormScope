@@ -57,6 +57,7 @@ var SHELL_ASSETS = [
   './js/data-mode.js',
   './js/camera-record.js',
   './js/camera-store.js',
+  './js/camera-quarantine.js',
   './js/layer-registry.js',
   './js/saved-state.js',
   './js/scene-codec.js',

@@ -43,6 +43,7 @@
   var CAMERA_OUTAGE_CHECK_STORAGE_KEY = 'stormscope-camera-outage-check-v1';
   var cameraIconCache = Object.create(null);
   var cameraObservations = Object.create(null);
+  var cameraQuarantine = null;
   var cameraStore = null;
   var cameraSourceHealth = null;
   var cameraSourceHealthState = 'loading';
@@ -4154,6 +4155,7 @@
   function recordCameraObservation(cam, outcome, reason) {
     if (!cam) return;
     var observedAt = Date.now();
+    if (cameraQuarantine) cameraQuarantine.observe(cam, outcome, observedAt);
     var observation = {
       outcome: outcome,
       reason: reason || null,
@@ -4163,6 +4165,7 @@
     cameraObservations[cameraHealthKey(cam)] = observation;
     cam.local_observation = observation;
     persistCameraObservations();
+    renderCameraSourceHealth();
     if (activeCamera === cam) updateModalCameraHealth(cam);
     if (currentCameraResults.indexOf(cam) !== -1) renderCameraResultWindow();
   }
@@ -4272,6 +4275,11 @@
       document.getElementById('camera-count').textContent = tr('camera.loadingCount');
       cameraDataTimestamp = null;
       cameraObservations = loadCameraObservations();
+      try {
+        cameraQuarantine = StormScopeCameraQuarantine.create({ storage: localStorage });
+      } catch (error) {
+        cameraQuarantine = StormScopeCameraQuarantine.create();
+      }
       cameraCluster = L.markerClusterGroup({
         maxClusterRadius: 50,
         spiderfyOnMaxZoom: true,
@@ -4439,6 +4447,23 @@
     return badge;
   }
 
+  function cameraQuarantineDescription(record) {
+    return tr('camera.quarantineDescription', {
+      failures: localNumber(record.failures),
+      attempts: localNumber(record.attempts)
+    });
+  }
+
+  function createCameraQuarantineBadge(record) {
+    if (!record || !record.markedForReview) return null;
+    var badge = document.createElement('span');
+    badge.className = 'camera-quarantine-badge';
+    badge.textContent = tr('camera.quarantineBadge');
+    badge.setAttribute('aria-label', cameraQuarantineDescription(record));
+    badge.title = cameraQuarantineDescription(record);
+    return badge;
+  }
+
   function selectCameraResult(camera) {
     map.setView([camera.lat, camera.lon], Math.max(14, map.getZoom()), { animate: false });
     openCameraModal(camera);
@@ -4550,9 +4575,11 @@
     virtual.items.forEach(function (camera, localIndex) {
       var resultIndex = virtual.start + localIndex;
       var freshness = StormScopeCameraRecord.captureFreshness(camera);
+      var quarantine = cameraQuarantine && cameraQuarantine.get(camera);
       var item = document.createElement('li');
       item.className = 'camera-result';
       item.classList.toggle('camera-result-stale', freshness.state === 'stale');
+      item.classList.toggle('camera-result-quarantined', Boolean(quarantine && quarantine.markedForReview));
       item.setAttribute('role', 'listitem');
       item.dataset.resultIndex = String(resultIndex);
       item.setAttribute('aria-posinset', String(resultIndex + 1));
@@ -4576,6 +4603,8 @@
       }
       var stalenessBadge = createCameraStalenessBadge(freshness);
       if (stalenessBadge) openButton.appendChild(stalenessBadge);
+      var quarantineBadge = createCameraQuarantineBadge(quarantine);
+      if (quarantineBadge) openButton.appendChild(quarantineBadge);
       openButton.addEventListener('click', function () { selectCameraResult(camera); });
       openButton.addEventListener('focus', function () { cameraResultFocusIndex = resultIndex; });
       var favorite = document.createElement('button');
@@ -5098,9 +5127,13 @@
     var delta = summary.coverageDelta > 0
       ? '+' + localNumber(summary.coverageDelta)
       : localNumber(summary.coverageDelta);
+    var quarantine = cameraQuarantine
+      ? cameraQuarantine.summarize(source)
+      : { markedForReview: 0 };
     element.dataset.status = summary.failed
       ? 'failed'
       : summary.retained ? 'retained' : summary.fresh ? 'fresh' : 'unknown';
+    element.dataset.markedForReview = String(quarantine.markedForReview);
     element.textContent = tr('camera.sourceHealthSummary', {
       scope: scope,
       fresh: localNumber(summary.fresh),
@@ -5113,7 +5146,9 @@
       time: StormScopeI18n.formatDateTime(new Date(summary.lastAttemptAt), {
         month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
       }, appLocale)
-    }) : '');
+    }) : '') + ' • ' + tr('camera.quarantineSummary', {
+      count: localNumber(quarantine.markedForReview)
+    });
   }
 
   function refreshCameraLoadLabels() {
@@ -5248,6 +5283,7 @@
     var healthEl = document.getElementById('modal-cam-health');
     var outageEl = document.getElementById('modal-camera-outage');
     var stalenessEl = document.getElementById('modal-camera-staleness');
+    var quarantineEl = document.getElementById('modal-camera-quarantine');
     var modalContent = document.querySelector('#camera-modal .modal-content');
     var health = cam.health || 'unknown';
     healthEl.className = 'health-badge health-' + health;
@@ -5262,7 +5298,12 @@
     }
     var freshness = StormScopeCameraRecord.captureFreshness(cam);
     var stale = freshness.state === 'stale';
-    if (modalContent) modalContent.classList.toggle('camera-modal-stale', stale);
+    var quarantine = cameraQuarantine && cameraQuarantine.get(cam);
+    var underReview = Boolean(quarantine && quarantine.markedForReview);
+    if (modalContent) {
+      modalContent.classList.toggle('camera-modal-stale', stale);
+      modalContent.classList.toggle('camera-modal-quarantined', underReview);
+    }
     if (stalenessEl) {
       stalenessEl.classList.toggle('hidden', !stale);
       stalenessEl.textContent = stale ? tr('camera.stalenessBadge') : '';
@@ -5272,6 +5313,17 @@
       } else {
         stalenessEl.removeAttribute('aria-label');
         stalenessEl.removeAttribute('title');
+      }
+    }
+    if (quarantineEl) {
+      quarantineEl.classList.toggle('hidden', !underReview);
+      quarantineEl.textContent = underReview ? tr('camera.quarantineBadge') : '';
+      if (underReview) {
+        quarantineEl.setAttribute('aria-label', cameraQuarantineDescription(quarantine));
+        quarantineEl.setAttribute('title', cameraQuarantineDescription(quarantine));
+      } else {
+        quarantineEl.removeAttribute('aria-label');
+        quarantineEl.removeAttribute('title');
       }
     }
 

@@ -16,6 +16,7 @@ const spcReports = fs.readFileSync(path.join(root, 'js', 'spc-reports.js'), 'utf
 const surfaceObservations = fs.readFileSync(path.join(root, 'js', 'surface-observations.js'), 'utf8');
 const cameraRecordSource = fs.readFileSync(path.join(root, 'js', 'camera-record.js'), 'utf8');
 const cameraFeedSource = fs.readFileSync(path.join(root, 'js', 'camera-feed.js'), 'utf8');
+const cameraQuarantineSource = fs.readFileSync(path.join(root, 'js', 'camera-quarantine.js'), 'utf8');
 const serviceWorker = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const radarControllerSource = fs.readFileSync(path.join(root, 'js', 'radar-controller.js'), 'utf8');
 const radarMotionSource = fs.readFileSync(path.join(root, 'js', 'radar-motion.js'), 'utf8');
@@ -37,6 +38,7 @@ const cameraData = JSON.parse(fs.readFileSync(path.join(root, 'data', 'cameras.j
 const i18n = require('../js/i18n.js');
 const cameraRecord = require('../js/camera-record.js');
 const cameraFeed = require('../js/camera-feed.js');
+const cameraQuarantine = require('../js/camera-quarantine.js');
 const situationSnapshot = require('../js/situation-snapshot.js');
 
 test('RainViewer uses the 2026 past-radar contract', () => {
@@ -154,6 +156,31 @@ test('still-frame outage detection is opt-in, bounded, visible, and local-only',
       assert.ok(i18n.catalogs[locale][key], `${locale} catalog should define ${key}`);
     }
   }
+});
+
+test('camera family quarantine is local, bounded, expiring, and surfaced without health mutation', () => {
+  assert.match(cameraQuarantineSource, /STORAGE_KEY = 'stormscope-camera-quarantine-v1'/);
+  assert.match(cameraQuarantineSource, /MAX_FAMILIES = 256/);
+  assert.match(cameraQuarantineSource, /MAX_SAMPLES_PER_FAMILY = 12/);
+  assert.match(cameraQuarantineSource, /MIN_FAILURE_RATE = 0\.6/);
+  assert.match(cameraQuarantineSource, /markedForReview/);
+  assert.match(html, /js\/camera-quarantine\.js[\s\S]*js\/app\.js/);
+  assert.match(serviceWorker, /\.\/js\/camera-quarantine\.js/);
+  assert.match(html, /id="modal-camera-quarantine"[^>]*class="camera-quarantine-badge hidden"/);
+  assert.match(app, /StormScopeCameraQuarantine\.create/);
+  assert.match(app, /cameraQuarantine\.observe\(cam, outcome/);
+  assert.match(app, /cameraQuarantine\.summarize\(source\)/);
+  assert.match(app, /camera-result-quarantined/);
+  assert.doesNotMatch(app, /cam\.health\s*=/);
+  assert.match(css, /\.camera-result\.camera-result-quarantined/);
+  assert.match(css, /\.camera-quarantine-badge/);
+  for (const locale of ['en', 'es']) {
+    for (const key of ['camera.quarantineBadge', 'camera.quarantineDescription', 'camera.quarantineSummary']) {
+      assert.ok(i18n.catalogs[locale][key], `${locale} catalog should define ${key}`);
+    }
+  }
+  assert.equal(cameraQuarantine.FAILURE_OUTCOMES.includes('unavailable'), true);
+  assert.equal(cameraQuarantine.FAILURE_OUTCOMES.includes('unsupported'), true);
 });
 
 test('extracted lifecycle modules load before app, remain offline, and own one teardown loop', () => {

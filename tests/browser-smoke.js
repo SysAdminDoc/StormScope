@@ -2412,9 +2412,12 @@ async function main() {
     assert.equal(observedCamera.type, 'image');
     assert.equal(await visibleResults.first().locator('.camera-staleness-badge').count(), 1);
     assert.match(await visibleResults.first().getAttribute('class'), /camera-result-stale/);
-    const cameraImageFixture = route => route.fulfill({
-      contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: pixel
-    });
+    let cameraFailureMode = false;
+    const cameraImageFixture = route => cameraFailureMode
+      ? route.fulfill({ status: 503, body: 'camera unavailable' })
+      : route.fulfill({
+        contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: pixel
+      });
     const cameraImageMatch = url => url.href.startsWith(observedCamera.url);
     await page.route(cameraImageMatch, cameraImageFixture);
     await visibleResults.nth(observedCamera.observedIndex).locator('.camera-result-open').click();
@@ -2472,6 +2475,19 @@ async function main() {
     await page.getByRole('button', { name: 'Close camera viewer' }).click();
     await page.locator('#camera-modal').waitFor({ state: 'hidden' });
     assert.equal(await page.locator('#modal-feed video, #modal-feed iframe, #modal-feed img').count(), 0);
+
+    cameraFailureMode = true;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await visibleResults.first().locator('.camera-result-open').click();
+      await page.locator('#camera-modal .feed-error').waitFor({ state: 'visible' });
+      await page.getByRole('button', { name: 'Close camera viewer' }).click();
+      await page.locator('#camera-modal').waitFor({ state: 'hidden' });
+    }
+    cameraFailureMode = false;
+    await page.locator('.camera-result:first-child .camera-quarantine-badge').waitFor({ state: 'visible' });
+    assert.match(await page.locator('.camera-result:first-child').getAttribute('class'), /camera-result-quarantined/);
+    assert.equal(await page.locator('#camera-source-health').getAttribute('data-marked-for-review'), '1');
+    assert.match(await page.locator('#camera-source-health').textContent(), /1 camera families under review/);
 
     const failedAirQualityFixture = route => route.fulfill({ status: 503, body: 'air quality unavailable' });
     await page.route('https://air-quality-api.open-meteo.com/**', failedAirQualityFixture);

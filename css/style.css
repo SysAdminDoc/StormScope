@@ -1164,6 +1164,8 @@ button:focus-visible {
 .camera-result-open span { margin-top: 3px; color: var(--text-dim); font-size: 11px; }
 .camera-result.camera-result-stale .camera-result-open { opacity: 0.78; }
 .camera-result.camera-result-stale .camera-result-open strong { color: var(--text-dim); }
+.camera-result.camera-result-quarantined .camera-result-open { opacity: 0.7; }
+.camera-result.camera-result-quarantined .camera-result-open strong { color: var(--warning-text); }
 .favorite-result, .monitor-result, .favorite-camera { min-width: 44px; min-height: 44px; border: 1px solid var(--border); border-radius: 7px; background: transparent; color: var(--text-dim); cursor: pointer; }
 .favorite-camera { min-width: auto; min-height: 28px; padding: 3px 8px; font-size: 11px; }
 .favorite-result[aria-pressed="true"], .favorite-camera[aria-pressed="true"] { color: #ffd166; border-color: #ffd166; }
@@ -1473,7 +1475,8 @@ button:focus-visible {
 }
 
 .camera-outage-badge,
-.camera-staleness-badge {
+.camera-staleness-badge,
+.camera-quarantine-badge {
   display: inline-flex;
   width: fit-content;
   padding: 2px 6px;
@@ -1485,7 +1488,8 @@ button:focus-visible {
 }
 
 .camera-result-open .camera-outage-badge,
-.camera-result-open .camera-staleness-badge {
+.camera-result-open .camera-staleness-badge,
+.camera-result-open .camera-quarantine-badge {
   display: inline-flex;
   margin-top: 4px;
   overflow: visible;
@@ -1497,7 +1501,13 @@ button:focus-visible {
   color: var(--accent);
 }
 
+.camera-quarantine-badge {
+  border-color: color-mix(in srgb, var(--warning) 70%, transparent);
+  color: var(--warning-text);
+}
+
 .modal-content.camera-modal-stale #modal-cam-name { color: var(--text-dim); }
+.modal-content.camera-modal-quarantined #modal-cam-name { color: var(--warning-text); }
 
 .modal-close-btn {
   width: 32px;

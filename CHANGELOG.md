@@ -12,6 +12,7 @@
 - Added progressive View Transitions for top-level panel and scene changes, with named shell-surface animations, reduced-motion and unsupported-browser fallbacks, and settled-state browser coverage.
 - Added an opt-in, device-local camera still-frame sanity check that flags likely flat or stalled no-live-feed images with visible list/viewer badges, six-hour observations, and no provider-health mutation.
 - Added localized stale-capture badges and reduced-emphasis styling to camera results and the viewer using per-feed-type provider timestamp thresholds without additional requests.
+- Added bounded, six-hour device-local camera-family review state for repeated playback failures, with Search health and viewer badges that never mutate published catalog health.
 - Added on-demand USGS ShakeMap MMI contours and DYFI intensity polygons for significant earthquakes, with bounded official product discovery, safe DOM popups, partial-product recovery, attribution, English/Spanish copy, and headless coverage.
 - Added an optional, default-off NOAA/NWS WPC Winter Storm Severity Index layer using the bounded aggregate Days 1–3 impact polygons, official severity colors, issue/valid/source metadata, planning-only DOM popups, independent lifecycle recovery, English/Spanish labels, and unit/headless coverage. SW v115.
 - Added keyless NOAA/NWS RIDGE WMS as a bounded CONUS third radar fallback after RainViewer and MRMS, with capabilities-derived recent frames, explicit WMS timestamps, source/age metadata, and truthful outside-envelope coverage states. SW v114.
