@@ -17,6 +17,7 @@ const surfaceObservations = fs.readFileSync(path.join(root, 'js', 'surface-obser
 const cameraRecordSource = fs.readFileSync(path.join(root, 'js', 'camera-record.js'), 'utf8');
 const cameraFeedSource = fs.readFileSync(path.join(root, 'js', 'camera-feed.js'), 'utf8');
 const serviceWorker = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
+const radarControllerSource = fs.readFileSync(path.join(root, 'js', 'radar-controller.js'), 'utf8');
 const spatialQuery = fs.readFileSync(path.join(root, 'js', 'spatial-query.js'), 'utf8');
 const spatialQuerySource = spatialQuery;
 const privateAnnotationSource = fs.readFileSync(path.join(root, 'js', 'private-annotations.js'), 'utf8');
@@ -30,18 +31,22 @@ const cameraFeed = require('../js/camera-feed.js');
 const situationSnapshot = require('../js/situation-snapshot.js');
 
 test('RainViewer uses the 2026 past-radar contract', () => {
-  assert.match(app, /RAINVIEWER_COLOR_SCHEME = 2/);
-  assert.match(app, /RAINVIEWER_MAX_NATIVE_ZOOM = 7/);
-  assert.match(app, /parseXyzDiscovery/);
-  assert.match(app, /discoverNoaa/);
-  assert.match(app, /selectProvider/);
-  assert.match(app, /sampleRadarCenter/);
-  assert.match(app, /maxNativeZoom: RAINVIEWER_MAX_NATIVE_ZOOM/);
-  assert.match(app, /crossOrigin: 'anonymous'/);
-  assert.match(app, /radar\.pastFrame/);
+  assert.match(radarControllerSource, /COLOR_SCHEME = 2/);
+  assert.match(radarControllerSource, /MAX_NATIVE_ZOOM = 7/);
+  assert.match(radarControllerSource, /parseXyzDiscovery/);
+  assert.match(radarControllerSource, /discoverNoaa/);
+  assert.match(radarControllerSource, /selectProvider/);
+  assert.match(radarControllerSource, /sampleCenter/);
+  assert.match(radarControllerSource, /maxNativeZoom: provider\.tile\.maxNativeZoom/);
+  assert.match(radarControllerSource, /crossOrigin: 'anonymous'/);
+  assert.match(radarControllerSource, /radar\.pastFrame/);
   assert.match(i18n.catalogs.en['radar.pastFrame'], /Past radar/);
-  assert.match(app, /function clearRadarDisplay\(\)/);
-  assert.match(app, /layer\.on\('tileerror'/);
+  assert.match(radarControllerSource, /function clearDisplay\(\)/);
+  assert.match(radarControllerSource, /layer\.on\('tileerror'/);
+  assert.match(html, /js\/radar-controller\.js[\s\S]*js\/app\.js/);
+  assert.match(serviceWorker, /\.\/js\/radar-controller\.js/);
+  assert.doesNotMatch(app, /\bvar radarFrames\b/);
+  assert.doesNotMatch(app, /function initRadar\(/);
   assert.match(html, /href="https:\/\/www\.rainviewer\.com\/"/);
   assert.match(html, /id="radar-retry"/);
 });
@@ -171,7 +176,8 @@ test('PWA update and page lifecycle work are explicit and recoverable', () => {
   assert.match(app, /beforeunload/);
   assert.match(app, /window\.addEventListener\('online'/);
   assert.match(app, /window\.addEventListener\('offline'/);
-  assert.match(app, /RADAR_REFRESH_INTERVAL/);
+  assert.match(app, /radarController\.startRefreshTimer\(\)/);
+  assert.match(radarControllerSource, /REFRESH_INTERVAL/);
   assert.match(app, /camera\.paused/);
   assert.match(i18n.catalogs.en['camera.paused'], /Feed paused/);
 });
@@ -210,7 +216,7 @@ test('deterministic runtime status copy never exposes raw localization bypasses'
   assert.doesNotMatch(app, /\.degradationReason\.replace\(/);
   assert.doesNotMatch(app, /Offline cache (?:is not active yet|did not respond)/);
   assert.doesNotMatch(app, /\(cam\.health \|\| 'unknown'\) \+ ' feed'/);
-  assert.match(app, /radarReasonLabel\(radarProviderSelection\.degradationReason\)/);
+  assert.match(app, /function radarReasonLabel\(reason\)/);
   assert.match(app, /sourceLabel\(camera\.source \|\| camera\.type\)/);
 });
 
@@ -367,16 +373,17 @@ test('fatal recovery keeps shell cache and exports redacted diagnostics', () => 
 
 test('radar failover, coverage semantics, and NWS alerts are wired into the UI', () => {
   assert.match(html, /js\/radar-providers\.js/);
+  assert.match(html, /js\/radar-controller\.js/);
   assert.match(html, /js\/nws-alerts\.js/);
   assert.match(html, /id="toggle-coverage"/);
   assert.match(html, /id="toggle-alerts"/);
   assert.match(html, /id="alerts-panel"/);
   assert.match(html, /Informational only/);
-  assert.match(app, /StormScopeRadarProviders\.selectProvider/);
-  assert.match(app, /StormScopeRadarProviders\.parseNoaaDiscovery/);
-  assert.match(app, /StormScopeRadarProviders\.classifyRadarState/);
-  assert.match(app, /if \(params\.time\) wmsOptions\.time = params\.time/);
-  assert.match(app, /forceNoaa/);
+  assert.match(radarControllerSource, /selectProvider/);
+  assert.match(radarControllerSource, /parseNoaaDiscovery/);
+  assert.match(radarControllerSource, /classifyRadarState/);
+  assert.match(radarControllerSource, /if \(params\.time\) wmsOptions\.time = params\.time/);
+  assert.match(radarControllerSource, /forceNoaa/);
   assert.match(app, /StormScopeNwsAlerts\.buildViewportQuery/);
   assert.match(app, /StormScopeNwsAlerts\.buildPointQuery/);
   assert.match(app, /StormScopeNwsAlerts\.nextRetryMetadata/);
@@ -388,8 +395,9 @@ test('radar failover, coverage semantics, and NWS alerts are wired into the UI',
 
 test('build-time radar configuration loads before providers and remains in the offline shell', () => {
   assert.match(html, /js\/radar-build-config\.js[\s\S]*js\/radar-providers\.js/);
+  assert.match(html, /js\/radar-providers\.js[\s\S]*js\/radar-controller\.js/);
   assert.match(serviceWorker, /\.\/js\/radar-build-config\.js/);
-  assert.match(app, /StormScopeRadarProviders\.primaryProviderId/);
+  assert.match(radarControllerSource, /providers\.primaryProviderId/);
   assert.doesNotMatch(app, /localStorage[^\n]*radar[^\n]*provider/i);
   assert.doesNotMatch(app, /URLSearchParams[^\n]*radar/i);
 });
@@ -404,11 +412,11 @@ test('two-map comparison is packaged, budgeted, low-data aware, and lifecycle bo
 });
 
 test('RainViewer requests are guarded before tile and sampling fetches', () => {
-  assert.match(app, /createRollingRequestBudget\(\{ limit: 90, windowMs: 60000 \}\)/);
-  assert.match(app, /function guardRainViewerTileLayer/);
-  assert.match(app, /function consumeRainViewerRequest/);
-  assert.match(app, /RAINVIEWER_PRELOAD_RESERVE/);
-  assert.match(app, /initRadar\(\{ forceNoaa: true, resumePlayback: false \}\)/);
+  assert.match(radarControllerSource, /createRollingRequestBudget\(\{ limit: 90, windowMs: 60000 \}\)/);
+  assert.match(radarControllerSource, /function guardRainViewerTileLayer/);
+  assert.match(radarControllerSource, /function consumeRainViewerRequest/);
+  assert.match(radarControllerSource, /PRELOAD_RESERVE/);
+  assert.match(radarControllerSource, /init\(\{ forceNoaa: true, resumePlayback: state\.playing \}\)/);
   assert.match(app, /getRainViewerBudget/);
 });
 
@@ -712,7 +720,7 @@ test('direct camera media suppresses cross-origin referrers', () => {
     assert.match(window, /referrerPolicy = 'no-referrer'/, `${marker} must set no-referrer`);
   }
   // The radar tile pixel sampler fetches provider tiles cross-origin too.
-  assert.match(app, /image\.crossOrigin = 'anonymous';\s*\n\s*image\.referrerPolicy = 'no-referrer';/);
+  assert.match(radarControllerSource, /image\.crossOrigin = 'anonymous';\s*\n\s*image\.referrerPolicy = 'no-referrer';/);
 });
 
 test('popup anchor hrefs from fetched provider text are scheme-guarded (CVE-2025-69993)', () => {

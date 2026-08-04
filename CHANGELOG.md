@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Added local route-corridor situation mode for imported LineStrings, with bounded local geometry, intersecting official hazard context, verified cameras ordered along travel, and a private 2–4 camera route monitor.
+- Extracted RainViewer discovery, playback, tile budgeting, sampling, coverage, comparison, and lifecycle ownership into a standalone controller with stale-tile guards and unload-safe cleanup. SW v109.
 - Added private distance/bearing measurements and point, line, polygon, and text annotations with bounded validation, undo/clear/export, session-only defaults, explicit IndexedDB Keep locally persistence, and exclusion from shared scenes and diagnostics. SW v108.
 - Added optional SPC Mesoscale Discussion polygons and clustered NWS Local Storm Reports with bounded 24/48/72-hour queries, freshness/last-good recovery, safe official popups, scene/profile persistence, and English/Spanish UI.
 - Added an opt-in, bounded 12-frame GOES GeoColor loop with on-demand export caching, manual controls, low-data playback protection, and a rolling request budget.
@@ -24,7 +25,7 @@
 - A single-camera lookup during the initial catalog load no longer inflates the generation count or forces an unnecessary full-dataset fallback.
 - NWS alert polling backs off geometrically over empty or unchanged viewports instead of re-requesting the national feed every 30 seconds.
 - Hazard and provider map popups stay within the map pane on narrow and short-height screens.
-- The camera weather panel now shows the NWS chance of precipitation and a next-12-hour high/low range, clearly labeled as forecast guidance. SW v108.
+- The camera weather panel now shows the NWS chance of precipitation and a next-12-hour high/low range, clearly labeled as forecast guidance. SW v109.
 
 ## v0.122.0 - 2026-07-14
 

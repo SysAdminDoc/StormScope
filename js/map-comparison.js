@@ -84,8 +84,9 @@
         var pane = panes[side];
         updatePeakTiles();
         if (!active || !pane || tileCount(pane) >= MAX_TILE_NODES_PER_PANE || !budget.consume()) {
-          var blank = document.createElement('img');
-          blank.alt = '';
+          var blank = document.createElement('canvas');
+          blank.width = 256;
+          blank.height = 256;
           blank.setAttribute('role', 'presentation');
           setTimeout(function () { done(null, blank); }, 0);
           return blank;

@@ -20,43 +20,17 @@
   var MAP_CENTER = [39.5, -98.5];
   var APP_VERSION = '0.123.0';
   var MAP_ZOOM = 5;
-  var RADAR_ANIMATION_SPEED = 800;
-  var RADAR_REFRESH_INTERVAL = 10 * 60 * 1000;
   var IMAGE_REFRESH_INTERVAL = 15000;
   var CAMERA_OBSERVATION_TTL = 6 * 60 * 60 * 1000;
   var RECOVERY_ACTION_WINDOW_MS = 10 * 1000;
   var IMPORT_RECOVERY_WINDOW_MS = 12 * 1000;
-  var RAINVIEWER_COLOR_SCHEME = 2;
-  var RAINVIEWER_MAX_NATIVE_ZOOM = 7;
-  var RAINVIEWER_PRELOAD_RESERVE = 20;
   var SATELLITE_ANIMATION_SPEED = 1200;
   var TERMINATOR_REFRESH_INTERVAL = 60 * 1000;
 
-  var map, radarLayer, radarLayerNext, cameraCluster, basemapLayer;
+  var map, cameraCluster, basemapLayer;
   var themePreference = 'auto';
-  var radarFrames = [];
-  var radarHost = '';
-  var radarIndex = 0;
-  var radarPlaying = false;
-  var radarAnimationSpeed = RADAR_ANIMATION_SPEED;
-  var preferredRadarAnimationSpeed = RADAR_ANIMATION_SPEED;
-  var radarPalette = 'standard';
-  var radarAnimTimer = null;
-  var radarRefreshTimer = null;
-  var radarPreloadTimer = null;
-  var radarPreloadState = { status: 'idle', durationMs: null };
-  var radarAbort = null;
-  var radarOpacity = 0.65;
-  var radarVisible = true;
-  var radarProviderId = 'rainviewer';
-  var radarProviderSelection = null;
-  var radarDiscovery = null;
-  var radarCoverageLayer = null;
-  var radarSampleToken = 0;
-  var radarSemanticState = null;
-  var rainViewerBudget = StormScopeRadarProviders.createRollingRequestBudget({ limit: 90, windowMs: 60000 });
+  var radarController = null;
   var satelliteRequestBudget = StormScopeRadarProviders.createRollingRequestBudget({ limit: 30, windowMs: 60000 });
-  var radarBudgetFallbackPending = false;
   var activeCamera = null;
   var priorFocusEl = null;
   var weatherAbort = null;
@@ -80,7 +54,6 @@
   var recoveryActionTimers = Object.create(null);
   var startupSharedScene = null;
   var startupSceneError = false;
-  var pendingSceneFrameTime = null;
   var pendingSceneCameraId = null;
   var sceneHashTimer = null;
   var sceneHashApplying = false;
@@ -290,6 +263,24 @@
     return StormScopeI18n.formatNumber(value, null, appLocale);
   }
 
+  radarController = StormScopeRadarController.create({
+    document: document,
+    L: L,
+    providers: StormScopeRadarProviders,
+    translate: tr,
+    localNumber: localNumber,
+    getMap: function () { return map; },
+    getLocale: function () { return appLocale; },
+    formatDateTime: function (value, format) { return StormScopeI18n.formatDateTime(value, format, appLocale); },
+    formatAge: function (minutes) { return StormScopeI18n.formatAge(minutes, appLocale); },
+    radarReasonLabel: radarReasonLabel,
+    isOnline: function () { return navigator.onLine; },
+    isDocumentHidden: function () { return document.hidden; },
+    isComparisonOpen: function () { return mapComparison && mapComparison.isOpen(); },
+    onPlayingChange: function () { syncWakeLockMonitoring(); },
+    onSceneFrameExpired: function (message) { setSavedStateStatus(message, true); }
+  });
+
   function localTime(value) {
     return StormScopeWeather.formatTime(value, appLocale, tr('weather.unknown'));
   }
@@ -321,26 +312,12 @@
   }
 
   function applyDataMode(preference, persist) {
-    var wasLowData = lowDataMode;
     dataModePreference = StormScopeDataMode.normalize(preference);
     dataPolicy = StormScopeDataMode.resolve(dataModePreference, navigator.connection);
     lowDataMode = dataPolicy.lowData;
     lowDataSource = dataPolicy.source;
-    if (lowDataMode) {
-      if (!wasLowData) {
-        if (radarAnimationSpeed > 0) preferredRadarAnimationSpeed = radarAnimationSpeed;
-        radarAnimationSpeed = 0;
-        setRadarPlaying(false);
-      }
-      setSatellitePlaying(false);
-      clearTimeout(radarPreloadTimer);
-      if (radarLayerNext) map.removeLayer(radarLayerNext);
-      radarLayerNext = null;
-      radarPreloadState = { status: 'suppressed-low-data', durationMs: 0 };
-    } else if (wasLowData) {
-      radarAnimationSpeed = preferredRadarAnimationSpeed;
-    }
-    document.getElementById('radar-speed').value = String(radarAnimationSpeed);
+    radarController.setLowDataMode(lowDataMode);
+    setSatellitePlaying(false);
     if (persist) {
       try { localStorage.setItem('stormscope-data-mode', dataModePreference); } catch (error) { /* optional */ }
     }
@@ -351,7 +328,7 @@
       refreshIndicator.setAttribute('aria-label', refreshLabel);
       refreshIndicator.title = refreshLabel;
     }
-    updateRadarTimeDisplay();
+    radarController.updateTimeDisplay();
     renderSatelliteStatus();
     if (!lowDataMode && cameraCatalogDeferred && cameraStore) resumeCameraCatalog();
     if (mapComparison && mapComparison.isOpen()) mapComparison.refresh();
@@ -467,436 +444,6 @@
       if (query.addEventListener) query.addEventListener('change', onChange);
       else if (query.addListener) query.addListener(onChange);
     }
-  }
-
-  // ── RainViewer Radar ──
-
-  async function initRadar(options) {
-    options = options || {};
-    var resumePlayback = options.resumePlayback || radarPlaying;
-    if (radarAbort) radarAbort.abort();
-    radarAbort = new AbortController();
-    setRadarPlaying(false);
-    setRadarStatus(tr('radar.loadingPast'), false, true);
-
-    var signal = radarAbort.signal;
-    var discoveries = {};
-    var health = {};
-
-    try {
-      var primaryProviderId = StormScopeRadarProviders.primaryProviderId;
-      try {
-        if (options.forceNoaa) throw new Error('Primary radar tile delivery failed');
-        discoveries[primaryProviderId] = await discoverPrimaryRadar(signal);
-        health[primaryProviderId] = StormScopeRadarProviders.assessProviderHealth(primaryProviderId, {
-          latestFrame: discoveries[primaryProviderId].latestFrame,
-          lastSuccessAt: Date.now()
-        });
-      } catch (primaryError) {
-        if (primaryError.name === 'AbortError') throw primaryError;
-        health[primaryProviderId] = StormScopeRadarProviders.assessProviderHealth(primaryProviderId, {
-          error: primaryError,
-          rateLimitedUntil: primaryError.status === 429 ? Date.now() + 60000 : null,
-          consecutiveFailures: 1
-        });
-      }
-
-      if (!navigator.onLine && discoveries[primaryProviderId] && discoveries[primaryProviderId].latestFrame) {
-        health[primaryProviderId] = {
-          providerId: primaryProviderId,
-          status: 'degraded',
-          reason: 'cached-offline',
-          latestFrameAge: StormScopeRadarProviders.getFrameAge(
-            discoveries[primaryProviderId].latestFrame, primaryProviderId
-          ),
-          lastSuccessAt: discoveries[primaryProviderId].discoveredAt,
-          consecutiveFailures: 0,
-          checkedAt: Date.now()
-        };
-      }
-
-      if (navigator.onLine && (!health[primaryProviderId] || health[primaryProviderId].status !== 'healthy')) {
-        try {
-          discoveries['noaa-mrms'] = await discoverNoaa(signal);
-          health['noaa-mrms'] = StormScopeRadarProviders.assessProviderHealth('noaa-mrms', {
-            latestFrame: discoveries['noaa-mrms'].latestFrame,
-            lastSuccessAt: Date.now()
-          });
-        } catch (noaaError) {
-          if (noaaError.name === 'AbortError') throw noaaError;
-          health['noaa-mrms'] = StormScopeRadarProviders.assessProviderHealth('noaa-mrms', {
-            error: noaaError,
-            consecutiveFailures: 1
-          });
-        }
-      }
-
-      var selection = StormScopeRadarProviders.selectProvider(health);
-      if (!selection.selectedProviderId || !discoveries[selection.selectedProviderId]) {
-        throw new Error(selection.degradationReason || 'all radar providers unavailable');
-      }
-      applyRadarDiscovery(discoveries[selection.selectedProviderId], selection);
-      if (resumePlayback && radarFrames.length) setRadarPlaying(true);
-    } catch (error) {
-      if (error.name !== 'AbortError') {
-        clearRadarDisplay();
-        document.getElementById('radar-meta').textContent = tr('radar.providersUnavailable');
-        setRadarStatus(tr('radar.unavailable'), true, true);
-      }
-    }
-  }
-
-  async function fetchRadarJson(url, signal) {
-    var response = await fetch(url, { cache: 'no-store', signal: signal });
-    if (!response.ok) {
-      var error = new Error('HTTP ' + response.status);
-      error.status = response.status;
-      throw error;
-    }
-    return response.json();
-  }
-
-  async function discoverPrimaryRadar(signal) {
-    var providerId = StormScopeRadarProviders.primaryProviderId;
-    var provider = StormScopeRadarProviders.providers[providerId];
-    var payload = await fetchRadarJson(provider.discovery.url, signal);
-    return StormScopeRadarProviders.parseXyzDiscovery(providerId, payload, Date.now());
-  }
-
-  async function discoverNoaa(signal) {
-    var provider = StormScopeRadarProviders.providers['noaa-mrms'];
-    var metadata = await fetchRadarJson(provider.discovery.serviceUrl, signal);
-    var frames = await fetchRadarJson(provider.discovery.framesUrl, signal);
-    return StormScopeRadarProviders.parseNoaaDiscovery(metadata, frames, Date.now());
-  }
-
-  function applyRadarDiscovery(discovery, selection) {
-    radarDiscovery = discovery;
-    radarProviderSelection = selection;
-    radarProviderId = selection.selectedProviderId;
-    radarBudgetFallbackPending = false;
-    radarHost = discovery.tileHost || '';
-    radarFrames = discovery.frames;
-    if (!radarFrames.length) throw new Error('selected provider returned no frames');
-    radarIndex = radarFrames.length - 1;
-    if (pendingSceneFrameTime != null) {
-      var nearestIndex = 0;
-      var nearestDistance = Infinity;
-      radarFrames.forEach(function (frame, index) {
-        var distance = Math.abs(Number(frame.time) - pendingSceneFrameTime);
-        if (distance < nearestDistance) {
-          nearestDistance = distance;
-          nearestIndex = index;
-        }
-      });
-      if (nearestDistance <= 30 * 60 * 1000) radarIndex = nearestIndex;
-      else setSavedStateStatus(tr('views.sceneFrameExpired'), true);
-      pendingSceneFrameTime = null;
-    }
-    updateRadarScrubber();
-    updateRadarProviderUI();
-    updateCoverageLayer();
-    showRadarFrame(radarIndex);
-    preloadRadarFrame(radarIndex > 0 ? radarIndex - 1 : radarFrames.length - 1);
-    updateRadarTimeDisplay();
-    sampleRadarCenter(radarFrames[radarIndex]);
-  }
-
-  function clearRadarDisplay() {
-    radarFrames = [];
-    radarHost = '';
-    radarIndex = 0;
-    updateRadarScrubber();
-    setRadarPlaying(false);
-    showRadarFrame(-1);
-    if (radarLayerNext) {
-      map.removeLayer(radarLayerNext);
-      radarLayerNext = null;
-    }
-    clearTimeout(radarPreloadTimer);
-    radarPreloadTimer = null;
-    radarPreloadState = { status: 'idle', durationMs: null };
-    radarSemanticState = null;
-    radarDiscovery = null;
-    radarProviderSelection = null;
-    if (radarCoverageLayer) {
-      map.removeLayer(radarCoverageLayer);
-      radarCoverageLayer = null;
-    }
-  }
-
-  function hostMatchesSuffix(hostname, suffix) {
-    return hostname === suffix || hostname.endsWith('.' + suffix);
-  }
-
-  function getTrustedRainViewerHost(value) {
-    try {
-      var parsed = new URL(value);
-      var hostname = parsed.hostname.toLowerCase();
-      if (parsed.protocol !== 'https:' || !hostMatchesSuffix(hostname, 'rainviewer.com')) return '';
-      return parsed.origin;
-    } catch (e) {
-      return '';
-    }
-  }
-
-  function setRadarStatus(message, canRetry, disabled) {
-    document.getElementById('radar-time').textContent = message;
-    document.getElementById('radar-retry').classList.toggle('hidden', !canRetry);
-    var controls = ['radar-prev', 'radar-next', 'radar-scrubber'];
-    for (var i = 0; i < controls.length; i++) {
-      document.getElementById(controls[i]).disabled = !!disabled;
-    }
-    document.getElementById('radar-play').disabled = !!disabled || radarAnimationSpeed === 0;
-  }
-
-  function updateRadarScrubber() {
-    var scrubber = document.getElementById('radar-scrubber');
-    scrubber.max = String(Math.max(0, radarFrames.length - 1));
-    scrubber.value = String(Math.min(radarIndex, Math.max(0, radarFrames.length - 1)));
-    scrubber.disabled = radarFrames.length === 0;
-    document.getElementById('radar-frame-position').textContent = tr('radar.framePosition', {
-      current: radarFrames.length ? localNumber(radarIndex + 1) : '0',
-      total: localNumber(radarFrames.length)
-    });
-  }
-
-  function applyRadarPaletteToLayer(layer) {
-    if (!layer || !layer.getContainer) return;
-    var container = layer.getContainer();
-    if (!container) return;
-    container.classList.remove('radar-palette-colorblind', 'radar-palette-contrast');
-    if (radarPalette !== 'standard') container.classList.add('radar-palette-' + radarPalette);
-  }
-
-  function applyRadarPalette() {
-    applyRadarPaletteToLayer(radarLayer);
-    applyRadarPaletteToLayer(radarLayerNext);
-    var legend = document.getElementById('radar-legend');
-    legend.classList.remove('palette-standard', 'palette-colorblind', 'palette-contrast');
-    legend.classList.add('palette-' + radarPalette);
-    legend.setAttribute('aria-label', tr('radar.legend.' + radarPalette));
-  }
-
-  function selectRadarFrame(index) {
-    if (!radarFrames.length) return;
-    radarIndex = Math.max(0, Math.min(radarFrames.length - 1, Number(index) || 0));
-    radarSemanticState = null;
-    showRadarFrame(radarIndex);
-    updateRadarTimeDisplay();
-    updateRadarScrubber();
-    sampleRadarCenter(radarFrames[radarIndex]);
-    preloadRadarFrame((radarIndex + 1) % radarFrames.length);
-  }
-
-  function createRadarTileLayer(index) {
-    var frame = radarFrames[index];
-    if (!frame) return null;
-    var provider = StormScopeRadarProviders.providers[radarProviderId];
-    var layer;
-    if (provider.tile.kind === 'xyz') {
-      if (!radarHost) return null;
-      layer = L.tileLayer(radarHost + frame.path + '/256/{z}/{x}/{y}/' + RAINVIEWER_COLOR_SCHEME + '/1_1.png', {
-        opacity: radarOpacity,
-        zIndex: 400,
-        maxNativeZoom: provider.tile.maxNativeZoom,
-        maxZoom: 18,
-        crossOrigin: 'anonymous',
-        attribution: '<a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>'
-      });
-      if (radarProviderId === 'rainviewer') guardRainViewerTileLayer(layer);
-    } else if (radarProviderId === 'noaa-mrms') {
-      var params = StormScopeRadarProviders.noaaWmsParameters(frame);
-      var wmsOptions = {
-        layers: params.layers,
-        format: params.format,
-        transparent: true,
-        version: params.version,
-        crs: L.CRS.EPSG3857,
-        opacity: radarOpacity,
-        zIndex: 400,
-        maxZoom: 18,
-        crossOrigin: 'anonymous',
-        attribution: '<a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>'
-      };
-      if (params.time) wmsOptions.time = params.time;
-      layer = L.tileLayer.wms(provider.tile.endpoint, wmsOptions);
-    } else {
-      return null;
-    }
-    var tileErrors = 0;
-    layer.on('tileerror', function () {
-      tileErrors += 1;
-      if (tileErrors < 3 || radarLayer !== layer) return;
-      setTimeout(function () {
-        if (radarLayer !== layer) return;
-        if (radarProviderId === StormScopeRadarProviders.primaryProviderId && navigator.onLine) {
-          setRadarStatus(tr('radar.tileFallback'), false, true);
-          initRadar({ forceNoaa: true, resumePlayback: radarPlaying });
-        } else {
-          clearRadarDisplay();
-          setRadarStatus(tr('radar.tilesUnavailable'), true, true);
-        }
-      }, 0);
-    });
-    return layer;
-  }
-
-  function handleRainViewerBudgetExhausted() {
-    if (radarBudgetFallbackPending || radarProviderId !== 'rainviewer') return;
-    radarBudgetFallbackPending = true;
-    var snapshot = rainViewerBudget.snapshot();
-    setRadarPlaying(false);
-    clearTimeout(radarPreloadTimer);
-    if (radarLayerNext) map.removeLayer(radarLayerNext);
-    radarLayerNext = null;
-    radarPreloadState = { status: 'rate-limited', durationMs: null };
-    setRadarStatus(tr('radar.rateLimited', {
-      time: StormScopeI18n.formatDateTime(snapshot.rateLimitedUntil, {
-        hour: 'numeric', minute: '2-digit', second: '2-digit'
-      }, appLocale)
-    }), false, true);
-    setTimeout(function () {
-      initRadar({ forceNoaa: true, resumePlayback: false });
-    }, 0);
-  }
-
-  function consumeRainViewerRequest() {
-    var allowed = rainViewerBudget.consume(1);
-    if (!allowed) handleRainViewerBudgetExhausted();
-    return allowed;
-  }
-
-  function guardRainViewerTileLayer(layer) {
-    var createTile = layer.createTile;
-    layer.createTile = function (coords, done) {
-      if (consumeRainViewerRequest()) return createTile.call(this, coords, done);
-      var tile = document.createElement('img');
-      tile.alt = '';
-      tile.setAttribute('role', 'presentation');
-      setTimeout(function () { done(null, tile); }, 0);
-      return tile;
-    };
-    return layer;
-  }
-
-  function preloadRadarFrame(index) {
-    if (radarLayerNext) {
-      map.removeLayer(radarLayerNext);
-    }
-    clearTimeout(radarPreloadTimer);
-    if (lowDataMode) {
-      radarLayerNext = null;
-      radarPreloadState = { status: 'suppressed-low-data', durationMs: 0, index: index };
-      return;
-    }
-    if (radarProviderId === 'rainviewer' &&
-        rainViewerBudget.snapshot().remaining <= RAINVIEWER_PRELOAD_RESERVE) {
-      radarLayerNext = null;
-      radarPreloadState = { status: 'suppressed-budget', durationMs: 0, index: index };
-      return;
-    }
-    var startedAt = Date.now();
-    radarPreloadState = { status: 'loading', durationMs: null, index: index };
-    radarLayerNext = createRadarTileLayer(index);
-    if (radarLayerNext) {
-      var preloadLayer = radarLayerNext;
-      radarLayerNext.setOpacity(0);
-      radarLayerNext.addTo(map);
-      applyRadarPaletteToLayer(radarLayerNext);
-      function finishPreload(status) {
-        if (radarLayerNext !== preloadLayer) return;
-        clearTimeout(radarPreloadTimer);
-        radarPreloadTimer = null;
-        map.removeLayer(preloadLayer);
-        radarLayerNext = null;
-        radarPreloadState = {
-          status: status,
-          durationMs: Date.now() - startedAt,
-          index: index
-        };
-      }
-      preloadLayer.once('load', function () {
-        setTimeout(function () { finishPreload('complete'); }, 0);
-      });
-      radarPreloadTimer = setTimeout(function () { finishPreload('timeout'); }, 5000);
-    } else {
-      radarPreloadState = { status: 'unavailable', durationMs: 0, index: index };
-    }
-  }
-
-  function showRadarFrame(index) {
-    if (radarLayer) {
-      map.removeLayer(radarLayer);
-      radarLayer = null;
-    }
-    radarLayer = createRadarTileLayer(index);
-    if (radarLayer && radarVisible) {
-      radarLayer.addTo(map);
-      applyRadarPaletteToLayer(radarLayer);
-    }
-  }
-
-  function updateRadarTimeDisplay() {
-    var frame = radarFrames[radarIndex];
-    if (!frame) return;
-    var d = new Date(frame.time);
-    var timeStr = d.toLocaleTimeString(appLocale, {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-      timeZoneName: 'short'
-    });
-    var age = StormScopeRadarProviders.getFrameAge(frame, radarProviderId);
-    var ageLabel = StormScopeI18n.formatAge(age.ageMinutes, appLocale);
-    var state = radarSemanticState;
-    var stateKeys = { clear: 'radar.state.clear', 'no-coverage': 'radar.state.noCoverage', stale: 'radar.state.stale' };
-    var label = state && stateKeys[state.state]
-      ? tr(stateKeys[state.state], { age: ageLabel })
-      : tr('radar.pastFrame', { time: timeStr, age: ageLabel });
-    setRadarStatus(label, state ? state.canRetry : false, state ? !state.controlsEnabled : false);
-    updateRadarProviderUI();
-  }
-
-  function updateRadarProviderUI() {
-    if (!radarProviderSelection || !radarFrames.length) return;
-    var provider = StormScopeRadarProviders.providers[radarProviderId];
-    var age = StormScopeRadarProviders.getFrameAge(radarFrames[radarIndex], radarProviderId);
-    var reason = radarProviderSelection.degradationReason
-      ? ' • ' + tr('radar.degraded', { reason: radarReasonLabel(radarProviderSelection.degradationReason) })
-      : '';
-    var resolution = radarProviderId === 'build-radar'
-      ? provider.resolution.label
-      : tr('radar.resolution.' + radarProviderId);
-    document.getElementById('radar-meta').textContent = provider.label +
-      (radarProviderSelection.isFallback ? tr('radar.fallbackSuffix') : '') + ' • ' +
-      resolution + ' • ' + StormScopeI18n.formatAge(age.ageMinutes, appLocale) + reason;
-    var source = document.getElementById('radar-source');
-    source.textContent = provider.attribution.text;
-    source.href = provider.attribution.url;
-  }
-
-  function updateCoverageLayer() {
-    if (radarCoverageLayer) {
-      map.removeLayer(radarCoverageLayer);
-      radarCoverageLayer = null;
-    }
-    var toggle = document.getElementById('toggle-coverage');
-    var supported = radarProviderId === 'rainviewer' && !!radarHost;
-    toggle.disabled = !supported;
-    if (!supported) toggle.checked = false;
-    if (!supported || !toggle.checked) return;
-    radarCoverageLayer = L.tileLayer(
-      radarHost + '/v2/coverage/0/256/{z}/{x}/{y}/0/0_0.png', {
-        opacity: 0.2,
-        zIndex: 350,
-        maxNativeZoom: RAINVIEWER_MAX_NATIVE_ZOOM,
-        maxZoom: 18,
-        crossOrigin: 'anonymous',
-        attribution: 'RainViewer'
-      }
-    );
-    guardRainViewerTileLayer(radarCoverageLayer).addTo(map);
   }
 
   function contextTimestamp(value) {
@@ -3810,112 +3357,9 @@
     renderStormReportStatus();
   }
 
-  function centerTileCoordinate(zoom) {
-    var center = map.getCenter();
-    var scale = Math.pow(2, zoom);
-    var x = (center.lng + 180) / 360 * scale;
-    var latitude = Math.max(-85.05112878, Math.min(85.05112878, center.lat));
-    var radians = latitude * Math.PI / 180;
-    var y = (1 - Math.log(Math.tan(radians) + 1 / Math.cos(radians)) / Math.PI) / 2 * scale;
-    return {
-      x: Math.floor(x),
-      y: Math.floor(y),
-      pixelX: Math.floor((x - Math.floor(x)) * 256),
-      pixelY: Math.floor((y - Math.floor(y)) * 256)
-    };
-  }
-
-  function sampleTilePixel(url, coordinate) {
-    return new Promise(function (resolve) {
-      if (!consumeRainViewerRequest()) {
-        resolve(null);
-        return;
-      }
-      var image = new Image();
-      var settled = false;
-      var timeout = setTimeout(function () { if (!settled) resolve(null); }, 4000);
-      image.crossOrigin = 'anonymous';
-      image.referrerPolicy = 'no-referrer';
-      image.onload = function () {
-        settled = true;
-        clearTimeout(timeout);
-        try {
-          var canvas = document.createElement('canvas');
-          canvas.width = 1;
-          canvas.height = 1;
-          var context = canvas.getContext('2d', { willReadFrequently: true });
-          context.drawImage(image, -coordinate.pixelX, -coordinate.pixelY);
-          resolve(Array.from(context.getImageData(0, 0, 1, 1).data));
-        } catch (error) {
-          resolve(null);
-        }
-      };
-      image.onerror = function () { settled = true; clearTimeout(timeout); resolve(null); };
-      image.src = url;
-    });
-  }
-
-  async function sampleRadarCenter(frame) {
-    var provider = StormScopeRadarProviders.providers[radarProviderId];
-    if (!frame || !provider || provider.tile.kind !== 'xyz') {
-      radarSemanticState = StormScopeRadarProviders.classifyRadarState({ frame: frame, coverage: true });
-      updateRadarTimeDisplay();
-      return;
-    }
-    var token = ++radarSampleToken;
-    var zoom = Math.min(map.getZoom(), provider.tile.maxNativeZoom);
-    var coordinate = centerTileCoordinate(zoom);
-    var coverageRequest = radarProviderId === 'rainviewer'
-      ? sampleTilePixel(StormScopeRadarProviders.buildRainViewerCoverageUrl(
-        radarHost, zoom, coordinate.x, coordinate.y
-      ), coordinate)
-      : Promise.resolve(null);
-    var pixels = await Promise.all([coverageRequest, sampleTilePixel(
-      StormScopeRadarProviders.buildXyzRadarTileUrl(frame, zoom, coordinate.x, coordinate.y),
-      coordinate
-    )]);
-    if (token !== radarSampleToken || frame !== radarFrames[radarIndex]) return;
-    var coveragePixel = pixels[0];
-    var radarPixel = pixels[1];
-    var intensity = StormScopeRadarProviders.classifyRainViewerPixel(radarPixel);
-    var covered = radarProviderId !== 'rainviewer' ? true : coveragePixel
-      ? !(coveragePixel[3] > 0 && coveragePixel[0] < 16 && coveragePixel[1] < 16 && coveragePixel[2] < 16)
-      : null;
-    radarSemanticState = StormScopeRadarProviders.classifyRadarState({
-      frame: frame,
-      coverage: covered,
-      hasPrecipitation: radarPixel ? intensity !== 'clear' : null,
-      intensity: radarPixel ? intensity : null
-    });
-    updateRadarTimeDisplay();
-  }
-
-  function stepRadar(delta) {
-    if (radarFrames.length === 0) return;
-    selectRadarFrame((radarIndex + delta + radarFrames.length) % radarFrames.length);
-  }
-
-  function setRadarPlaying(playing) {
-    radarPlaying = Boolean(playing && radarAnimationSpeed > 0 && radarFrames.length);
-    document.getElementById('icon-play').classList.toggle('hidden', radarPlaying);
-    document.getElementById('icon-pause').classList.toggle('hidden', !radarPlaying);
-    document.getElementById('radar-play').setAttribute('aria-pressed', String(radarPlaying));
-    document.getElementById('radar-time').setAttribute('aria-live', radarPlaying ? 'off' : 'polite');
-
-    clearInterval(radarAnimTimer);
-    radarAnimTimer = null;
-
-    if (radarPlaying) {
-      radarAnimTimer = setInterval(function () {
-        stepRadar(1);
-      }, radarAnimationSpeed);
-    }
-    syncWakeLockMonitoring();
-  }
-
   function monitoringSessionActive() {
     var monitorModal = document.getElementById('monitor-modal');
-    return Boolean(radarPlaying || satellitePlaying || activeCamera || mapComparison && mapComparison.isOpen() ||
+    return Boolean(radarController.getState().playing || satellitePlaying || activeCamera || mapComparison && mapComparison.isOpen() ||
       monitorModal && !monitorModal.classList.contains('hidden'));
   }
 
@@ -4498,15 +3942,16 @@
 
   function captureViewSnapshot(includeWorkflow) {
     var center = map.getCenter();
+    var radar = radarController.getState();
     var snapshot = {
       center: { lat: center.lat, lon: center.lng },
       zoom: map.getZoom(),
       layers: StormScopeLayerRegistry.captureEnabled(document),
-      opacity: { radar: radarOpacity }
+      opacity: { radar: radar.opacity }
     };
     if (includeWorkflow) {
       var filters = cameraSearchFilters();
-      snapshot.radar = { palette: radarPalette, speed: preferredRadarAnimationSpeed };
+      snapshot.radar = { palette: radar.palette, speed: radar.preferredAnimationSpeed };
       snapshot.alertSeverity = document.getElementById('alert-severity').value;
       snapshot.cameraFilters = {
         query: filters.query, state: filters.state, source: filters.source, type: filters.type,
@@ -4522,15 +3967,16 @@
 
   function captureSharedScene() {
     var snapshot = captureViewSnapshot();
+    var radar = radarController.getState();
     var filters = cameraSearchFilters();
     return Object.assign({
       map: { lat: snapshot.center.lat, lon: snapshot.center.lon, zoom: snapshot.zoom },
       layers: snapshot.layers,
       radar: {
-        opacity: radarOpacity,
-        palette: radarPalette,
-        speed: radarAnimationSpeed,
-        frameTime: radarFrames[radarIndex] ? radarFrames[radarIndex].time : null
+        opacity: snapshot.opacity.radar,
+        palette: radar.palette,
+        speed: radar.animationSpeed,
+        frameTime: radar.frames[radar.index] ? radar.frames[radar.index].time : null
       },
       alertSeverity: document.getElementById('alert-severity').value,
       cameraFilters: {
@@ -4553,7 +3999,7 @@
 
   function writeSceneHash() {
     sceneHashTimer = null;
-    if (sceneHashApplying || pendingSceneFrameTime != null || pendingSceneCameraId != null) return;
+    if (sceneHashApplying || radarController.hasPendingFrame() || pendingSceneCameraId != null) return;
     try {
       var url = new URL(sharedSceneUrl());
       if (url.hash === location.hash) return;
@@ -4581,12 +4027,12 @@
       stormReportWindow: scene.stormReportWindow,
       earthquake: scene.earthquake
     });
-    radarPalette = scene.radar.palette;
-    preferredRadarAnimationSpeed = scene.radar.speed;
-    radarAnimationSpeed = lowDataMode ? 0 : scene.radar.speed;
-    document.getElementById('radar-palette').value = radarPalette;
-    document.getElementById('radar-speed').value = String(radarAnimationSpeed);
-    applyRadarPalette();
+    radarController.applyScene({
+      opacity: scene.radar.opacity,
+      palette: scene.radar.palette,
+      speed: scene.radar.speed,
+      frameTime: scene.radar.frameTime
+    });
     document.getElementById('alert-severity').value = scene.alertSeverity;
     document.getElementById('camera-query').value = scene.cameraFilters.query;
     document.getElementById('camera-state').value = scene.cameraFilters.state;
@@ -4595,27 +4041,9 @@
     document.getElementById('camera-sort').value = scene.cameraFilters.sort;
     document.getElementById('camera-healthy').checked = scene.cameraFilters.healthy;
     document.getElementById('camera-favorites').checked = false;
-    pendingSceneFrameTime = scene.radar.frameTime;
     pendingSceneCameraId = scene.activeCameraId;
-    applyPendingSceneFrameIfReady();
     resolvePendingSceneCamera();
     setSavedStateStatus(tr('views.sceneLoaded'));
-  }
-
-  function applyPendingSceneFrameIfReady() {
-    if (pendingSceneFrameTime == null || !radarFrames.length) return;
-    var nearestIndex = 0;
-    var nearestDistance = Infinity;
-    radarFrames.forEach(function (frame, index) {
-      var distance = Math.abs(Number(frame.time) - pendingSceneFrameTime);
-      if (distance < nearestDistance) {
-        nearestDistance = distance;
-        nearestIndex = index;
-      }
-    });
-    if (nearestDistance <= 30 * 60 * 1000) selectRadarFrame(nearestIndex);
-    else setSavedStateStatus(tr('views.sceneFrameExpired'), true);
-    pendingSceneFrameTime = null;
   }
 
   async function resolvePendingSceneCamera() {
@@ -4668,11 +4096,7 @@
   // a new lifecycle layer never requires a new apply branch here.
   function applyBaseLayerEffect(id, enabled) {
     if (id === 'radar') {
-      radarVisible = enabled;
-      if (radarLayer) {
-        if (enabled) radarLayer.addTo(map);
-        else map.removeLayer(radarLayer);
-      }
+      radarController.setVisible(enabled);
       return true;
     }
     if (id === 'cameras') {
@@ -4683,7 +4107,7 @@
       return true;
     }
     if (id === 'coverage') {
-      if (radarHost) updateCoverageLayer();
+      if (radarController.getState().host) radarController.updateCoverageLayer();
       return true;
     }
     if (id === 'alerts') {
@@ -4722,22 +4146,13 @@
       if (typeof enabled === 'boolean') applyLayerEnabled(descriptor, enabled, layerBindings);
     });
     if (snapshot.opacity && typeof snapshot.opacity.radar === 'number') {
-      radarOpacity = snapshot.opacity.radar;
-      document.getElementById('radar-opacity').value = String(Math.round(radarOpacity * 100));
-      if (radarLayer) radarLayer.setOpacity(radarOpacity);
+      radarController.setOpacity(snapshot.opacity.radar);
+      document.getElementById('radar-opacity').value = String(Math.round(radarController.getState().opacity * 100));
     }
     if (snapshot.dataMode) applyDataMode(snapshot.dataMode, true);
     if (snapshot.radar) {
-      radarPalette = snapshot.radar.palette;
-      preferredRadarAnimationSpeed = snapshot.radar.speed;
-      radarAnimationSpeed = lowDataMode ? 0 : preferredRadarAnimationSpeed;
-      document.getElementById('radar-palette').value = radarPalette;
-      document.getElementById('radar-speed').value = String(radarAnimationSpeed);
-      applyRadarPalette();
-      try {
-        localStorage.setItem('stormscope-radar-palette', radarPalette);
-        localStorage.setItem('stormscope-radar-speed', String(preferredRadarAnimationSpeed));
-      } catch (error) { /* optional */ }
+      radarController.setPalette(snapshot.radar.palette, true);
+      radarController.setSpeed(snapshot.radar.speed, true);
     }
     if (snapshot.alertSeverity) {
       document.getElementById('alert-severity').value = snapshot.alertSeverity;
@@ -5292,66 +4707,20 @@
   }
 
   function comparisonTimeLabel(index) {
-    var frame = radarFrames[Math.max(0, Math.min(radarFrames.length - 1, Number(index) || 0))];
+    var frame = radarController.getFrame(Math.max(0, Number(index) || 0));
     return frame ? StormScopeI18n.formatDateTime(frame.time, {
       hour: 'numeric', minute: '2-digit'
     }, appLocale) : tr('comparison.unavailable');
-  }
-
-  function comparisonRadarLayer(request) {
-    if (!radarFrames.length || !radarProviderId) throw new Error(tr('comparison.radarUnavailable'));
-    var index = Math.max(0, Math.min(radarFrames.length - 1, request.timeIndex));
-    var frame = radarFrames[index];
-    var provider = StormScopeRadarProviders.providers[radarProviderId];
-    var attribution = '<a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' +
-      provider.attribution.text + '</a>';
-    var layer;
-    if (provider.tile.kind === 'xyz') {
-      layer = L.tileLayer(
-        frame.tileHost + frame.path + '/256/{z}/{x}/{y}/' + RAINVIEWER_COLOR_SCHEME + '/1_1.png',
-        {
-          opacity: radarOpacity,
-          maxNativeZoom: provider.tile.maxNativeZoom,
-          maxZoom: 18,
-          keepBuffer: 1,
-          updateWhenIdle: true,
-          crossOrigin: 'anonymous',
-          attribution: attribution
-        }
-      );
-      request.guardTileLayer(layer);
-    } else if (provider.tile.kind === 'wms') {
-      var params = StormScopeRadarProviders.noaaWmsParameters(frame);
-      var options = {
-        layers: params.layers,
-        format: params.format,
-        transparent: true,
-        version: params.version,
-        crs: L.CRS.EPSG3857,
-        opacity: radarOpacity,
-        maxZoom: 18,
-        keepBuffer: 1,
-        updateWhenIdle: true,
-        crossOrigin: 'anonymous',
-        attribution: attribution
-      };
-      if (params.time) options.time = params.time;
-      layer = L.tileLayer.wms(provider.tile.endpoint, options);
-      request.guardTileLayer(layer);
-    } else {
-      throw new Error(tr('comparison.radarUnavailable'));
-    }
-    return {
-      layer: layer,
-      message: provider.label + ' • ' + comparisonTimeLabel(index)
-    };
   }
 
   function ensureComparisonSatelliteTime(request) {
     if (comparisonSatelliteTime) return Promise.resolve(comparisonSatelliteTime);
     if (!request.consumeRequest()) return Promise.reject(new Error(tr('comparison.requestBudget')));
     var provider = StormScopeContextLayers.providers.satellite;
-    return fetchRadarJson(provider.imageServerUrl + '?f=pjson').then(function (metadata) {
+    return fetch(provider.imageServerUrl + '?f=pjson', { cache: 'no-store' }).then(function (response) {
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      return response.json();
+    }).then(function (metadata) {
       comparisonSatelliteTime = StormScopeContextLayers.parseGoesMetadata(metadata).latestTime;
       return comparisonSatelliteTime;
     });
@@ -5405,7 +4774,7 @@
   }
 
   function createComparisonLayer(request) {
-    if (request.source === 'radar') return comparisonRadarLayer(request);
+    if (request.source === 'radar') return radarController.createComparisonLayer(request);
     if (request.source === 'satellite') return comparisonSatelliteLayer(request);
     return comparisonHazardLayer();
   }
@@ -5422,20 +4791,20 @@
   }
 
   function pauseOperationalWorkForComparison() {
-    comparisonRadarWasPlaying = radarPlaying;
+    comparisonRadarWasPlaying = radarController.getState().playing;
     satelliteWasPlaying = satellitePlaying;
-    setRadarPlaying(false);
+    radarController.setPlaying(false);
     setSatellitePlaying(false);
-    clearInterval(radarRefreshTimer);
-    radarRefreshTimer = null;
+    radarController.stopRefreshTimer();
     operationalControllers.suspend();
   }
 
   function resumeOperationalWorkAfterComparison() {
     if (document.hidden) return;
     startRadarRefreshTimer();
-    initRadar().then(function () {
-      if (comparisonRadarWasPlaying && radarVisible && radarFrames.length) setRadarPlaying(true);
+    radarController.refresh().then(function () {
+      var radar = radarController.getState();
+      if (comparisonRadarWasPlaying && radar.visible && radar.frames.length) radarController.setPlaying(true);
       if (satelliteWasPlaying && satelliteFrames.length && !lowDataMode) setSatellitePlaying(true);
       comparisonRadarWasPlaying = false;
       satelliteWasPlaying = false;
@@ -5480,7 +4849,7 @@
   function openMapComparison() {
     if (activeCamera) closeCameraModal();
     closeMonitor(false);
-    var latest = Math.max(0, radarFrames.length - 1);
+    var latest = Math.max(0, radarController.getState().frames.length - 1);
     var ranges = document.querySelectorAll('[data-comparison-time]');
     ranges.forEach(function (range) {
       range.max = String(latest);
@@ -6431,10 +5800,11 @@
   }
 
   function situationRadarText() {
-    if (!radarFrames.length || !radarSemanticState) return tr('summary.radarPending');
-    var frame = radarFrames[radarIndex];
-    var age = StormScopeRadarProviders.getFrameAge(frame, radarProviderId);
-    var provider = StormScopeRadarProviders.providers[radarProviderId];
+    var radar = radarController.getState();
+    if (!radar.frames.length || !radar.semanticState) return tr('summary.radarPending');
+    var frame = radar.frames[radar.index];
+    var age = StormScopeRadarProviders.getFrameAge(frame, radar.providerId);
+    var provider = StormScopeRadarProviders.providers[radar.providerId];
     var stateKey = {
       clear: 'summary.radarClear',
       precipitation: 'summary.radarPrecipitation',
@@ -6442,11 +5812,11 @@
       stale: 'summary.radarStale',
       failure: 'summary.radarFailure',
       available: 'summary.radarAvailable'
-    }[radarSemanticState.state] || 'summary.radarAvailable';
+    }[radar.semanticState.state] || 'summary.radarAvailable';
     return tr(stateKey, {
       age: StormScopeI18n.formatAge(age.ageMinutes, appLocale),
       source: provider ? provider.label : tr('weather.unknown'),
-      intensity: tr('radar.intensity.' + (radarSemanticState.intensity || 'unknown'))
+      intensity: tr('radar.intensity.' + (radar.semanticState.intensity || 'unknown'))
     });
   }
 
@@ -6876,12 +6246,13 @@
       sources.push({ id: id, source: source, issueAt: issueAt, freshness: freshness });
     }
 
-    if (snapshotToggleEnabled('toggle-radar') && radarVisible) {
-      var radarFrame = radarFrames[radarIndex] || null;
-      var radarProvider = (radarProviderSelection && radarProviderSelection.provider) ||
-        StormScopeRadarProviders.providers[radarProviderId];
-      var radarAge = radarFrame ? StormScopeRadarProviders.getFrameAge(radarFrame, radarProviderId) : null;
-      var radarState = radarSemanticState && radarSemanticState.state;
+    var radarControllerState = radarController.getState();
+    if (snapshotToggleEnabled('toggle-radar') && radarControllerState.visible) {
+      var radarFrame = radarControllerState.frames[radarControllerState.index] || null;
+      var radarProvider = (radarControllerState.providerSelection && radarControllerState.providerSelection.provider) ||
+        StormScopeRadarProviders.providers[radarControllerState.providerId];
+      var radarAge = radarFrame ? StormScopeRadarProviders.getFrameAge(radarFrame, radarControllerState.providerId) : null;
+      var radarState = radarControllerState.semanticState && radarControllerState.semanticState.state;
       var radarFresh = radarState === 'failure' || radarState === 'no-coverage' ? 'unavailable'
         : !radarAge || !radarAge.known ? 'unknown'
           : radarAge.failed ? 'unavailable' : radarAge.stale ? 'stale' : 'fresh';
@@ -7585,13 +6956,7 @@
     });
 
     document.getElementById('toggle-radar').addEventListener('change', function () {
-      radarVisible = this.checked;
-      if (radarVisible) {
-        if (radarLayer) radarLayer.addTo(map);
-      } else {
-        setRadarPlaying(false);
-        if (radarLayer) map.removeLayer(radarLayer);
-      }
+      radarController.setVisible(this.checked);
       scheduleLastViewSave();
     });
 
@@ -7605,7 +6970,7 @@
     });
 
     document.getElementById('toggle-coverage').addEventListener('change', function () {
-      updateCoverageLayer();
+      radarController.updateCoverageLayer();
       scheduleLastViewSave();
     });
 
@@ -7634,8 +6999,7 @@
     });
 
     document.getElementById('radar-opacity').addEventListener('input', function () {
-      radarOpacity = parseInt(this.value, 10) / 100;
-      if (radarLayer) radarLayer.setOpacity(radarOpacity);
+      radarController.setOpacity(parseInt(this.value, 10) / 100);
       scheduleLastViewSave();
     });
 
@@ -7654,11 +7018,11 @@
       StormScopeI18n.localizeDocument(document);
       renderLayerNavigation();
       updateConnectionState();
-      updateRadarScrubber();
-      applyRadarPalette();
+      radarController.updateScrubber();
+      radarController.applyPalette();
       updateLowDataUi();
       refreshInstallDiscovery();
-      if (radarFrames.length) updateRadarTimeDisplay();
+      if (radarController.getState().frames.length) radarController.updateTimeDisplay();
       if (cameraDataTimestamp) updateDataFreshness();
       refreshCameraLoadLabels();
       if (wakeLockController) renderWakeLockState(wakeLockController.snapshot());
@@ -7685,23 +7049,18 @@
       }
     });
 
-    document.getElementById('radar-prev').addEventListener('click', function () { stepRadar(-1); scheduleSceneHashWrite(); });
-    document.getElementById('radar-next').addEventListener('click', function () { stepRadar(1); scheduleSceneHashWrite(); });
-    document.getElementById('radar-play').addEventListener('click', function () { setRadarPlaying(!radarPlaying); });
+    document.getElementById('radar-prev').addEventListener('click', function () { radarController.step(-1); scheduleSceneHashWrite(); });
+    document.getElementById('radar-next').addEventListener('click', function () { radarController.step(1); scheduleSceneHashWrite(); });
+    document.getElementById('radar-play').addEventListener('click', function () {
+      radarController.setPlaying(!radarController.getState().playing);
+    });
     document.getElementById('radar-scrubber').addEventListener('input', function () {
-      setRadarPlaying(false);
-      selectRadarFrame(parseInt(this.value, 10));
+      radarController.setPlaying(false);
+      radarController.selectFrame(parseInt(this.value, 10));
       scheduleSceneHashWrite();
     });
     document.getElementById('radar-speed').addEventListener('change', function () {
-      var wasPlaying = radarPlaying;
-      radarAnimationSpeed = [0, 400, 800, 1600].indexOf(Number(this.value)) === -1
-        ? RADAR_ANIMATION_SPEED
-        : Number(this.value);
-      preferredRadarAnimationSpeed = radarAnimationSpeed;
-      try { localStorage.setItem('stormscope-radar-speed', String(radarAnimationSpeed)); } catch (error) { /* optional */ }
-      setRadarPlaying(wasPlaying && radarAnimationSpeed > 0);
-      if (radarFrames.length) updateRadarTimeDisplay();
+      radarController.setSpeed(Number(this.value));
       scheduleSceneHashWrite();
     });
     document.getElementById('satellite-prev').addEventListener('click', function () {
@@ -7730,12 +7089,10 @@
       scheduleSceneHashWrite();
     });
     document.getElementById('radar-palette').addEventListener('change', function () {
-      radarPalette = ['standard', 'colorblind', 'contrast'].indexOf(this.value) === -1 ? 'standard' : this.value;
-      try { localStorage.setItem('stormscope-radar-palette', radarPalette); } catch (error) { /* optional */ }
-      applyRadarPalette();
+      radarController.setPalette(this.value, true);
       scheduleSceneHashWrite();
     });
-    document.getElementById('radar-retry').addEventListener('click', function () { initRadar(); });
+    document.getElementById('radar-retry').addEventListener('click', function () { radarController.refresh(); });
 
     document.getElementById('modal-close').addEventListener('click', closeCameraModal);
     document.querySelector('.modal-backdrop').addEventListener('click', closeCameraModal);
@@ -7952,7 +7309,7 @@
       syncAlertsPanelVisibility();
     });
     map.on('moveend', function () {
-      if (radarFrames.length) sampleRadarCenter(radarFrames[radarIndex]);
+      radarController.sampleCenter();
       clearTimeout(alertMoveTimer);
       alertMoveTimer = setTimeout(fetchNwsAlerts, 600);
       if (document.getElementById('toggle-wildfires').checked) {
@@ -8178,10 +7535,7 @@
   }
 
   function startRadarRefreshTimer() {
-    clearInterval(radarRefreshTimer);
-    radarRefreshTimer = setInterval(function () {
-      if (!document.hidden && (!mapComparison || !mapComparison.isOpen()) && navigator.onLine) initRadar();
-    }, RADAR_REFRESH_INTERVAL);
+    radarController.startRefreshTimer();
   }
 
   function createOperationalControllers() {
@@ -8229,9 +7583,9 @@
       if (monitorRegistry) monitorRegistry.setDocumentHidden(document.hidden);
       if (mapComparison) mapComparison.setDocumentHidden(document.hidden);
       if (document.hidden) {
-        radarWasPlaying = radarPlaying;
+        radarWasPlaying = radarController.getState().playing;
         satelliteWasPlaying = satellitePlaying;
-        setRadarPlaying(false);
+        radarController.setPlaying(false);
         setSatellitePlaying(false);
         if (activeCamera) {
           destroyActiveFeed(container);
@@ -8251,8 +7605,9 @@
       }
 
       startRadarRefreshTimer();
-      initRadar().then(function () {
-        if ((radarWasPlaying || comparisonRadarWasPlaying) && radarVisible && radarFrames.length) setRadarPlaying(true);
+      radarController.refresh().then(function () {
+        var radar = radarController.getState();
+        if ((radarWasPlaying || comparisonRadarWasPlaying) && radar.visible && radar.frames.length) radarController.setPlaying(true);
         if (satelliteWasPlaying && satelliteFrames.length && !lowDataMode) setSatellitePlaying(true);
         radarWasPlaying = false;
         satelliteWasPlaying = false;
@@ -8268,16 +7623,13 @@
 
     window.addEventListener('online', function () {
       updateConnectionState();
-      initRadar();
+      radarController.refresh();
       operationalControllers.refreshEnabled();
     });
     window.addEventListener('offline', updateConnectionState);
     window.addEventListener('beforeunload', function () {
-      clearInterval(radarRefreshTimer);
-      clearTimeout(radarPreloadTimer);
-      setRadarPlaying(false);
+      radarController.destroy({ preserveMapLayers: true });
       setSatellitePlaying(false);
-      if (radarAbort) radarAbort.abort();
       if (weatherAbort) weatherAbort.abort();
       if (summaryWildfireAbort) summaryWildfireAbort.abort();
       if (savedLocationAlertAbort) savedLocationAlertAbort.abort();
@@ -8366,14 +7718,15 @@
   }
 
   async function exportDiagnostics() {
+    var radar = radarController.getState();
     var report = diagnostics.report({
       appVersion: APP_VERSION,
       corpusGeneration: cameraLoadMetrics.index && cameraLoadMetrics.index.generated_at,
       cameraIngestion: cameraSourceHealth,
       startup: await startupDiagnosticContext(),
       providers: {
-        radar: radarProviderId,
-        radarStatus: radarProviderSelection && radarProviderSelection.degradationReason || 'ready',
+        radar: radar.providerId,
+        radarStatus: radar.providerSelection && radar.providerSelection.degradationReason || 'ready',
         alerts: { status: activeAlerts.length ? 'ready' : 'none', count: activeAlerts.length },
         lightning: lightningStatusState,
         wildfires: wildfireStatusState,
@@ -8430,23 +7783,7 @@
   }
 
   function initRadarPreferences() {
-    var savedSpeed = null;
-    var savedPalette = null;
-    try {
-      savedSpeed = localStorage.getItem('stormscope-radar-speed');
-      savedPalette = localStorage.getItem('stormscope-radar-palette');
-    } catch (error) { /* optional */ }
-    var parsedSpeed = Number(savedSpeed);
-    if ([0, 400, 800, 1600].indexOf(parsedSpeed) !== -1 && savedSpeed !== null) {
-      preferredRadarAnimationSpeed = parsedSpeed;
-    } else if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      preferredRadarAnimationSpeed = 0;
-    }
-    radarAnimationSpeed = lowDataMode ? 0 : preferredRadarAnimationSpeed;
-    radarPalette = ['standard', 'colorblind', 'contrast'].indexOf(savedPalette) === -1 ? 'standard' : savedPalette;
-    document.getElementById('radar-speed').value = String(radarAnimationSpeed);
-    document.getElementById('radar-palette').value = radarPalette;
-    applyRadarPalette();
+    radarController.loadPreferences(lowDataMode);
     updateLowDataUi();
   }
 
@@ -8486,7 +7823,7 @@
     bindUI();
     initInstallDiscovery();
     updateMonitorSelectionUi();
-    initRadar();
+    radarController.init();
     loadCameras();
     fetchNwsAlerts();
     registerServiceWorker();
@@ -8499,8 +7836,8 @@
 
   window._stormscope = {
     getMap: function () { return map; },
-    getRadarPreloadState: function () { return Object.assign({}, radarPreloadState); },
-    getRainViewerBudget: function () { return rainViewerBudget.snapshot(); },
+    getRadarPreloadState: function () { return radarController.getPreloadState(); },
+    getRainViewerBudget: function () { return radarController.getBudget(); },
     getCameraLoadMetrics: function () { return Object.assign({}, cameraLoadMetrics); },
     getCameraResults: function () { return currentCameraResults.slice(); },
     getSearchRenderMetrics: function () { return Object.assign({}, searchRenderMetrics); },
@@ -8518,7 +7855,7 @@
       return { json: result.json, text: result.text };
     },
     getActiveCameraId: function () { return activeCamera ? String(activeCamera.id) : null; },
-    getRadarFrameTime: function () { return radarFrames[radarIndex] ? radarFrames[radarIndex].time : null; },
+    getRadarFrameTime: function () { return radarController.getFrameTime(); },
     getAlertLayerGroup: function () { return alertLayerGroup; },
     refreshAlerts: fetchNwsAlerts,
     refreshSavedLocationAlerts: refreshSavedLocationAlerts,
