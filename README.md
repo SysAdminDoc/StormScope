@@ -13,7 +13,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 
 ## Features
 
-- **Live Weather Radar** — Animated RainViewer radar with official NOAA/NWS MRMS failover, source/age/coverage status, and adjustable opacity
+- **Live Weather Radar** — Animated RainViewer radar with official NOAA/NWS MRMS and RIDGE failover, source/age/coverage status, and adjustable opacity
 - **Accessible Radar Timeline** — Direct frame scrubbing, manual-only/0.5×/1×/2× playback, explicit frame age and light/moderate/heavy scale text, color-accessible palettes, and a rolling request budget that automatically falls back to NOAA before exceeding RainViewer's public limit
 - **Synchronized Map Comparison** — An opt-in two-pane workspace keeps center/zoom aligned while each pane independently selects radar time, GOES satellite, or current NWS hazards; low-data, hidden-tab, request, tile, decoded-memory, and frame-time budgets are enforced
 - **Official Weather Alerts** — Viewport-scoped NWS watches, warnings, and advisories with severity polygons and accessible details

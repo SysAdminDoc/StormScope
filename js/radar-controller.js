@@ -98,6 +98,17 @@
       });
     }
 
+    function fetchText(url, signal) {
+      return fetchFunction(url, { cache: 'no-store', signal: signal }).then(function (response) {
+        if (!response.ok) {
+          var error = new Error('HTTP ' + response.status);
+          error.status = response.status;
+          throw error;
+        }
+        return response.text();
+      });
+    }
+
     function discoverPrimary(signal) {
       var providerId = providers.primaryProviderId;
       var provider = providers.providers[providerId];
@@ -113,6 +124,13 @@
         fetchJson(provider.discovery.framesUrl, signal)
       ]).then(function (payloads) {
         return providers.parseNoaaDiscovery(payloads[0], payloads[1], timers.now());
+      });
+    }
+
+    function discoverRidge(signal) {
+      var provider = providers.providers['noaa-ridge'];
+      return fetchText(provider.discovery.url, signal).then(function (payload) {
+        return providers.parseRidgeDiscovery(payload, timers.now());
       });
     }
 
@@ -283,8 +301,9 @@
             provider.attribution.text + '</a>'
         });
         if (state.providerId === 'rainviewer') guardRainViewerTileLayer(layer);
-      } else if (state.providerId === 'noaa-mrms') {
-        var params = providers.noaaWmsParameters(frame);
+      } else if (provider.tile.kind === 'wms') {
+        var params = state.providerId === 'noaa-ridge'
+          ? providers.ridgeWmsParameters(frame) : providers.noaaWmsParameters(frame);
         var wmsOptions = {
           layers: params.layers, format: params.format, transparent: true, version: params.version,
           crs: leaflet.CRS.EPSG3857, opacity: state.opacity, zIndex: 400, maxZoom: 18,
@@ -321,6 +340,9 @@
           if (state.providerId === providers.primaryProviderId && isOnline()) {
             setStatus(tr('radar.tileFallback'), false, true);
             init({ forceNoaa: true, resumePlayback: state.playing });
+          } else if (state.providerId === 'noaa-mrms' && isOnline()) {
+            setStatus(tr('radar.ridgeTileFallback'), false, true);
+            init({ forceRidge: true, resumePlayback: state.playing });
           } else {
             clearDisplay();
             setStatus(tr('radar.tilesUnavailable'), true, true);
@@ -452,7 +474,10 @@
     async function sampleCenter(frame) {
       var provider = providers.providers[state.providerId];
       if (!frame || !provider || provider.tile.kind !== 'xyz') {
-        state.semanticState = providers.classifyRadarState({ frame: frame, coverage: true });
+        var center = map().getCenter();
+        var coverage = typeof providers.isPointCovered === 'function'
+          ? providers.isPointCovered(state.providerId, center.lat, center.lng) : true;
+        state.semanticState = providers.classifyRadarState({ frame: frame, coverage: coverage });
         updateTimeDisplay();
         return;
       }
@@ -516,7 +541,10 @@
         try {
           var primaryProviderId = providers.primaryProviderId;
           try {
-            if (optionsForRefresh.forceNoaa) throw new Error('Primary radar tile delivery failed');
+            if (optionsForRefresh.forceNoaa || optionsForRefresh.forceRidge) {
+              throw new Error(optionsForRefresh.forceRidge
+                ? 'NOAA/NWS MRMS tile delivery failed' : 'Primary radar tile delivery failed');
+            }
             discoveries[primaryProviderId] = await discoverPrimary(signal);
             health[primaryProviderId] = providers.assessProviderHealth(primaryProviderId, {
               latestFrame: discoveries[primaryProviderId].latestFrame, lastSuccessAt: timers.now()
@@ -524,7 +552,7 @@
           } catch (primaryError) {
             if (primaryError.name === 'AbortError') throw primaryError;
             var finalPrimaryError = primaryError;
-            if (isOnline() && !optionsForRefresh.forceNoaa && primaryError.status == null) {
+            if (isOnline() && !optionsForRefresh.forceNoaa && !optionsForRefresh.forceRidge && primaryError.status == null) {
               try {
                 discoveries[primaryProviderId] = await discoverPrimary(signal);
                 health[primaryProviderId] = providers.assessProviderHealth(primaryProviderId, {
@@ -549,7 +577,8 @@
               latestFrameAge: providers.getFrameAge(discoveries[primaryProviderId].latestFrame, primaryProviderId),
               lastSuccessAt: discoveries[primaryProviderId].discoveredAt, consecutiveFailures: 0, checkedAt: timers.now() };
           }
-          if (isOnline() && (!health[primaryProviderId] || health[primaryProviderId].status !== 'healthy')) {
+          if (isOnline() && !optionsForRefresh.forceRidge &&
+              (!health[primaryProviderId] || health[primaryProviderId].status !== 'healthy')) {
             try {
               discoveries['noaa-mrms'] = await discoverNoaa(signal);
               health['noaa-mrms'] = providers.assessProviderHealth('noaa-mrms', {
@@ -562,7 +591,32 @@
               });
             }
           }
-          var selection = providers.selectProvider(health);
+          var shouldDiscoverRidge = optionsForRefresh.forceRidge ||
+            (!health[primaryProviderId] || health[primaryProviderId].status !== 'healthy') &&
+            (!health['noaa-mrms'] || health['noaa-mrms'].status !== 'healthy');
+          if (isOnline() && shouldDiscoverRidge) {
+            try {
+              discoveries['noaa-ridge'] = await discoverRidge(signal);
+              health['noaa-ridge'] = providers.assessProviderHealth('noaa-ridge', {
+                latestFrame: discoveries['noaa-ridge'].latestFrame, lastSuccessAt: timers.now()
+              });
+            } catch (ridgeError) {
+              if (ridgeError.name === 'AbortError') throw ridgeError;
+              health['noaa-ridge'] = providers.assessProviderHealth('noaa-ridge', {
+                error: ridgeError, consecutiveFailures: 1
+              });
+            }
+          }
+          var selectionOptions = {};
+          if (health['noaa-ridge'] && typeof providers.isPointCovered === 'function') {
+            try {
+              var mapCenter = map().getCenter();
+              selectionOptions.coverageByProvider = {
+                'noaa-ridge': providers.isPointCovered('noaa-ridge', mapCenter.lat, mapCenter.lng)
+              };
+            } catch (coverageError) { /* map may be unavailable to a headless controller */ }
+          }
+          var selection = providers.selectProvider(health, selectionOptions);
           if (!selection.selectedProviderId || !discoveries[selection.selectedProviderId]) {
             throw new Error(selection.degradationReason || 'all radar providers unavailable');
           }
@@ -695,7 +749,8 @@
         });
         request.guardTileLayer(layer);
       } else if (provider.tile.kind === 'wms') {
-        var params = providers.noaaWmsParameters(frame);
+        var params = state.providerId === 'noaa-ridge'
+          ? providers.ridgeWmsParameters(frame) : providers.noaaWmsParameters(frame);
         var wmsOptions = {
           layers: params.layers, format: params.format, transparent: true, version: params.version,
           crs: leaflet.CRS.EPSG3857, opacity: state.opacity, maxZoom: 18, keepBuffer: 1,

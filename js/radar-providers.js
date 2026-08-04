@@ -12,14 +12,21 @@
   // https://www.rainviewer.com/api/transition-faq.html
   // https://mapservices.weather.noaa.gov/eventdriven/rest/services/radar/radar_base_reflectivity_time/ImageServer
   // https://mapservices.weather.noaa.gov/eventdriven/services/radar/radar_base_reflectivity_time/ImageServer/WMSServer?service=WMS&request=GetCapabilities&version=1.3.0
+  // https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/ows?service=WMS&request=GetCapabilities&version=1.3.0
 
   var MINUTE_MS = 60000;
   var NOAA_SUBSETS = Object.freeze(['ALASKA', 'CARIB', 'CONUS', 'GUAM', 'HAWAII']);
   var RAINVIEWER_ID = 'rainviewer';
   var BUILD_PROVIDER_ID = 'build-radar';
   var NOAA_ID = 'noaa-mrms';
+  var RIDGE_ID = 'noaa-ridge';
   var NOAA_SERVICE_URL = 'https://mapservices.weather.noaa.gov/eventdriven/rest/services/radar/radar_base_reflectivity_time/ImageServer';
   var NOAA_WMS_URL = 'https://mapservices.weather.noaa.gov/eventdriven/services/radar/radar_base_reflectivity_time/ImageServer/WMSServer';
+  var RIDGE_WMS_URL = 'https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/ows';
+  var RIDGE_CAPABILITIES_URL = RIDGE_WMS_URL + '?service=WMS&request=GetCapabilities&version=1.3.0';
+  var RIDGE_BOUNDS = Object.freeze({ west: -130, south: 20, east: -60, north: 55 });
+  var RIDGE_MAX_CAPABILITIES_BYTES = 512 * 1024;
+  var RIDGE_MAX_HISTORY_MINUTES = 180;
   var NOAA_QUERY_FIELDS = 'objectid,idp_subset,idp_validtime,idp_validendtime,idp_filedate,idp_ingestdate';
   var NOAA_QUERY_URL = NOAA_SERVICE_URL + '/query?where=1%3D1' +
     '&outFields=' + encodeURIComponent(NOAA_QUERY_FIELDS) +
@@ -141,6 +148,59 @@
         expectedUpdateMinutes: 10,
         staleAfterMinutes: 20,
         failAfterMinutes: 40
+      }
+    },
+    'noaa-ridge': {
+      id: RIDGE_ID,
+      label: 'NOAA/NWS RIDGE',
+      role: 'fallback',
+      priority: 2,
+      discovery: {
+        kind: 'wms-capabilities',
+        url: RIDGE_CAPABILITIES_URL,
+        method: 'GET',
+        cors: true,
+        layerName: 'conus_bref_qcd',
+        timeDimension: 'time'
+      },
+      tile: {
+        kind: 'wms',
+        endpoint: RIDGE_WMS_URL,
+        layer: 'conus_bref_qcd',
+        version: '1.3.0',
+        crs: 'EPSG:3857',
+        format: 'image/png',
+        transparent: true,
+        tileSize: 256,
+        crossOrigin: 'anonymous'
+      },
+      attribution: {
+        text: 'NOAA/NWS RIDGE',
+        url: 'https://radar.weather.gov/',
+        required: true
+      },
+      coverage: {
+        kind: 'fixed-bounds',
+        bounds: RIDGE_BOUNDS,
+        region: 'CONUS',
+        exactPointCoverage: false,
+        extentSource: RIDGE_CAPABILITIES_URL
+      },
+      history: {
+        kind: 'time-enabled-past',
+        advertisedWindowMinutes: RIDGE_MAX_HISTORY_MINUTES,
+        windowFromDiscovery: true,
+        advertisedUpdateMinutes: 5,
+        supportsFuture: false
+      },
+      resolution: {
+        nominalKilometers: 1,
+        label: 'Quality-controlled 1 km CONUS composite'
+      },
+      freshness: {
+        expectedUpdateMinutes: 5,
+        staleAfterMinutes: 15,
+        failAfterMinutes: 30
       }
     }
   };
@@ -538,6 +598,117 @@
     return NOAA_WMS_URL + '?' + query;
   }
 
+  function ridgeTimeMilliseconds(value) {
+    if (typeof value !== 'string' || value.length > 80) return null;
+    var parsed = Date.parse(value.trim());
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  function parseRidgeDiscovery(payload, discoveredAt) {
+    if (typeof payload !== 'string') throw new TypeError('NOAA/NWS RIDGE capabilities must be XML text.');
+    if (!payload.length || payload.length > RIDGE_MAX_CAPABILITIES_BYTES) {
+      throw new RangeError('NOAA/NWS RIDGE capabilities are outside the bounded response size.');
+    }
+    if (!/<(?:WMS_Capabilities|WMT_MS_Capabilities)\b/i.test(payload) ||
+        !/<Name\s*>\s*conus_bref_qcd\s*<\/Name\s*>/i.test(payload)) {
+      throw new Error('NOAA/NWS RIDGE capabilities did not advertise the CONUS reflectivity layer.');
+    }
+    var dimension = payload.match(/<Dimension\b[^>]*\bname\s*=\s*(['"])time\1[^>]*>([\s\S]*?)<\/Dimension\s*>/i);
+    if (!dimension) throw new Error('NOAA/NWS RIDGE capabilities did not advertise a time dimension.');
+
+    var timesByValue = Object.create(null);
+    function addTime(value) {
+      var timeMs = ridgeTimeMilliseconds(value);
+      if (timeMs !== null) timesByValue[timeMs] = true;
+    }
+    var defaultMatch = dimension[0].match(/\bdefault\s*=\s*(['"])([^'"]+)\1/i);
+    if (defaultMatch) addTime(defaultMatch[2]);
+    dimension[2].split(',').forEach(addTime);
+    var allTimes = Object.keys(timesByValue).map(Number).filter(Number.isFinite).sort(function (left, right) {
+      return left - right;
+    });
+    if (!allTimes.length) throw new Error('NOAA/NWS RIDGE time dimension contained no usable timestamps.');
+
+    var latestTime = allTimes[allTimes.length - 1];
+    var windowStart = latestTime - RIDGE_MAX_HISTORY_MINUTES * MINUTE_MS;
+    var frameTimes = allTimes.filter(function (timeMs) { return timeMs >= windowStart; });
+    if (!frameTimes.length) frameTimes = [latestTime];
+    var frames = frameTimes.map(function (timeMs, index) {
+      return {
+        id: RIDGE_ID + ':' + timeMs,
+        providerId: RIDGE_ID,
+        time: timeMs,
+        generatedAt: timeMs,
+        wmsTime: timeMs,
+        isLatest: index === frameTimes.length - 1,
+        coverageSubsets: ['CONUS'],
+        coverageComplete: true
+      };
+    });
+    return {
+      providerId: RIDGE_ID,
+      discoveredAt: epochMilliseconds(discoveredAt) || Date.now(),
+      serviceTimeExtent: [allTimes[0], latestTime],
+      availableHistoryMinutes: Math.max(0, Math.round((latestTime - frameTimes[0]) / MINUTE_MS)),
+      frames: frames,
+      latestFrame: frames[frames.length - 1],
+      coverage: {
+        kind: PROVIDERS[RIDGE_ID].coverage.kind,
+        bounds: Object.assign({}, PROVIDERS[RIDGE_ID].coverage.bounds),
+        region: PROVIDERS[RIDGE_ID].coverage.region,
+        exactPointCoverage: PROVIDERS[RIDGE_ID].coverage.exactPointCoverage
+      }
+    };
+  }
+
+  function ridgeWmsParameters(frame, options) {
+    options = options || {};
+    var parameters = {
+      service: 'WMS',
+      request: 'GetMap',
+      version: PROVIDERS[RIDGE_ID].tile.version,
+      layers: PROVIDERS[RIDGE_ID].tile.layer,
+      styles: '',
+      format: PROVIDERS[RIDGE_ID].tile.format,
+      transparent: 'true',
+      crs: PROVIDERS[RIDGE_ID].tile.crs
+    };
+    var requestedTime = epochMilliseconds(options.time);
+    if (requestedTime === null && frame) {
+      requestedTime = epochMilliseconds(frame.wmsTime !== undefined ? frame.wmsTime : frame.time);
+    }
+    if (requestedTime !== null) parameters.time = new Date(requestedTime).toISOString();
+    return parameters;
+  }
+
+  function buildRidgeWmsUrl(frame, bbox, width, height, options) {
+    if (!Array.isArray(bbox) || bbox.length !== 4 || !bbox.every(finiteNumber)) {
+      throw new TypeError('NOAA/NWS RIDGE WMS bbox must contain four finite EPSG:3857 coordinates.');
+    }
+    width = width || 256;
+    height = height || 256;
+    if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || width > 4096 || height > 4096) {
+      throw new RangeError('NOAA/NWS RIDGE WMS image dimensions must be integers from 1 through 4096.');
+    }
+    var parameters = ridgeWmsParameters(frame, options);
+    parameters.bbox = bbox.join(',');
+    parameters.width = String(width);
+    parameters.height = String(height);
+    var query = Object.keys(parameters).map(function (key) {
+      return encodeURIComponent(key) + '=' + encodeURIComponent(parameters[key]);
+    }).join('&');
+    return RIDGE_WMS_URL + '?' + query;
+  }
+
+  function isPointCovered(providerId, latitude, longitude) {
+    var provider = PROVIDERS[providerId];
+    if (!provider || !finiteNumber(latitude) || !finiteNumber(longitude)) return null;
+    if (provider.coverage.kind !== 'fixed-bounds') return true;
+    var bounds = provider.coverage.bounds;
+    return longitude >= bounds.west && longitude <= bounds.east &&
+      latitude >= bounds.south && latitude <= bounds.north;
+  }
+
   function getFrameAge(frame, providerId, now) {
     var timeMs = epochMilliseconds(frame && frame.time !== undefined ? frame.time : frame);
     var nowMs = epochMilliseconds(now) || Date.now();
@@ -618,7 +789,7 @@
   function selectProvider(healthByProvider, options) {
     healthByProvider = healthByProvider || {};
     options = options || {};
-    var order = Array.isArray(options.order) ? options.order : [PRIMARY_PROVIDER_ID, NOAA_ID];
+    var order = Array.isArray(options.order) ? options.order : [PRIMARY_PROVIDER_ID, NOAA_ID, RIDGE_ID];
     var coverage = options.coverageByProvider || {};
     var candidates = [];
     order.forEach(function (providerId) {
@@ -729,7 +900,7 @@
   }
 
   return deepFreeze({
-    providerIds: { RAINVIEWER: RAINVIEWER_ID, BUILD_RADAR: BUILD_PROVIDER_ID, NOAA_MRMS: NOAA_ID },
+    providerIds: { RAINVIEWER: RAINVIEWER_ID, BUILD_RADAR: BUILD_PROVIDER_ID, NOAA_MRMS: NOAA_ID, NOAA_RIDGE: RIDGE_ID },
     primaryProviderId: PRIMARY_PROVIDER_ID,
     healthStatus: HEALTH,
     radarState: RADAR_STATE,
@@ -743,6 +914,10 @@
     parseNoaaDiscovery: parseNoaaDiscovery,
     noaaWmsParameters: noaaWmsParameters,
     buildNoaaWmsUrl: buildNoaaWmsUrl,
+    parseRidgeDiscovery: parseRidgeDiscovery,
+    ridgeWmsParameters: ridgeWmsParameters,
+    buildRidgeWmsUrl: buildRidgeWmsUrl,
+    isPointCovered: isPointCovered,
     getFrameAge: getFrameAge,
     assessProviderHealth: assessProviderHealth,
     selectProvider: selectProvider,

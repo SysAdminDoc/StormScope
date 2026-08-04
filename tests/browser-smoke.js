@@ -380,6 +380,32 @@ async function addNetworkFixtures(page, metrics, options) {
       await route.fulfill({ contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: pixel });
       return;
     }
+    if (options.ridgeFallback && url === 'https://api.rainviewer.com/public/weather-maps.json') {
+      await route.abort();
+      return;
+    }
+    if (options.ridgeFallback && url.startsWith('https://mapservices.weather.noaa.gov/eventdriven/rest/services/radar/radar_base_reflectivity_time/ImageServer')) {
+      await route.abort();
+      return;
+    }
+    if (url.startsWith('https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/ows') &&
+        url.includes('request=GetCapabilities')) {
+      const latest = new Date(Date.now() - 5 * 60000).toISOString();
+      const middle = new Date(Date.now() - 10 * 60000).toISOString();
+      await route.fulfill({
+        contentType: 'text/xml',
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: `<WMS_Capabilities version="1.3.0"><Capability><Layer><Name>conus_bref_qcd</Name>` +
+          `<Dimension name="time" default="${latest}">${middle},${latest}</Dimension>` +
+          `</Layer></Capability></WMS_Capabilities>`
+      });
+      return;
+    }
+    if (url.startsWith('https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/ows') &&
+        url.includes('request=GetMap')) {
+      await route.fulfill({ contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: pixel });
+      return;
+    }
     if (url === 'https://api.rainviewer.com/public/weather-maps.json') {
       await route.fulfill({
         contentType: 'application/json',
@@ -2832,6 +2858,21 @@ async function main() {
     assert.match(await customRadarPage.locator('#radar-meta').textContent(), /Configured tile pyramid through zoom 8/);
     assert.equal(await customRadarPage.evaluate(() => window.StormScopeRadarProviders.primaryProviderId), 'build-radar');
     await customRadarContext.close();
+
+    const ridgeFallbackContext = await browser.newContext({
+      viewport: { width: 1280, height: 720 },
+      serviceWorkers: 'block'
+    });
+    const ridgeFallbackPage = await ridgeFallbackContext.newPage();
+    ridgeFallbackPage.baseURL = baseURL;
+    ridgeFallbackPage.on('pageerror', (error) => errors.push(error.message));
+    await addNetworkFixtures(ridgeFallbackPage, {}, { ridgeFallback: true });
+    await waitForApp(ridgeFallbackPage, false);
+    await ridgeFallbackPage.waitForFunction(() => /NOAA\/NWS RIDGE/.test(document.querySelector('#radar-meta').textContent));
+    assert.equal(await ridgeFallbackPage.locator('#radar-source').textContent(), 'NOAA/NWS RIDGE');
+    assert.match(await ridgeFallbackPage.locator('#radar-meta').textContent(), /Quality-controlled 1 km CONUS composite/);
+    assert.match(await ridgeFallbackPage.locator('#radar-frame-position').textContent(), /Frame 2 of 2/);
+    await ridgeFallbackContext.close();
 
     assert.deepEqual(errors, []);
     console.log('Headless desktop/mobile/modal/offline/cache/accessibility smoke passed.');

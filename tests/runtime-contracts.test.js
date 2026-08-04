@@ -37,6 +37,7 @@ test('RainViewer uses the 2026 past-radar contract', () => {
   assert.match(radarControllerSource, /MAX_NATIVE_ZOOM = 7/);
   assert.match(radarControllerSource, /parseXyzDiscovery/);
   assert.match(radarControllerSource, /discoverNoaa/);
+  assert.match(radarControllerSource, /discoverRidge/);
   assert.match(radarControllerSource, /selectProvider/);
   assert.match(radarControllerSource, /sampleCenter/);
   assert.match(radarControllerSource, /maxNativeZoom: provider\.tile\.maxNativeZoom/);
@@ -121,7 +122,7 @@ test('NWPS river gauges are bounded, forecast-aware, and lifecycle-owned', () =>
   const gaugePosition = html.indexOf('js/river-gauges.js');
   const appPosition = html.indexOf('js/app.js');
   assert.ok(floodPosition >= 0 && gaugePosition > floodPosition && appPosition > gaugePosition);
-  assert.match(serviceWorker, /var VERSION = 'v113'/);
+  assert.match(serviceWorker, /var VERSION = 'v114'/);
   assert.match(serviceWorker, /\.\/js\/river-gauges\.js/);
   assert.match(riverGaugesSource, /resultRecordCount: String\(MAX_RECORDS\)/);
   assert.match(riverGaugesSource, /function buildQueries\(bounds, zoom\)/);
@@ -425,9 +426,12 @@ test('radar failover, coverage semantics, and NWS alerts are wired into the UI',
   assert.match(html, /Informational only/);
   assert.match(radarControllerSource, /selectProvider/);
   assert.match(radarControllerSource, /parseNoaaDiscovery/);
+  assert.match(radarControllerSource, /parseRidgeDiscovery/);
   assert.match(radarControllerSource, /classifyRadarState/);
   assert.match(radarControllerSource, /if \(params\.time\) wmsOptions\.time = params\.time/);
   assert.match(radarControllerSource, /forceNoaa/);
+  assert.match(radarControllerSource, /forceRidge/);
+  assert.match(html, /https:\/\/opengeo\.ncep\.noaa\.gov/);
   assert.match(app, /StormScopeNwsAlerts\.buildViewportQuery/);
   assert.match(app, /StormScopeNwsAlerts\.buildPointQuery/);
   assert.match(app, /StormScopeNwsAlerts\.nextRetryMetadata/);

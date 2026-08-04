@@ -26,6 +26,10 @@ test('exports a standalone browser global with immutable provider capabilities',
   assert.equal(browserApi.providers['noaa-mrms'].history.advertisedWindowMinutes, 240);
   assert.equal(browserApi.providers['noaa-mrms'].history.windowFromDiscovery, true);
   assert.equal(browserApi.providers['noaa-mrms'].resolution.nominalKilometers, 1);
+  assert.equal(browserApi.providers['noaa-ridge'].role, 'fallback');
+  assert.equal(browserApi.providers['noaa-ridge'].tile.layer, 'conus_bref_qcd');
+  assert.equal(browserApi.providers['noaa-ridge'].coverage.kind, 'fixed-bounds');
+  assert.equal(browserApi.providers['noaa-ridge'].coverage.bounds.west, -130);
   assert.ok(Object.isFrozen(browserApi.providers));
 });
 
@@ -196,6 +200,37 @@ test('groups NOAA regional rasters into historical frames and builds WMS request
   assert.equal(Object.hasOwn(latestParams, 'time'), false, 'latest NOAA mosaic must let the service select all current regional rasters');
 });
 
+test('normalizes NOAA/NWS RIDGE capabilities into bounded, time-aware WMS frames', () => {
+  const oldest = new Date(NOW - 240 * 60000).toISOString();
+  const middle = new Date(NOW - 120 * 60000).toISOString();
+  const latest = new Date(NOW - 5 * 60000).toISOString();
+  const discovery = radar.parseRidgeDiscovery(
+    `<WMS_Capabilities version="1.3.0"><Capability><Layer><Name>conus_bref_qcd</Name>` +
+      `<Dimension name="time" default="${latest}">${oldest},${middle},${latest}</Dimension>` +
+      `</Layer></Capability></WMS_Capabilities>`, NOW
+  );
+
+  assert.equal(discovery.providerId, 'noaa-ridge');
+  assert.equal(discovery.frames.length, 2, 'frames outside the bounded history window are discarded');
+  assert.equal(discovery.latestFrame.isLatest, true);
+  assert.equal(discovery.latestFrame.wmsTime, Date.parse(latest));
+  assert.equal(discovery.availableHistoryMinutes, 115);
+  assert.deepEqual(discovery.coverage.bounds, { west: -130, south: 20, east: -60, north: 55 });
+  assert.equal(discovery.frames.every((frame) => frame.coverageComplete), true);
+
+  const ridgeUrl = new URL(radar.buildRidgeWmsUrl(discovery.latestFrame, [-1, -2, 3, 4], 512, 256));
+  assert.equal(ridgeUrl.hostname, 'opengeo.ncep.noaa.gov');
+  assert.equal(ridgeUrl.searchParams.get('layers'), 'conus_bref_qcd');
+  assert.equal(ridgeUrl.searchParams.get('crs'), 'EPSG:3857');
+  assert.equal(ridgeUrl.searchParams.get('time'), latest);
+  assert.equal(radar.ridgeWmsParameters(discovery.frames[0]).time, middle);
+  assert.equal(radar.isPointCovered('noaa-ridge', 39, -96), true);
+  assert.equal(radar.isPointCovered('noaa-ridge', 61, -96), false);
+  assert.equal(radar.isPointCovered('noaa-ridge', NaN, -96), null);
+  assert.throws(() => radar.parseRidgeDiscovery('<WMS_Capabilities/>'), /did not advertise/);
+  assert.throws(() => radar.parseRidgeDiscovery('x'.repeat(512 * 1024 + 1)), /bounded response size/);
+});
+
 test('computes provider-specific frame age and health without hiding stale success', () => {
   const freshFrame = { providerId: 'rainviewer', time: NOW - 5 * 60000 };
   const staleFrame = { providerId: 'rainviewer', time: NOW - 25 * 60000 };
@@ -233,6 +268,24 @@ test('failover preserves provider identity and never labels NOAA as primary', ()
   assert.equal(selection.degradationReason, 'request-failed');
 });
 
+test('selects RIDGE only after the primary and MRMS are unavailable', () => {
+  const unavailable = { status: 'unavailable', reason: 'request-failed' };
+  const ridge = radar.assessProviderHealth('noaa-ridge', {
+    latestFrame: { providerId: 'noaa-ridge', time: NOW - 5 * 60000 }
+  }, NOW);
+  const selection = radar.selectProvider({
+    rainviewer: unavailable,
+    'noaa-mrms': unavailable,
+    'noaa-ridge': ridge
+  });
+
+  assert.equal(selection.selectedProviderId, 'noaa-ridge');
+  assert.equal(selection.role, 'fallback');
+  assert.equal(selection.isFallback, true);
+  assert.equal(selection.displayLabel, 'NOAA/NWS RIDGE (fallback)');
+  assert.equal(selection.degradationReason, 'request-failed');
+});
+
 test('classifies clear, no-coverage, stale, and failure as distinct accessible states', () => {
   const freshFrame = { providerId: 'rainviewer', time: NOW - 5 * 60000 };
   const staleFrame = { providerId: 'rainviewer', time: NOW - 25 * 60000 };
@@ -261,9 +314,9 @@ test('Universal Blue pixels classify transparent, light, moderate, and heavy ech
 
 test('returns no-coverage separately from all-provider failure when no candidate can run', () => {
   const unavailable = { status: 'unavailable', reason: 'request-failed' };
-  const health = { rainviewer: unavailable, 'noaa-mrms': unavailable };
+  const health = { rainviewer: unavailable, 'noaa-mrms': unavailable, 'noaa-ridge': unavailable };
   assert.equal(radar.selectProvider(health).state, 'failure');
   assert.equal(radar.selectProvider(health, {
-    coverageByProvider: { rainviewer: false, 'noaa-mrms': false }
+    coverageByProvider: { rainviewer: false, 'noaa-mrms': false, 'noaa-ridge': false }
   }).state, 'no-coverage');
 });
