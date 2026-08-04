@@ -229,6 +229,17 @@
   var stormReportCount = 0;
   var stormReportStatusState = 'off';
   var stormReportAttributionAdded = false;
+  var surfaceObservationLayer = null;
+  var surfaceObservationAbort = null;
+  var surfaceObservationGeneration = 0;
+  var surfaceObservationRefreshTimer = null;
+  var surfaceObservationMoveTimer = null;
+  var surfaceObservationLatestAt = null;
+  var surfaceObservationFetchedAt = null;
+  var surfaceObservationCount = 0;
+  var surfaceObservationStatusState = 'off';
+  var surfaceObservationTruncated = false;
+  var surfaceObservationAttributionAdded = false;
   var summaryWildfireStatus = 'idle';
   var summaryWildfireCount = 0;
   var summaryWildfireUpdatedAt = null;
@@ -1415,6 +1426,255 @@
     lightningLayer = null;
     lightningStatusState = 'off';
     renderLightningStatus();
+  }
+
+  // ── NOAA AWC METAR surface observations ──
+
+  function renderSurfaceObservationStatus() {
+    if (surfaceObservationStatusState === 'off') {
+      setContextStatusElement('surface-observations-status', tr('context.surfaceObservationsOff'), 'off');
+      return;
+    }
+    if (surfaceObservationStatusState === 'loading') {
+      setContextStatusElement('surface-observations-status', tr('context.loading'), 'loading');
+      return;
+    }
+    if (surfaceObservationStatusState === 'zoom') {
+      setContextStatusElement('surface-observations-status', tr('context.surfaceObservationsZoom'), 'off');
+      return;
+    }
+    if (surfaceObservationStatusState === 'error') {
+      setContextStatusElement('surface-observations-status', tr(surfaceObservationLayer ? 'context.refreshFailed' : 'context.unavailable'), 'error');
+      return;
+    }
+    var provider = StormScopeSurfaceObservations.provider;
+    var freshness = StormScopeSurfaceObservations.freshness(surfaceObservationLatestAt, provider.staleMs);
+    var key = surfaceObservationTruncated ? 'context.surfaceObservationsPartial' : 'context.surfaceObservationsStatus';
+    setContextStatusElement('surface-observations-status', tr(key, {
+      count: localNumber(surfaceObservationCount),
+      freshness: freshness.state === 'fresh' ? tr('context.fresh')
+        : freshness.state === 'stale' ? tr('context.stale') : tr('weather.unknown'),
+      time: contextTimestamp(surfaceObservationLatestAt)
+    }), freshness.state);
+  }
+
+  function metarValue(value) {
+    return value == null || value === '' ? tr('context.metarNoData') : String(value);
+  }
+
+  function metarWindText(speedKt, direction) {
+    if (speedKt == null) return tr('context.metarNoData');
+    var speed = StormScopeWeather.windFromKmh(Number(speedKt) * 1.852, weatherUnits) || metarValue(speedKt) + ' kt';
+    return direction == null ? speed : speed + ' ' + localizedWindDirection(direction);
+  }
+
+  function metarPopup(feature) {
+    var properties = feature.properties || {};
+    var container = document.createElement('div');
+    container.className = 'context-popup metar-popup';
+    var heading = document.createElement('strong');
+    heading.textContent = tr('context.metarStation', { station: properties.stationId || tr('weather.unknown') });
+    container.appendChild(heading);
+
+    function appendRow(key, value) {
+      var row = document.createElement('span');
+      row.textContent = tr(key, { value: metarValue(value) });
+      container.appendChild(row);
+    }
+
+    var observed = document.createElement('span');
+    observed.textContent = tr('context.metarObserved', { time: contextTimestamp(properties.observationTime) });
+    container.appendChild(observed);
+    appendRow('context.metarTemperature', properties.tempC == null
+      ? null : StormScopeWeather.temperatureFromCelsius(properties.tempC, weatherUnits));
+    appendRow('context.metarDewpoint', properties.dewpointC == null
+      ? null : StormScopeWeather.temperatureFromCelsius(properties.dewpointC, weatherUnits));
+    appendRow('context.metarWind', metarWindText(properties.windSpeedKt, properties.windDirection));
+    appendRow('context.metarGust', properties.windGustKt == null
+      ? null : metarWindText(properties.windGustKt, null));
+    appendRow('context.metarVisibility', properties.visibility);
+    appendRow('context.metarWeather', properties.weather);
+    appendRow('context.metarSky', properties.skyCover);
+    appendRow('context.metarCeiling', properties.ceilingFt == null ? properties.cloudBaseFt : properties.ceilingFt);
+    appendRow('context.metarFlightCategory', properties.flightCategory);
+
+    if (properties.rawText) {
+      var details = document.createElement('details');
+      var summary = document.createElement('summary');
+      summary.textContent = tr('context.metarRaw');
+      var raw = document.createElement('pre');
+      raw.textContent = properties.rawText;
+      details.appendChild(summary);
+      details.appendChild(raw);
+      container.appendChild(details);
+    }
+    var link = document.createElement('a');
+    link.href = safeExternalUrl(properties.officialUrl);
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = tr('context.metarSource');
+    container.appendChild(link);
+    return container;
+  }
+
+  function createSurfaceObservationCluster() {
+    return L.markerClusterGroup({
+      pane: 'contextVectorPane',
+      clusterPane: 'contextVectorPane',
+      maxClusterRadius: 45,
+      spiderfyOnMaxZoom: true,
+      showCoverageOnHover: false,
+      disableClusteringAtZoom: 9,
+      iconCreateFunction: function (cluster) {
+        var count = cluster.getChildCount();
+        var label = escapeHtml(tr('context.metarCluster', { count: localNumber(count) }));
+        return L.divIcon({
+          html: '<span aria-hidden="true">' + count + '</span><span class="visually-hidden" role="img" aria-label="' + label + '"></span>',
+          className: 'metar-cluster-marker', iconSize: L.point(34, 34)
+        });
+      }
+    });
+  }
+
+  function decorateSurfaceObservationMarker(marker, feature) {
+    marker.feature = feature;
+    marker.bindPopup(function () { return metarPopup(feature); }, { autoPan: false, maxWidth: 360, maxHeight: 440 });
+    marker.on('add', function () {
+      var element = marker.getElement && marker.getElement();
+      if (!element) return;
+      element.setAttribute('role', 'button');
+      element.setAttribute('tabindex', '0');
+      element.setAttribute('aria-label', tr('context.metarStation', { station: feature.properties.stationId }));
+      element.title = feature.properties.stationId;
+      element.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        marker.openPopup();
+      });
+    });
+  }
+
+  function buildSurfaceObservationLayer(collection) {
+    var group = createSurfaceObservationCluster();
+    (collection.features || []).forEach(function (feature) {
+      var properties = feature.properties || {};
+      var marker = L.marker([properties.latitude, properties.longitude], {
+        pane: 'contextVectorPane',
+        title: properties.stationId,
+        icon: L.divIcon({
+          html: '<span aria-hidden="true"></span>',
+          className: StormScopeSurfaceObservations.markerClass(properties.flightCategory),
+          iconSize: L.point(14, 14), iconAnchor: L.point(7, 7)
+        })
+      });
+      decorateSurfaceObservationMarker(marker, feature);
+      group.addLayer(marker);
+    });
+    return group;
+  }
+
+  function scheduleSurfaceObservationRefresh() {
+    clearTimeout(surfaceObservationRefreshTimer);
+    surfaceObservationRefreshTimer = null;
+    if (document.hidden || !document.getElementById('toggle-surface-observations').checked) return;
+    surfaceObservationRefreshTimer = setTimeout(refreshSurfaceObservations, StormScopeSurfaceObservations.provider.refreshMs);
+  }
+
+  function addSurfaceObservationAttribution() {
+    if (surfaceObservationAttributionAdded) return;
+    var provider = StormScopeSurfaceObservations.provider;
+    map.attributionControl.addAttribution('<a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>');
+    surfaceObservationAttributionAdded = true;
+  }
+
+  function removeSurfaceObservationAttribution() {
+    if (!surfaceObservationAttributionAdded) return;
+    var provider = StormScopeSurfaceObservations.provider;
+    map.attributionControl.removeAttribution('<a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>');
+    surfaceObservationAttributionAdded = false;
+  }
+
+  async function refreshSurfaceObservations() {
+    if (!document.getElementById('toggle-surface-observations').checked || document.hidden) return;
+    if (surfaceObservationAbort) surfaceObservationAbort.abort();
+    var operation = new AbortController();
+    surfaceObservationAbort = operation;
+    var generation = ++surfaceObservationGeneration;
+    surfaceObservationStatusState = 'loading';
+    renderSurfaceObservationStatus();
+    try {
+      var bounds = map.getBounds();
+      var queries = StormScopeSurfaceObservations.buildQueries({
+        west: bounds.getWest(), south: bounds.getSouth(), east: bounds.getEast(), north: bounds.getNorth()
+      }, map.getZoom());
+      if (!queries.length) {
+        if (surfaceObservationLayer) map.removeLayer(surfaceObservationLayer);
+        surfaceObservationLayer = null;
+        surfaceObservationLatestAt = null;
+        surfaceObservationFetchedAt = null;
+        surfaceObservationCount = 0;
+        surfaceObservationTruncated = false;
+        removeSurfaceObservationAttribution();
+        surfaceObservationStatusState = 'zoom';
+        renderSurfaceObservationStatus();
+        return;
+      }
+      var results = await Promise.all(queries.map(async function (url) {
+        var response = await fetch(url, { cache: 'no-store', signal: operation.signal });
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return StormScopeSurfaceObservations.normalizeCollection(await response.json());
+      }));
+      if (generation !== surfaceObservationGeneration || operation.signal.aborted) return;
+      var normalized = StormScopeSurfaceObservations.mergeCollections(results);
+      var nextLayer = buildSurfaceObservationLayer(normalized.collection);
+      nextLayer.addTo(map);
+      if (surfaceObservationLayer) map.removeLayer(surfaceObservationLayer);
+      surfaceObservationLayer = nextLayer;
+      surfaceObservationLatestAt = normalized.latestAt;
+      surfaceObservationFetchedAt = Date.now();
+      surfaceObservationCount = normalized.count;
+      surfaceObservationTruncated = normalized.truncated;
+      addSurfaceObservationAttribution();
+      surfaceObservationStatusState = 'ready';
+      renderSurfaceObservationStatus();
+    } catch (error) {
+      if (error.name === 'AbortError') return;
+      if (generation !== surfaceObservationGeneration) return;
+      surfaceObservationStatusState = 'error';
+      renderSurfaceObservationStatus();
+    } finally {
+      if (surfaceObservationAbort === operation) {
+        surfaceObservationAbort = null;
+        scheduleSurfaceObservationRefresh();
+      }
+    }
+  }
+
+  function disableSurfaceObservations() {
+    surfaceObservationGeneration += 1;
+    if (surfaceObservationAbort) surfaceObservationAbort.abort();
+    surfaceObservationAbort = null;
+    clearTimeout(surfaceObservationRefreshTimer);
+    clearTimeout(surfaceObservationMoveTimer);
+    surfaceObservationRefreshTimer = null;
+    surfaceObservationMoveTimer = null;
+    if (surfaceObservationLayer) map.removeLayer(surfaceObservationLayer);
+    surfaceObservationLayer = null;
+    surfaceObservationLatestAt = null;
+    surfaceObservationFetchedAt = null;
+    surfaceObservationCount = 0;
+    surfaceObservationTruncated = false;
+    removeSurfaceObservationAttribution();
+    surfaceObservationStatusState = 'off';
+    renderSurfaceObservationStatus();
+  }
+
+  function getSurfaceObservationState() {
+    return {
+      enabled: Boolean(surfaceObservationLayer), status: surfaceObservationStatusState,
+      count: surfaceObservationCount, updatedAt: surfaceObservationLatestAt,
+      fetchedAt: surfaceObservationFetchedAt, truncated: surfaceObservationTruncated
+    };
   }
 
   function renderTropicalStatus() {
@@ -6178,6 +6438,11 @@
         aborts: function () { return stormReportAbort; },
         timers: function () { return [stormReportRefreshTimer, stormReportMoveTimer]; },
         onControl: function (_control, value) { stormReportWindow = Number(value); }
+      },
+      surfaceObservations: {
+        refresh: refreshSurfaceObservations, disable: disableSurfaceObservations,
+        aborts: function () { return surfaceObservationAbort; },
+        timers: function () { return [surfaceObservationRefreshTimer, surfaceObservationMoveTimer]; }
       }
     };
   }
@@ -6372,6 +6637,7 @@
       renderGaugeStatus();
       renderMesoscaleStatus();
       renderStormReportStatus();
+      renderSurfaceObservationStatus();
       if (activeCamera) {
         updateModalCameraHealth(activeCamera);
         fetchWeather(activeCamera.lat, activeCamera.lon, activeCamera);
@@ -6657,6 +6923,10 @@
       if (document.getElementById('toggle-storm-reports').checked) {
         clearTimeout(stormReportMoveTimer);
         stormReportMoveTimer = setTimeout(refreshStormReports, 900);
+      }
+      if (document.getElementById('toggle-surface-observations').checked) {
+        clearTimeout(surfaceObservationMoveTimer);
+        surfaceObservationMoveTimer = setTimeout(refreshSurfaceObservations, 900);
       }
       if (document.getElementById('camera-sort').value === 'distance') scheduleSearchRender();
       scheduleLastViewSave();
@@ -7260,6 +7530,7 @@
     getSnowState: function () {
       return { enabled: Boolean(snowLayer), status: snowStatusState, updatedAt: snowFetchedAt };
     },
+    getSurfaceObservationState: getSurfaceObservationState,
     getSpcReportsState: function () {
       return {
         mesoscale: Boolean(mesoscaleLayer), mesoscaleStatus: mesoscaleStatusState, mesoscaleCount: mesoscaleCount,
@@ -7271,6 +7542,7 @@
     refreshStormReports: refreshStormReports,
     refreshTropical: refreshTropical,
     refreshWpcOutlooks: refreshWpcOutlooks,
-    refreshUsgsGauges: refreshUsgsGauges
+    refreshUsgsGauges: refreshUsgsGauges,
+    refreshSurfaceObservations: refreshSurfaceObservations
   };
 })();

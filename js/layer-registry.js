@@ -38,6 +38,10 @@
       labelKey: 'layers.lightning', groupId: 'hazards', groupLabelKey: 'layers.groupHazards'
     },
     {
+      id: 'surfaceObservations', toggleId: 'toggle-surface-observations', defaultEnabled: false, lifecycleId: 'surface-observations',
+      labelKey: 'layers.surfaceObservations', groupId: 'hazards', groupLabelKey: 'layers.groupHazards'
+    },
+    {
       id: 'wildfires', toggleId: 'toggle-wildfires', defaultEnabled: false, lifecycleId: 'wildfires',
       labelKey: 'layers.wildfires', groupId: 'hazards', groupLabelKey: 'layers.groupHazards'
     },

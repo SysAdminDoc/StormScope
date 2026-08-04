@@ -13,6 +13,7 @@ const solarTerminator = fs.readFileSync(path.join(root, 'js', 'solar-terminator.
 const weather = fs.readFileSync(path.join(root, 'js', 'weather.js'), 'utf8');
 const contextControllers = fs.readFileSync(path.join(root, 'js', 'context-layer-controllers.js'), 'utf8');
 const spcReports = fs.readFileSync(path.join(root, 'js', 'spc-reports.js'), 'utf8');
+const surfaceObservations = fs.readFileSync(path.join(root, 'js', 'surface-observations.js'), 'utf8');
 const cameraRecordSource = fs.readFileSync(path.join(root, 'js', 'camera-record.js'), 'utf8');
 const cameraFeedSource = fs.readFileSync(path.join(root, 'js', 'camera-feed.js'), 'utf8');
 const serviceWorker = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
@@ -427,9 +428,11 @@ test('official context layers are optional, attributed, and cannot obscure warni
   assert.match(html, /<input[^>]*type="checkbox"[^>]*id="toggle-wildfires"[^>]*>/);
   assert.match(html, /<input[^>]*type="checkbox"[^>]*id="toggle-terminator"[^>]*>/);
   assert.match(html, /<input[^>]*type="checkbox"[^>]*id="toggle-snow"[^>]*>/);
+  assert.match(html, /<input[^>]*type="checkbox"[^>]*id="toggle-surface-observations"[^>]*>/);
   assert.match(html, /id="lightning-status"[^>]*role="status"/);
   assert.match(html, /id="wildfire-status"[^>]*role="status"/);
   assert.match(html, /id="snow-status"[^>]*role="status"/);
+  assert.match(html, /id="surface-observations-status"[^>]*role="status"/);
   assert.match(html, /https:\/\/nowcoast\.noaa\.gov/);
   assert.match(html, /https:\/\/services3\.arcgis\.com/);
   assert.match(contextLayers, /NOAA nowCOAST/);
@@ -451,7 +454,19 @@ test('official context layers are optional, attributed, and cannot obscure warni
   assert.match(app, /function refreshSnow/);
   assert.match(app, /function disableSnow/);
   assert.match(app, /getSnowState/);
+  assert.match(app, /function refreshSurfaceObservations/);
+  assert.match(app, /function disableSurfaceObservations/);
+  assert.match(app, /getSurfaceObservationState/);
+  assert.match(app, /clusterPane: 'contextVectorPane'/);
+  assert.match(surfaceObservations, /MapServer\/12/);
+  assert.match(surfaceObservations, /resultRecordCount: String\(PAGE_SIZE\)/);
+  assert.match(surfaceObservations, /function buildQueries/);
+  assert.match(surfaceObservations, /function normalizeCollection/);
+  assert.match(surfaceObservations, /MultiPoint/);
+  assert.match(html, /js\/surface-observations\.js/);
+  assert.match(serviceWorker, /\.\/js\/surface-observations\.js/);
   assert.match(layerRegistrySource, /id: 'snow', toggleId: 'toggle-snow'/);
+  assert.match(layerRegistrySource, /id: 'surfaceObservations', toggleId: 'toggle-surface-observations'/);
   assert.match(html, /id="satellite-scrubber"/);
 });
 

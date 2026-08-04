@@ -735,7 +735,7 @@ button:focus-visible {
 .satellite-scrubber-row input { width: 100%; min-width: 0; accent-color: var(--accent); grid-column: 1 / -1; }
 .satellite-range-label { color: var(--text-dim); font-size: 9px; }
 .satellite-range-label-latest { justify-self: end; }
-.satellite-swatch, .terminator-swatch, .snow-swatch, .tropical-swatch, .wpc-outlook-swatch, .usgs-gauge-swatch, .lightning-swatch, .wildfire-swatch, .earthquake-swatch { width: 9px; height: 9px; border-radius: 2px; }
+.satellite-swatch, .terminator-swatch, .snow-swatch, .tropical-swatch, .wpc-outlook-swatch, .usgs-gauge-swatch, .lightning-swatch, .wildfire-swatch, .earthquake-swatch, .surface-observation-swatch { width: 9px; height: 9px; border-radius: 2px; }
 .earthquake-swatch { border-radius: 50%; border: 2px solid #f76707; background: rgba(247, 103, 7, 0.25); }
 .convective-swatch { border: 2px solid #c9a400; background: rgba(246, 246, 127, 0.4); }
 .watch-swatch { border: 2px dashed #d6006e; background: rgba(214, 0, 110, 0.12); }
@@ -748,6 +748,7 @@ button:focus-visible {
 .usgs-gauge-swatch { position: relative; box-sizing: border-box; border: 2px solid #4cc9f0; border-radius: 50%; background: transparent; }
 .usgs-gauge-swatch::after { position: absolute; top: 3px; left: 0; width: 100%; border-top: 1px solid currentColor; color: #4cc9f0; content: ''; }
 .lightning-swatch { background: linear-gradient(135deg, #00e5ff, #ff2d55); }
+.surface-observation-swatch { background: #38bdf8; border: 1px solid #e0f2fe; border-radius: 50%; }
 .wildfire-swatch { border: 1px solid #ff6b35; background: rgba(255, 107, 53, 0.2); }
 .tropical-storm-list { grid-column: 2 / 4; display: grid; gap: 4px; margin: 1px 0 0; padding: 0; list-style: none; }
 .tropical-storm-list:empty { display: none; }
@@ -1552,6 +1553,44 @@ button:focus-visible {
 .storm-report-hail { background: #7c3aed; }
 .storm-report-wind { background: #ea580c; }
 .storm-report-other { background: #0891b2; }
+
+.metar-station-marker {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(17, 24, 39, 0.85), 0 1px 4px rgba(0, 0, 0, 0.7);
+  cursor: pointer;
+}
+
+.metar-station-marker span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+
+.metar-vfr span { background: #16a34a; }
+.metar-mvfr span { background: #2563eb; }
+.metar-ifr span { background: #dc2626; }
+.metar-lifr span { background: #d946ef; }
+.metar-unknown span { background: #64748b; }
+
+.metar-cluster-marker {
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(125, 211, 252, 0.95);
+  border-radius: 50%;
+  background: rgba(3, 105, 161, 0.9);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  box-shadow: 0 0 0 1px rgba(17, 24, 39, 0.75), 0 1px 5px rgba(0, 0, 0, 0.65);
+}
 
 /* --- Camera Marker --- */
 .camera-marker {

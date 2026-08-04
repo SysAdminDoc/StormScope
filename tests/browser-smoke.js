@@ -90,7 +90,7 @@ async function exerciseLayerNavigation(page, options) {
   const groupQuery = options.locale === 'es' ? 'Contexto de peligros' : 'Hazard context';
 
   await query.fill(groupQuery);
-   assert.match(await count.textContent(), /\b5\b/);
+   assert.match(await count.textContent(), /\b6\b/);
   assert.equal(await page.locator('[data-layer-id="lightning"]').first().isVisible(), true);
   assert.equal(await page.locator('[data-layer-id="earthquakes"]').first().isVisible(), true);
   assert.equal(await page.locator('[data-layer-id="radar"]').first().isVisible(), false);
@@ -389,6 +389,27 @@ async function addNetworkFixtures(page, metrics, options) {
           { type: 'Feature', geometry: { type: 'Point', coordinates: [-97, 38] },
             properties: { objectid: 2, wfo_id: 'OUN', wfo: 'Norman', descript: 'Thunderstorm Wind', loc_desc: 'Testburg', state: 'OK',
               magnitude: '60', units: 'mph', lsr_validtime: Date.now() - 1200000 } }
+        ] })
+      });
+      return;
+    }
+    if (url.startsWith('https://mapservices.weather.noaa.gov/vector/rest/services/aviation/awc_aviation_weather/MapServer/12/query')) {
+      if (metrics) metrics.surfaceObservationRequests = (metrics.surfaceObservationRequests || 0) + 1;
+      const now = Date.now();
+      await route.fulfill({
+        contentType: 'application/geo+json', headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ type: 'FeatureCollection', exceededTransferLimit: false, features: [
+          { type: 'Feature', id: 101, geometry: { type: 'MultiPoint', coordinates: [[-110, 45]] }, properties: {
+            objectid: 101, station_id: 'KFIX', raw_text: 'METAR KFIX <img src=x onerror=window.__surfaceInjected=true>',
+            observation_time: now - 600000, latitude: 45, longitude: -110, temp_c: 20, dewpoint_c: 12,
+            winddir: 180, wind_speed_kt: 12, wind_gust_kt: 22, visibility_statute_mi: '10+',
+            wx_string: '-RA', sky_cover: 'BKN', flight_category: 'MVFR', cloud_base_ft_agl: 2200, ceiling_ft: 2200
+          } },
+          { type: 'Feature', id: 102, geometry: { type: 'MultiPoint', coordinates: [[-90, 35]] }, properties: {
+            objectid: 102, station_id: 'KCLEAR', raw_text: 'METAR KCLEAR', observation_time: now - 300000,
+            latitude: 35, longitude: -90, temp_c: 25, dewpoint_c: 18, winddir: 90, wind_speed_kt: 8,
+            visibility_statute_mi: '10+', sky_cover: 'CLR', flight_category: 'VFR'
+          } }
         ] })
       });
       return;
@@ -755,7 +776,7 @@ async function main() {
       if (text.startsWith('Failed to load resource') && source && !source.startsWith(baseURL)) return;
       errors.push(text);
     });
-    const networkMetrics = { rainViewerRequests: 0, satelliteExports: 0, satelliteMetadataRequests: 0, snowExports: 0 };
+    const networkMetrics = { rainViewerRequests: 0, satelliteExports: 0, satelliteMetadataRequests: 0, snowExports: 0, surfaceObservationRequests: 0 };
     await addNetworkFixtures(page, networkMetrics);
     await waitForApp(page);
 
@@ -1145,6 +1166,34 @@ async function main() {
     await page.locator('#toggle-snow').uncheck();
     assert.deepEqual(await page.evaluate(() => window._stormscope.getSnowState()), {
       enabled: false, status: 'off', updatedAt: null
+    });
+    await page.locator('#toggle-surface-observations').check();
+    await page.locator('#surface-observations-status').filter({ hasText: '2 METAR stations' }).waitFor({ state: 'visible' });
+    const surfaceObservationState = await page.evaluate(() => window._stormscope.getSurfaceObservationState());
+    assert.equal(surfaceObservationState.enabled, true);
+    assert.equal(surfaceObservationState.status, 'ready');
+    assert.equal(surfaceObservationState.count, 2);
+    assert.equal(networkMetrics.surfaceObservationRequests, 1);
+    const metarPopupOpened = await page.evaluate(() => {
+      window.__surfaceInjected = false;
+      let opened = false;
+      window._stormscope.getMap().eachLayer(layer => {
+        if (opened || typeof layer.getLayers !== 'function') return;
+        const child = layer.getLayers().find(item => item.feature && item.feature.properties &&
+          item.feature.properties.stationId === 'KFIX');
+        if (child) { child.openPopup(); opened = true; }
+      });
+      return opened;
+    });
+    assert.equal(metarPopupOpened, true);
+    await page.locator('.metar-popup details').evaluate(element => { element.open = true; });
+    await page.locator('.metar-popup pre').waitFor({ state: 'visible' });
+    assert.match(await page.locator('.metar-popup pre').textContent(), /<img src=x/);
+    assert.equal(await page.evaluate(() => window.__surfaceInjected), false);
+    assert.equal(await page.locator('.metar-station-marker').first().getAttribute('role'), 'button');
+    await page.locator('#toggle-surface-observations').uncheck();
+    assert.deepEqual(await page.evaluate(() => window._stormscope.getSurfaceObservationState()), {
+      enabled: false, status: 'off', count: 0, updatedAt: null, fetchedAt: null, truncated: false
     });
     await page.locator('#toggle-satellite').check();
     await page.locator('#toggle-lightning').check();
@@ -1807,7 +1856,7 @@ async function main() {
     await page.locator('#earthquake-magnitude').selectOption('4.5');
     await page.locator('#earthquake-period').selectOption('week');
     assert.deepEqual(await page.evaluate(() => window._stormscope.getLayerRegistryState().ids), [
-      'radar', 'cameras', 'coverage', 'terminator', 'snow', 'alerts', 'lightning', 'wildfires', 'satellite', 'tropical',
+      'radar', 'cameras', 'coverage', 'terminator', 'snow', 'alerts', 'lightning', 'surfaceObservations', 'wildfires', 'satellite', 'tropical',
       'wpcOutlooks', 'usgsGauges', 'earthquakes', 'convective', 'watches', 'mesoscale', 'stormReports'
     ]);
     await page.locator('#camera-favorites').evaluate(element => {
@@ -1960,7 +2009,7 @@ async function main() {
     });
     const sharedScene = {
       map: { lat: 39.75, lon: -98.25, zoom: 6 },
-      layers: { radar: true, cameras: true, coverage: false, terminator: false, snow: false, alerts: true, lightning: false, wildfires: false, satellite: false, tropical: false,
+      layers: { radar: true, cameras: true, coverage: false, terminator: false, snow: false, surfaceObservations: false, alerts: true, lightning: false, wildfires: false, satellite: false, tropical: false,
         wpcOutlooks: false, usgsGauges: false, earthquakes: false, convective: false, watches: false, mesoscale: false, stormReports: false },
       radar: { opacity: 0.48, palette: 'contrast', speed: 400, frameTime: sceneFixture.frameTime },
       alertSeverity: 'severe',
