@@ -271,6 +271,9 @@ test('saved views provide foreground NWS alert polling with bounded notices', ()
   assert.match(app, /document\.hidden/);
   assert.match(app, /StormScopeNwsAlerts\.nextRetryMetadata/);
   assert.match(app, /function renderSavedLocationAlertBanner\(\)/);
+  assert.match(app, /function syncSavedLocationAlertBadge\(\)/);
+  assert.match(app, /badgeApi\.setAppBadge/);
+  assert.match(app, /badgeApi\.clearAppBadge/);
   assert.match(css, /\.saved-location-alert-banner/);
   for (const locale of ['en', 'es']) {
     for (const key of ['alerts.savedLocationHelp', 'alerts.savedLocationOne', 'alerts.savedLocationMany',

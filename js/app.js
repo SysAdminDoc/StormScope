@@ -94,7 +94,13 @@
   var savedLocationAlertTimer = null;
   var savedLocationAlertRetryMetadata = null;
   var savedLocationAlertSeen = Object.create(null);
+  var savedLocationAlertCurrent = Object.create(null);
+  var savedLocationAlertAcknowledged = Object.create(null);
   var savedLocationAlertNotices = [];
+  var savedLocationAlertBadgeCount = 0;
+  var savedLocationAlertBadgeSupported = null;
+  var savedLocationAlertBadgeGeneration = 0;
+  var savedLocationAlertBadgeTask = Promise.resolve();
   var SAVED_LOCATION_ALERT_CAP = 12;
   var appLocale = 'en';
   var monitorSelection = new StormScopeMultiCamera.Selection({ minimum: 2, maximum: 4 });
@@ -6073,6 +6079,40 @@
     return [alert.dedupeKey, alert.sentMs == null ? (alert.sent || alert.id) : alert.sentMs, alert.messageType].join('@');
   }
 
+  function savedLocationAlertBadgeAlerts() {
+    var alerts = Object.create(null);
+    Object.keys(savedLocationAlertCurrent).forEach(function (targetKey) {
+      var current = savedLocationAlertCurrent[targetKey] || {};
+      Object.keys(current).forEach(function (signature) {
+        if (!alerts[signature]) alerts[signature] = current[signature];
+      });
+    });
+    Object.keys(savedLocationAlertAcknowledged).forEach(function (signature) {
+      if (!alerts[signature]) delete savedLocationAlertAcknowledged[signature];
+    });
+    return alerts;
+  }
+
+  function syncSavedLocationAlertBadge() {
+    var alerts = savedLocationAlertBadgeAlerts();
+    var count = Object.keys(alerts).filter(function (signature) {
+      return !savedLocationAlertAcknowledged[signature];
+    }).length;
+    savedLocationAlertBadgeCount = count;
+    var badgeApi = typeof navigator !== 'undefined' ? navigator : null;
+    savedLocationAlertBadgeSupported = Boolean(badgeApi && typeof badgeApi.setAppBadge === 'function' &&
+      typeof badgeApi.clearAppBadge === 'function');
+    if (!savedLocationAlertBadgeSupported) return;
+    var generation = ++savedLocationAlertBadgeGeneration;
+    savedLocationAlertBadgeTask = savedLocationAlertBadgeTask.catch(function () {}).then(function () {
+      if (generation !== savedLocationAlertBadgeGeneration) return;
+      try {
+        var operation = count > 0 ? badgeApi.setAppBadge(count) : badgeApi.clearAppBadge();
+        return operation && typeof operation.catch === 'function' ? operation.catch(function () {}) : operation;
+      } catch (error) { return undefined; }
+    });
+  }
+
   function savedLocationAlertLocation(target) {
     return target.names.join(' / ') || target.key;
   }
@@ -6101,7 +6141,11 @@
   }
 
   function dismissSavedLocationAlerts() {
+    Object.keys(savedLocationAlertBadgeAlerts()).forEach(function (signature) {
+      savedLocationAlertAcknowledged[signature] = true;
+    });
     savedLocationAlertNotices = [];
+    syncSavedLocationAlertBadge();
     renderSavedLocationAlertBanner();
   }
 
@@ -6141,7 +6185,10 @@
       clearTimeout(savedLocationAlertTimer);
       savedLocationAlertTimer = null;
       savedLocationAlertSeen = Object.create(null);
+      savedLocationAlertCurrent = Object.create(null);
+      savedLocationAlertAcknowledged = Object.create(null);
       savedLocationAlertNotices = [];
+      syncSavedLocationAlertBadge();
       renderSavedLocationAlertBanner();
       return;
     }
@@ -6169,9 +6216,11 @@
         successes += 1;
         var previous = savedLocationAlertSeen[target.key];
         var current = Object.create(null);
+        savedLocationAlertCurrent[target.key] = Object.create(null);
         StormScopeNwsAlerts.normalizeCollection(result.value || { features: [] }).forEach(function (alert) {
           var signature = savedLocationAlertSignature(alert);
           current[signature] = true;
+          savedLocationAlertCurrent[target.key][signature] = alert;
           if (previous && !previous[signature]) {
             newNotices.push({ key: target.key + '@' + signature, target: target, alert: alert });
           }
@@ -6179,7 +6228,10 @@
         savedLocationAlertSeen[target.key] = current;
       });
       Object.keys(savedLocationAlertSeen).forEach(function (key) {
-        if (!targetByKey[key]) delete savedLocationAlertSeen[key];
+        if (!targetByKey[key]) {
+          delete savedLocationAlertSeen[key];
+          delete savedLocationAlertCurrent[key];
+        }
       });
       savedLocationAlertNotices = savedLocationAlertNotices.filter(function (notice) {
         return Boolean(targetByKey[notice.target.key]);
@@ -6193,6 +6245,7 @@
         noticeKeys[notice.key] = true;
         return true;
       }).slice(0, 8);
+      syncSavedLocationAlertBadge();
       renderSavedLocationAlertBanner();
       if (failures.length || successes < targets.length) {
         savedLocationAlertRetryMetadata = StormScopeNwsAlerts.nextRetryMetadata(
@@ -6219,6 +6272,8 @@
     return {
       targetCount: savedLocationAlertTargets().length,
       noticeCount: savedLocationAlertNotices.length,
+      badgeCount: savedLocationAlertBadgeCount,
+      badgeSupported: savedLocationAlertBadgeSupported,
       polling: Boolean(savedLocationAlertTimer),
       inFlight: Boolean(savedLocationAlertAbort),
       retry: savedLocationAlertRetryMetadata ? Object.assign({}, savedLocationAlertRetryMetadata) : null

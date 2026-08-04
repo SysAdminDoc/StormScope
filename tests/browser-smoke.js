@@ -1123,6 +1123,17 @@ async function main() {
     const savedAlertFixture = { version: 0 };
     const savedLocationPage = await context.newPage();
     savedLocationPage.baseURL = baseURL;
+    await savedLocationPage.addInitScript(() => {
+      window.__appBadgeCalls = [];
+      Object.defineProperty(navigator, 'setAppBadge', {
+        configurable: true,
+        value: (count) => { window.__appBadgeCalls.push(['set', count]); return Promise.resolve(); }
+      });
+      Object.defineProperty(navigator, 'clearAppBadge', {
+        configurable: true,
+        value: () => { window.__appBadgeCalls.push(['clear']); return Promise.resolve(); }
+      });
+    });
     const savedAlertMetrics = { rainViewerRequests: 0, savedAlertRequests: 0 };
     await addNetworkFixtures(savedLocationPage, savedAlertMetrics, { savedAlertFixture });
     await waitForApp(savedLocationPage, false);
@@ -1134,16 +1145,22 @@ async function main() {
     await savedLocationPage.evaluate(() => window._stormscope.refreshSavedLocationAlerts());
     await savedLocationPage.waitForFunction(() => {
       const state = window._stormscope.getSavedLocationAlertState();
-      return state.targetCount === 1 && state.noticeCount === 0 && !state.inFlight;
+      return state.targetCount === 1 && state.noticeCount === 0 && state.badgeCount === 1 &&
+        state.badgeSupported === true && !state.inFlight;
     });
     const baselineSavedAlertRequests = savedAlertMetrics.savedAlertRequests;
     savedAlertFixture.version = 1;
     await savedLocationPage.evaluate(() => window._stormscope.refreshSavedLocationAlerts());
     await savedLocationPage.locator('#saved-location-alert-banner').waitFor({ state: 'visible' });
     assert.match(await savedLocationPage.locator('#saved-location-alert-banner').textContent(), /Tornado Warning/);
-    assert.equal((await savedLocationPage.evaluate(() => window._stormscope.getSavedLocationAlertState())).noticeCount, 2);
+    assert.equal((await savedLocationPage.evaluate(() => window._stormscope.getSavedLocationAlertState())).badgeCount, 2);
     await savedLocationPage.locator('#saved-location-alert-dismiss').click();
     await savedLocationPage.locator('#saved-location-alert-banner').waitFor({ state: 'hidden' });
+    await savedLocationPage.waitForFunction(() => {
+      const state = window._stormscope.getSavedLocationAlertState();
+      return state.badgeCount === 0 && window.__appBadgeCalls.some((call) => call[0] === 'clear');
+    });
+    assert.deepEqual(await savedLocationPage.evaluate(() => window.__appBadgeCalls.map((call) => call[0])), ['set', 'set', 'clear']);
 
     await savedLocationPage.evaluate(() => {
       Object.defineProperty(document, 'hidden', { configurable: true, value: true });
