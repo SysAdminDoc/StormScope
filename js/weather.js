@@ -166,6 +166,31 @@
     return observation;
   }
 
+  function normalizeNwsForecastTimeline(periods, limit) {
+    var requested = Number(limit);
+    var count = Number.isFinite(requested) && requested > 0 ? Math.floor(requested) : 12;
+    count = Math.max(6, Math.min(12, count));
+    return (Array.isArray(periods) ? periods : []).slice(0, count).map(function (period) {
+      period = period || {};
+      var precipitation = period.quantitativePrecipitation || {};
+      var amount = boundedNumber(precipitation.value, 0, 10000);
+      var unitCode = typeof precipitation.unitCode === 'string' && precipitation.unitCode.length <= 32
+        ? precipitation.unitCode : null;
+      var startTime = typeof period.startTime === 'string' ? period.startTime.slice(0, 64) : null;
+      var endTime = typeof period.endTime === 'string' ? period.endTime.slice(0, 64) : null;
+      return {
+        startTime: startTime,
+        endTime: endTime,
+        probabilityOfPrecipitation: boundedNumber(
+          period.probabilityOfPrecipitation && period.probabilityOfPrecipitation.value, 0, 100
+        ),
+        precipitationAmount: amount === null ? null : { value: amount, unitCode: unitCode },
+        shortForecast: typeof period.shortForecast === 'string' && period.shortForecast.trim()
+          ? period.shortForecast.trim().slice(0, 160) : null
+      };
+    });
+  }
+
   function windFromMph(value, units) {
     var text = String(value || '');
     var converted = text.replace(/\d+(?:\.\d+)?/g, function (match) {
@@ -282,6 +307,7 @@
     inNwsCoverageBounds: inNwsCoverageBounds,
     normalizeUnits: normalizeUnits,
     normalizeAirQuality: normalizeAirQuality,
+    normalizeNwsForecastTimeline: normalizeNwsForecastTimeline,
     normalizeNwsObservation: normalizeNwsObservation,
     rankObservationStations: rankObservationStations,
     shouldUseNws: shouldUseNws,

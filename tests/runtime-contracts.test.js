@@ -420,6 +420,8 @@ test('weather routing, units, freshness, and accessibility contracts are integra
   assert.match(app, /Promise\.allSettled/);
   assert.match(app, /observations\/latest\?require_qc=true/);
   assert.match(app, /StormScopeWeather\.normalizeNwsObservation/);
+  assert.match(app, /StormScopeWeather\.normalizeNwsForecastTimeline/);
+  assert.match(app, /kind: 'precipitationTimeline'/);
   assert.match(app, /StormScopeWeather\.buildAirQualityUrl/);
   assert.match(app, /StormScopeWeather\.normalizeAirQuality/);
   assert.match(app, /weather\.airQualityUnavailable/);
@@ -430,6 +432,12 @@ test('weather routing, units, freshness, and accessibility contracts are integra
   assert.equal(i18n.catalogs.en['weather.openMeteoFallback'], 'Open-Meteo fallback');
   assert.equal(i18n.catalogs.en['weather.forecastIssued'], 'Forecast issued');
   assert.equal(i18n.catalogs.en['weather.forecastValid'], 'Forecast valid');
+  assert.equal(i18n.catalogs.en['weather.precipTimelineHeading'], 'Precipitation forecast guidance');
+  assert.equal(i18n.catalogs.en['weather.precipTimelineWindow'], 'Next {hours} hours • forecast only');
+  assert.match(css, /\.weather-precipitation-timeline/);
+  assert.match(css, /\.weather-precip-timeline[\s\S]*overflow-x: auto/);
+  assert.equal(html.includes('weather-precipitation-timeline'), false,
+    'forecast timeline is rendered only after an independent NWS response');
   assert.match(app, /localStorage\.setItem\('stormscope-weather-units'/);
   assert.match(app, /setModalBackgroundInert/);
   assert.match(css, /@media \(forced-colors: active\)/);

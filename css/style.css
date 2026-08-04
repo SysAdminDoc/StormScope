@@ -1511,6 +1511,67 @@ button:focus-visible {
   font-size: 12px;
 }
 
+.weather-precipitation-timeline {
+  min-width: 0;
+}
+
+.weather-precip-meta {
+  margin-top: 4px;
+}
+
+.weather-precip-timeline {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  margin-top: 10px;
+  padding-bottom: 4px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.weather-precip-card {
+  display: flex;
+  flex: 0 0 112px;
+  flex-direction: column;
+  gap: 7px;
+  min-height: 132px;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel-hover);
+}
+
+.weather-precip-time {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.weather-precip-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.weather-precip-metric .weather-label {
+  font-size: 9px;
+}
+
+.weather-precip-metric .weather-value {
+  font-size: 14px;
+}
+
+.weather-precip-condition {
+  display: -webkit-box;
+  min-height: 30px;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .weather-item {
   display: flex;
   flex-direction: column;

@@ -90,6 +90,30 @@ test('NWS observation normalization rejects empty, invalid, and future reports',
   } }, station), null);
 });
 
+test('NWS precipitation timeline is bounded and preserves unknown fields', () => {
+  const periods = Array.from({ length: 20 }, (_, index) => ({
+    startTime: `2026-08-03T${String(index).padStart(2, '0')}:00:00Z`,
+    endTime: `2026-08-03T${String(index).padStart(2, '0')}:59:00Z`,
+    probabilityOfPrecipitation: index === 2 ? { value: null } : { value: index * 5 },
+    quantitativePrecipitation: index === 2 ? { value: null, unitCode: 'wmoUnit:mm' } : {
+      value: index / 2, unitCode: 'wmoUnit:mm'
+    },
+    shortForecast: index === 3 ? '  Light rain  ' : 'Clear'
+  }));
+  const timeline = weather.normalizeNwsForecastTimeline(periods);
+  assert.equal(timeline.length, 12);
+  assert.deepEqual(timeline[0], {
+    startTime: '2026-08-03T00:00:00Z', endTime: '2026-08-03T00:59:00Z',
+    probabilityOfPrecipitation: 0,
+    precipitationAmount: { value: 0, unitCode: 'wmoUnit:mm' }, shortForecast: 'Clear'
+  });
+  assert.equal(timeline[2].probabilityOfPrecipitation, null);
+  assert.equal(timeline[2].precipitationAmount, null);
+  assert.equal(timeline[3].shortForecast, 'Light rain');
+  assert.equal(weather.normalizeNwsForecastTimeline(periods, 2).length, 6);
+  assert.deepEqual(weather.normalizeNwsForecastTimeline(null), []);
+});
+
 test('air quality requests stay bounded and use the dedicated Open-Meteo origin', () => {
   const url = weather.buildAirQualityUrl(39.7392, -104.9903);
   assert.match(url, /^https:\/\/air-quality-api\.open-meteo\.com\/v1\/air-quality\?/);

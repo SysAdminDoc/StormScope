@@ -714,25 +714,20 @@ async function addNetworkFixtures(page, metrics, options) {
     if (url === 'https://api.weather.gov/fixture/hourly') {
       await route.fulfill({
         contentType: 'application/geo+json',
-        body: JSON.stringify({ properties: { updateTime: new Date(Date.now() - 5 * 60000).toISOString(), periods: [{
-          temperature: 72,
+        body: JSON.stringify({ properties: { updateTime: new Date(Date.now() - 5 * 60000).toISOString(), periods: Array.from({ length: 12 }, (_, index) => ({
+          temperature: index % 2 === 0 ? 72 : 60,
           temperatureUnit: 'F',
           shortForecast: 'Clear',
-          windSpeed: '5 mph',
+          windSpeed: index % 2 === 0 ? '5 mph' : '4 mph',
           windDirection: 'N',
-          relativeHumidity: { value: 45 },
-          probabilityOfPrecipitation: { value: 20 },
-          startTime: new Date(Date.now() + 55 * 60000).toISOString()
-        }, {
-          temperature: 60,
-          temperatureUnit: 'F',
-          shortForecast: 'Clear',
-          windSpeed: '4 mph',
-          windDirection: 'N',
-          relativeHumidity: { value: 50 },
-          probabilityOfPrecipitation: { value: 10 },
-          startTime: new Date(Date.now() + 115 * 60000).toISOString()
-        }] } })
+          relativeHumidity: { value: index % 2 === 0 ? 45 : 50 },
+          probabilityOfPrecipitation: index === 2 ? { value: null } : { value: index === 0 ? 20 : index * 5 },
+          quantitativePrecipitation: index === 2 ? { value: null, unitCode: 'wmoUnit:mm' } : {
+            value: index === 0 ? 0 : index * 0.5, unitCode: 'wmoUnit:mm'
+          },
+          startTime: new Date(Date.now() + (55 + index * 60) * 60000).toISOString(),
+          endTime: new Date(Date.now() + (115 + index * 60) * 60000).toISOString()
+        })) } })
       });
       return;
     }
@@ -1747,6 +1742,14 @@ async function main() {
     assert.match(await page.locator('#weather-data').textContent(), /72°F.*Clear.*NWS hourly forecast/s);
     assert.match(await page.locator('#weather-data').textContent(), /Chance of precipitation \(forecast\)[\s\S]{0,80}20%/);
     assert.match(await page.locator('#weather-data').textContent(), /Next 12 h high \/ low \(forecast\)[\s\S]{0,80}72°F \/ 60°F/);
+    const precipTimeline = page.locator('.weather-precipitation-timeline');
+    await precipTimeline.waitFor({ state: 'visible' });
+    assert.equal(await precipTimeline.locator('.weather-precip-card').count(), 12);
+    assert.match(await precipTimeline.textContent(), /20%/);
+    assert.match(await precipTimeline.textContent(), /0 in/);
+    assert.match(await precipTimeline.textContent(), /N\/A/);
+    assert.equal(await page.locator('#radar-controls .weather-precipitation-timeline').count(), 0,
+      'precipitation guidance must stay outside the radar scrubber');
     assert.match(await page.locator('#weather-data').textContent(), /US AQI[\s\S]{0,120}43 \• Good/);
     assert.match(await page.locator('#weather-data').textContent(), /Primary pollutant[\s\S]{0,120}Ozone \• 66 μg\/m³ \(AQI 43\)/);
     assert.match(await page.locator('#weather-data').textContent(), /Open-Meteo Air Quality/);

@@ -12,6 +12,7 @@
 - Added a default-off NOAA AWC METAR surface-observation layer with zoom/viewport-bounded 2,000-record queries, clustered accessible station markers, localized observed fields, raw-report escape hatches, attribution, freshness, and last-good recovery. SW v104.
 - Added privacy-bounded situation snapshots with localized plain text, versioned JSON downloads, rounded coordinates, public source issue/freshness, visible-hazard counts, selected-camera provenance, and an optional rounded public scene link. SW v105.
 - Added CI-only pseudo-locale expansion, missing-key sentinels, and RTL direction/layout readiness checks without shipping a pseudo-locale. SW v106.
+- Added a separate bounded NWS precipitation forecast-guidance timeline with up to 12 hourly cards, probability/amount/short-forecast values, source/issue/valid metadata, and independent missing-data handling. SW v107.
 
 ## v0.123.0 - 2026-07-15
 
@@ -21,7 +22,7 @@
 - A single-camera lookup during the initial catalog load no longer inflates the generation count or forces an unnecessary full-dataset fallback.
 - NWS alert polling backs off geometrically over empty or unchanged viewports instead of re-requesting the national feed every 30 seconds.
 - Hazard and provider map popups stay within the map pane on narrow and short-height screens.
-- The camera weather panel now shows the NWS chance of precipitation and a next-12-hour high/low range, clearly labeled as forecast guidance. SW v106.
+- The camera weather panel now shows the NWS chance of precipitation and a next-12-hour high/low range, clearly labeled as forecast guidance. SW v107.
 
 ## v0.122.0 - 2026-07-14
 

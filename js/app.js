@@ -5233,6 +5233,12 @@
     else sections.push({ heading: tr('weather.observationHeading'), status: tr('weather.observationUnavailable') });
     if (forecast) sections.push({ heading: tr('weather.forecastHeading'), items: nwsForecastItems(forecast) });
     else sections.push({ heading: tr('weather.forecastHeading'), status: tr('weather.forecastUnavailable') });
+    if (forecast) sections.push({
+      kind: 'precipitationTimeline',
+      heading: tr('weather.precipTimelineHeading'),
+      updatedAt: forecast.updatedAt,
+      timeline: forecast.timeline
+    });
     showWeatherSections(weatherLoading, weatherData, sections);
   }
 
@@ -5256,7 +5262,12 @@
     var range = temps.length
       ? { high: Math.max.apply(null, temps), low: Math.min.apply(null, temps), unit: periods[0].temperatureUnit }
       : null;
-    return { period: periods[0], updatedAt: data.properties.updateTime, range: range };
+    return {
+      period: periods[0],
+      updatedAt: data.properties.updateTime,
+      range: range,
+      timeline: StormScopeWeather.normalizeNwsForecastTimeline(periods, 12)
+    };
   }
 
   function forecastTemperature(value, unit) {
@@ -5326,6 +5337,64 @@
       [tr('weather.forecastValid'), localTime(current.startTime)],
       [tr('weather.source'), tr('weather.nwsForecast')]
     ];
+  }
+
+  function forecastPrecipitationAmount(amount) {
+    if (!amount || !Number.isFinite(Number(amount.value))) return tr('weather.notAvailable');
+    var value = Number(amount.value);
+    var unit = String(amount.unitCode || '').toLowerCase();
+    var millimeters;
+    if (unit.endsWith(':mm') || unit === 'mm') millimeters = value;
+    else if (unit.endsWith(':in') || unit === 'in') millimeters = value * 25.4;
+    else return tr('weather.notAvailable');
+    var output = weatherUnits === 'metric' ? millimeters : millimeters / 25.4;
+    var suffix = weatherUnits === 'metric' ? ' mm' : ' in';
+    return StormScopeI18n.formatNumber(output, { maximumFractionDigits: 2 }, appLocale) + suffix;
+  }
+
+  function precipitationTimelineCard(item) {
+    var time = localTime(item.startTime);
+    var chance = item.probabilityOfPrecipitation === null
+      ? tr('weather.notAvailable') : localNumber(item.probabilityOfPrecipitation) + '%';
+    var amount = forecastPrecipitationAmount(item.precipitationAmount);
+    var forecast = item.shortForecast || tr('weather.notAvailable');
+    var card = document.createElement('article');
+    card.className = 'weather-precip-card';
+    card.setAttribute('role', 'listitem');
+    card.setAttribute('aria-label', tr('weather.precipTimelineCard', {
+      time: time, chance: chance, amount: amount, forecast: forecast
+    }));
+    var timeElement = document.createElement('time');
+    timeElement.className = 'weather-precip-time';
+    if (item.startTime) timeElement.dateTime = item.startTime;
+    timeElement.textContent = time;
+    card.appendChild(timeElement);
+    [[tr('weather.precipTimelineChance'), chance, 'weather-precip-chance'],
+      [tr('weather.precipTimelineAmount'), amount, 'weather-precip-amount']].forEach(function (metric) {
+      var wrapper = document.createElement('div');
+      wrapper.className = 'weather-precip-metric ' + metric[2];
+      var label = document.createElement('span');
+      label.className = 'weather-label';
+      label.textContent = metric[0];
+      var value = document.createElement('strong');
+      value.className = 'weather-value';
+      value.textContent = metric[1];
+      wrapper.appendChild(label);
+      wrapper.appendChild(value);
+      card.appendChild(wrapper);
+    });
+    var condition = document.createElement('span');
+    condition.className = 'weather-precip-condition';
+    condition.textContent = forecast;
+    var forecastWrapper = document.createElement('div');
+    forecastWrapper.className = 'weather-precip-metric weather-precip-forecast';
+    var forecastLabel = document.createElement('span');
+    forecastLabel.className = 'weather-label';
+    forecastLabel.textContent = tr('weather.precipTimelineForecast');
+    forecastWrapper.appendChild(forecastLabel);
+    forecastWrapper.appendChild(condition);
+    card.appendChild(forecastWrapper);
+    return card;
   }
 
   function airQualityItems(airQuality) {
@@ -5405,11 +5474,38 @@
 
   function createWeatherSection(section) {
     var container = document.createElement('section');
-    container.className = 'weather-section';
+    container.className = section.kind === 'precipitationTimeline'
+      ? 'weather-section weather-precipitation-timeline' : 'weather-section';
     var heading = document.createElement('h4');
     heading.textContent = section.heading;
     container.appendChild(heading);
-    if (section.status) {
+    if (section.kind === 'precipitationTimeline') {
+      var timeline = Array.isArray(section.timeline) ? section.timeline : [];
+      var windowStatus = document.createElement('p');
+      windowStatus.className = 'weather-section-status';
+      windowStatus.textContent = timeline.length
+        ? tr('weather.precipTimelineWindow', { hours: localNumber(timeline.length) })
+        : tr('weather.precipTimelineUnavailable');
+      container.appendChild(windowStatus);
+      if (timeline.length) {
+        var first = timeline[0];
+        var last = timeline[timeline.length - 1];
+        var metadata = document.createElement('p');
+        metadata.className = 'weather-section-status weather-precip-meta';
+        metadata.textContent = tr('weather.precipTimelineMeta', {
+          source: tr('weather.nwsForecast'),
+          issued: localTime(section.updatedAt),
+          valid: localTime(first.startTime) + ' – ' + localTime(last.endTime || last.startTime)
+        });
+        container.appendChild(metadata);
+        var list = document.createElement('div');
+        list.className = 'weather-precip-timeline';
+        list.setAttribute('role', 'list');
+        list.setAttribute('aria-label', tr('weather.precipTimelineAria'));
+        timeline.forEach(function (item) { list.appendChild(precipitationTimelineCard(item)); });
+        container.appendChild(list);
+      }
+    } else if (section.status) {
       var status = document.createElement('p');
       status.className = 'weather-section-status';
       status.textContent = section.status;
