@@ -30,6 +30,7 @@
   var map, cameraCluster, basemapLayer;
   var themePreference = 'auto';
   var radarController = null;
+  var riverGaugesController = null;
   var satelliteRequestBudget = StormScopeRadarProviders.createRollingRequestBudget({ limit: 30, windowMs: 60000 });
   var activeCamera = null;
   var priorFocusEl = null;
@@ -137,14 +138,6 @@
   var wpcUpdatedAt = null;
   var wpcOutlookDay = 1;
   var wpcAttributionAdded = false;
-  var usgsGaugeLayer = null;
-  var usgsGaugeAbort = null;
-  var usgsGaugeRefreshTimer = null;
-  var usgsGaugeMoveTimer = null;
-  var usgsGaugeStatusState = 'off';
-  var usgsGaugeCount = 0;
-  var usgsGaugeUpdatedAt = null;
-  var usgsGaugeAttributionAdded = false;
   var localOverlayRecords = [];
   var localOverlayDatabase = null;
   var LOCAL_OVERLAY_DB = 'stormscope-local-overlays';
@@ -280,6 +273,25 @@
     onPlayingChange: function () { syncWakeLockMonitoring(); },
     onSceneFrameExpired: function (message) { setSavedStateStatus(message, true); }
   });
+
+  riverGaugesController = StormScopeRiverGauges.create({
+    document: document,
+    L: L,
+    fetch: window.fetch.bind(window),
+    translate: tr,
+    localNumber: localNumber,
+    contextTimestamp: contextTimestamp,
+    formatAge: function (minutes) { return StormScopeI18n.formatAge(minutes, appLocale); },
+    getMap: function () { return map; },
+    isEnabled: function () { return document.getElementById('toggle-usgs-gauges').checked; },
+    isDocumentHidden: function () { return document.hidden; },
+    setStatus: function (message, state) { setContextStatusElement('usgs-gauge-status', message, state); },
+    safeExternalUrl: safeExternalUrl,
+    appendNearbyCameraSection: function (container, geometry, heading) {
+      appendNearbyCameraSection(container, geometry, heading);
+    }
+  });
+  teardownResources.push(riverGaugesController);
 
   function localTime(value) {
     return StormScopeWeather.formatTime(value, appLocale, tr('weather.unknown'));
@@ -1526,133 +1538,18 @@
     renderWpcStatus();
   }
 
+  function riverGaugeState() {
+    return riverGaugesController ? riverGaugesController.getState() : {
+      status: 'off', count: 0, updatedAt: null, layer: null, lastGood: false
+    };
+  }
+
   function renderGaugeStatus() {
-    var key = usgsGaugeStatusState === 'off' ? 'context.gaugesOff'
-      : usgsGaugeStatusState === 'loading' ? 'context.gaugesLoading'
-        : usgsGaugeStatusState === 'none' ? 'context.gaugesNone'
-          : usgsGaugeStatusState === 'partial' || usgsGaugeStatusState === 'error' ? 'context.gaugesPartial' : 'context.gaugesActive';
-    setContextStatusElement('usgs-gauge-status', tr(key, { count: localNumber(usgsGaugeCount) }),
-      usgsGaugeStatusState === 'partial' || usgsGaugeStatusState === 'error' ? 'error' : usgsGaugeStatusState);
+    if (riverGaugesController) riverGaugesController.renderStatus();
   }
 
-  function gaugePopup(feature) {
-    var properties = feature.properties;
-    var container = document.createElement('div');
-    container.className = 'context-popup';
-    var title = document.createElement('strong');
-    title.textContent = properties.name;
-    container.appendChild(title);
-    var value = document.createElement('span');
-    value.textContent = tr('context.gaugeValue', { value: localNumber(properties.value), unit: properties.unit });
-    container.appendChild(value);
-    Object.keys(properties.thresholds).forEach(function (name) {
-      var row = document.createElement('span');
-      row.textContent = tr('context.gaugeThreshold', {
-        name: name, value: localNumber(properties.thresholds[name]), unit: properties.unit
-      });
-      container.appendChild(row);
-    });
-    var age = document.createElement('span');
-    age.textContent = tr('context.gaugeAge', {
-      age: StormScopeI18n.formatAge((Date.now() - Date.parse(properties.observedAt)) / 60000, appLocale)
-    });
-    container.appendChild(age);
-    var source = document.createElement('span');
-    source.textContent = tr('context.gaugeSource', { source: properties.source });
-    container.appendChild(source);
-    var link = document.createElement('a');
-    link.href = safeExternalUrl(properties.sourceUrl);
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    link.textContent = tr('context.gaugeOfficial');
-    container.appendChild(link);
-    appendNearbyCameraSection(container, feature.geometry, tr('incident.camerasNearGauge'));
-    return container;
-  }
-
-  function gaugeBounds() {
-    var bounds = map.getBounds();
-    var west = Math.max(-180, bounds.getWest());
-    var east = Math.min(180, bounds.getEast());
-    var south = Math.max(-90, bounds.getSouth());
-    var north = Math.min(90, bounds.getNorth());
-    return west <= east ? [{ west: west, south: south, east: east, north: north }]
-      : [{ west: west, south: south, east: 180, north: north }, { west: -180, south: south, east: east, north: north }];
-  }
-
-  async function refreshUsgsGauges() {
-    if (!document.getElementById('toggle-usgs-gauges').checked || document.hidden) return;
-    if (usgsGaugeAbort) usgsGaugeAbort.abort();
-    usgsGaugeAbort = new AbortController();
-    var signal = usgsGaugeAbort.signal;
-    usgsGaugeStatusState = 'loading';
-    renderGaugeStatus();
-    try {
-      var responses = await Promise.all(gaugeBounds().map(async function (bounds) {
-        var response = await fetch(StormScopeFloodOutlooks.usgsUrl(bounds), { cache: 'no-store', signal: signal });
-        if (!response.ok) throw new Error('HTTP ' + response.status);
-        return StormScopeFloodOutlooks.gaugeCandidates(await response.json());
-      }));
-      var candidates = [].concat.apply([], responses).filter(function (candidate, index, all) {
-        return all.findIndex(function (item) { return item.id === candidate.id; }) === index;
-      }).slice(0, StormScopeFloodOutlooks.MAX_GAUGES);
-      var details = await Promise.allSettled(candidates.map(async function (candidate) {
-        var response = await fetch(StormScopeFloodOutlooks.nwpsUrl(candidate), { cache: 'no-store', signal: signal });
-        if (!response.ok) throw new Error('HTTP ' + response.status);
-        return StormScopeFloodOutlooks.normalizeGauge(candidate, await response.json());
-      }));
-      if (signal.aborted || !document.getElementById('toggle-usgs-gauges').checked) return;
-      var features = details.filter(function (result) { return result.status === 'fulfilled' && result.value; })
-        .map(function (result) { return result.value; });
-      var next = L.geoJSON({ type: 'FeatureCollection', features: features }, {
-        pane: 'contextVectorPane',
-        pointToLayer: function (feature, latlng) {
-          var colors = { below: '#4cc9f0', action: '#ffff00', minor: '#ff9f1c', moderate: '#ff2d55', major: '#b5179e' };
-          return L.circleMarker(latlng, { pane: 'contextVectorPane', radius: 6, color: '#111111', weight: 2,
-            fillColor: colors[feature.properties.category] || '#4cc9f0', fillOpacity: 0.9 });
-        },
-        onEachFeature: function (feature, layer) {
-          layer.bindPopup(function () { return gaugePopup(feature); }, { autoPan: false, maxWidth: 390, maxHeight: 420 });
-        }
-      }).addTo(map);
-      if (usgsGaugeLayer) map.removeLayer(usgsGaugeLayer);
-      usgsGaugeLayer = next;
-      usgsGaugeCount = features.length;
-      var gaugeTimes = features.map(function (feature) { return Date.parse(feature.properties.observedAt || ''); })
-        .filter(Number.isFinite);
-      usgsGaugeUpdatedAt = gaugeTimes.length ? Math.max.apply(Math, gaugeTimes) : null;
-      usgsGaugeStatusState = details.some(function (result) { return result.status === 'rejected'; }) ? 'partial'
-        : (features.length ? 'ready' : 'none');
-      if (!usgsGaugeAttributionAdded) {
-        map.attributionControl.addAttribution('<a href="https://waterdata.usgs.gov/" target="_blank" rel="noopener noreferrer">USGS</a> / <a href="https://water.noaa.gov/" target="_blank" rel="noopener noreferrer">NOAA NWPS</a>');
-        usgsGaugeAttributionAdded = true;
-      }
-      renderGaugeStatus();
-      renderLocalOverlayList();
-    } catch (error) {
-      if (error.name === 'AbortError') return;
-      usgsGaugeStatusState = 'error';
-      renderGaugeStatus();
-    } finally {
-      clearTimeout(usgsGaugeRefreshTimer);
-      if (document.getElementById('toggle-usgs-gauges').checked) usgsGaugeRefreshTimer = setTimeout(refreshUsgsGauges, 5 * 60 * 1000);
-    }
-  }
-
-  function disableUsgsGauges() {
-    if (usgsGaugeAbort) usgsGaugeAbort.abort();
-    clearTimeout(usgsGaugeRefreshTimer);
-    clearTimeout(usgsGaugeMoveTimer);
-    if (usgsGaugeLayer) map.removeLayer(usgsGaugeLayer);
-    usgsGaugeLayer = null;
-    usgsGaugeCount = 0;
-    usgsGaugeUpdatedAt = null;
-    if (usgsGaugeAttributionAdded) {
-      map.attributionControl.removeAttribution('<a href="https://waterdata.usgs.gov/" target="_blank" rel="noopener noreferrer">USGS</a> / <a href="https://water.noaa.gov/" target="_blank" rel="noopener noreferrer">NOAA NWPS</a>');
-      usgsGaugeAttributionAdded = false;
-    }
-    usgsGaugeStatusState = 'off';
-    renderGaugeStatus();
+  function refreshUsgsGauges() {
+    return riverGaugesController ? riverGaugesController.refresh() : undefined;
   }
 
   function overlayStoredRecord(record) {
@@ -6291,8 +6188,9 @@
         wpcUpdatedAt, 6 * 60 * 60 * 1000, wpcStatusState));
     }
     if (snapshotToggleEnabled('toggle-usgs-gauges')) {
-      add('usgs-nwps-gauges', 'USGS / NOAA NWPS river gauges', usgsGaugeUpdatedAt, snapshotFreshness(
-        usgsGaugeUpdatedAt, 2 * 60 * 60 * 1000, usgsGaugeStatusState));
+      var gauges = riverGaugeState();
+      add('usgs-nwps-gauges', 'NOAA NWPS river gauges', gauges.updatedAt, snapshotFreshness(
+        gauges.updatedAt, StormScopeRiverGauges.provider.staleMs, gauges.status));
     }
     if (snapshotToggleEnabled('toggle-earthquakes')) {
       add('usgs-earthquakes', 'USGS earthquakes', earthquakeGeneratedAt,
@@ -6352,7 +6250,7 @@
       lightning: snapshotHazard(lightningEnabled, lightningLayer ? 1 : 0, 'snapshot.hazardLightning', 'noaa-lightning'),
       tropical: snapshotHazard(tropicalEnabled, tropicalStorms.length, 'snapshot.hazardTropical', 'noaa-nhc'),
       wpcOutlooks: snapshotHazard(outlooksEnabled, wpcOutlookCount, 'snapshot.hazardOutlooks', 'noaa-wpc'),
-      gauges: snapshotHazard(gaugesEnabled, usgsGaugeCount, 'snapshot.hazardGauges', 'usgs-nwps-gauges'),
+      gauges: snapshotHazard(gaugesEnabled, riverGaugeState().count, 'snapshot.hazardGauges', 'usgs-nwps-gauges'),
       convective: snapshotHazard(convectiveEnabled, convectiveCount, 'snapshot.hazardConvective', 'spc-convective'),
       mesoscale: snapshotHazard(mesoscaleEnabled, mesoscaleCount, 'snapshot.hazardMesoscale', 'spc-mesoscale')
     };
@@ -6815,8 +6713,8 @@
         onControl: function (_control, value) { wpcOutlookDay = Number(value); }
       },
       usgsGauges: {
-        refresh: refreshUsgsGauges, disable: disableUsgsGauges,
-        aborts: function () { return usgsGaugeAbort; }, timers: function () { return [usgsGaugeRefreshTimer, usgsGaugeMoveTimer]; }
+        refresh: refreshUsgsGauges, disable: riverGaugesController.disable,
+        aborts: riverGaugesController.getAbort, timers: riverGaugesController.getTimers
       },
       earthquakes: {
         refresh: refreshEarthquakes, disable: disableEarthquakes,
@@ -7325,8 +7223,7 @@
         snowMoveTimer = setTimeout(refreshSnow, 900);
       }
       if (document.getElementById('toggle-usgs-gauges').checked) {
-        clearTimeout(usgsGaugeMoveTimer);
-        usgsGaugeMoveTimer = setTimeout(refreshUsgsGauges, 900);
+        riverGaugesController.scheduleMoveRefresh();
       }
       if (document.getElementById('toggle-storm-reports').checked) {
         clearTimeout(stormReportMoveTimer);
@@ -7732,7 +7629,7 @@
         wildfires: wildfireStatusState,
         tropical: { status: tropicalStatusState, count: tropicalStorms.length },
         wpcOutlooks: { status: wpcStatusState, count: wpcOutlookCount, day: wpcOutlookDay },
-        usgsGauges: { status: usgsGaugeStatusState, count: usgsGaugeCount },
+        usgsGauges: { status: riverGaugeState().status, count: riverGaugeState().count },
         comparison: mapComparison ? mapComparison.metrics() : { active: false }
       },
       localOverlays: {
@@ -7890,13 +7787,13 @@
       return {
         satellite: Boolean(satelliteLayer), lightning: Boolean(lightningLayer), wildfires: Boolean(wildfireLayer),
         tropical: Boolean(tropicalLayer), wpcOutlooks: Boolean(wpcEroLayer || wpcFloodLayer),
-        usgsGauges: Boolean(usgsGaugeLayer), earthquakes: Boolean(earthquakeLayer),
+        usgsGauges: Boolean(riverGaugeState().layer), earthquakes: Boolean(earthquakeLayer),
         convective: Boolean(convectiveLayer),
         satelliteStatus: satelliteStatusState,
         lightningStatus: lightningStatusState, wildfireStatus: wildfireStatusState,
         tropicalStatus: tropicalStatusState, tropicalCount: tropicalStorms.length,
         wpcStatus: wpcStatusState, wpcCount: wpcOutlookCount, wpcDay: wpcOutlookDay,
-        gaugeStatus: usgsGaugeStatusState, gaugeCount: usgsGaugeCount,
+        gaugeStatus: riverGaugeState().status, gaugeCount: riverGaugeState().count,
         earthquakeStatus: earthquakeStatusState, earthquakeCount: earthquakeCount,
         convectiveStatus: convectiveStatusState, convectiveCount: convectiveCount, convectiveDay: convectiveDay,
         watches: Boolean(watchLayer), watchStatus: watchStatusState, watchCount: watchCount,

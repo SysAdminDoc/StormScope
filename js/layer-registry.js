@@ -63,7 +63,8 @@
     },
     {
       id: 'usgsGauges', toggleId: 'toggle-usgs-gauges', defaultEnabled: false, lifecycleId: 'usgs-gauges',
-      labelKey: 'layers.usgsGauges', groupId: 'hazards', groupLabelKey: 'layers.groupHazards'
+      labelKey: 'layers.usgsGauges', groupId: 'hazards', groupLabelKey: 'layers.groupHazards',
+      searchKeys: ['context.gaugeObserved', 'context.gaugeForecast', 'context.gaugesLimitation']
     },
     {
       id: 'earthquakes', toggleId: 'toggle-earthquakes', defaultEnabled: false, lifecycleId: 'earthquakes',

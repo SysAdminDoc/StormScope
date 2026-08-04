@@ -36,7 +36,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 - **Privacy-Bounded Situation Snapshots** — Copy localized plain text or download versioned JSON with rounded map coordinates, source issue/freshness, visible-hazard counts, and selected-camera provenance; an optional rounded public scene link excludes private local state
 - **Saved-View Alert Watch** — While the tab is foregrounded, up to 12 unique saved-view centers are checked against the keyless NWS alerts endpoint; new or updated alerts appear in a dismissible in-app banner with no push service or account
 - **NHC Tropical Cyclones** — Optional official advisory centers, forecast points/tracks/cones, and coastal watches/warnings with explicit partial/no-active states and nearby cameras
-- **WPC Flood Outlooks & Gauges** — Selected Day 1–3 excessive-rainfall and five-day significant-river outlooks remain independent; viewport gauges appear only after a USGS observation is joined to matching official NOAA NWPS flood thresholds
+- **WPC Flood Outlooks & NOAA NWPS River Gauges** — Selected Day 1–3 excessive-rainfall and five-day significant-river outlooks remain independent; the default-off river layer queries bounded observed and forecast gauge products, labels stage/flow and flood categories separately, and keeps the last-good map on transient failures
 - **Severe & Tornado Watches** — Optional, default-off SPC watch polygons (the area under threat, distinct from CAP warnings) from the keyless NOAA ArcGIS service; expired and non-severe watches are dropped, tornado watches sit above severe-thunderstorm watches, and popups link the official SPC watch
 - **SPC Mesoscale Discussions & Local Storm Reports** — Optional, default-off short-fuse SPC discussion polygons and clustered NWS report points with bounded 24/48/72-hour windows, freshness, safe official links, and separate guidance/observation framing
 - **GOES Satellite Loop** — Optional NOAA NESDIS GeoColor imagery with a bounded 12-frame timeline, on-demand frame caching, manual scrubbing, and low-data/request-budget protection
@@ -195,7 +195,7 @@ Report suspected vulnerabilities privately to [matt_parker@outlook.com](mailto:m
 - [NOAA/NWS MRMS](https://mapservices.weather.noaa.gov/) — Official fallback radar imagery and history (no key)
 - [NOAA National Hurricane Center GIS](https://www.nhc.noaa.gov/gis/) — Official tropical forecast points, tracks, cones, and watches/warnings (no key)
 - [NOAA Weather Prediction Center](https://www.wpc.ncep.noaa.gov/qpf/excessive_rainfall_outlook_ero.php) — Official excessive-rainfall and significant-river-flood outlooks (no key)
-- [USGS Water Data](https://api.waterdata.usgs.gov/) + [NOAA NWPS](https://water.noaa.gov/about/api) — Current gauge observations displayed only with matching official flood thresholds (no key)
+- [NOAA NWPS](https://water.noaa.gov/about/api) + [NOAA river-gauge ArcGIS service](https://mapservices.weather.noaa.gov/eventdriven/rest/services/water/riv_gauges/MapServer) — Bounded observed/forecast stage and flow gauge products with flood thresholds (no key)
 - [NWS API](https://www.weather.gov/documentation/services-web-api) — Free hourly weather data (no key)
 - [HLS.js 1.6.16](https://github.com/video-dev/hls.js/) (Apache-2.0) — HLS video stream playback
 - Camera data from 30+ official state/local DOT sources + [OpenTrafficCamMap](https://github.com/AidanWelch/OpenTrafficCamMap) (MIT) + NOAA/NWS + USGS + NRAO + NPS + MWRA + EarthCam + IPCamLive + LiveBeaches + verified-live YouTube streams
@@ -206,7 +206,7 @@ Report suspected vulnerabilities privately to [matt_parker@outlook.com](mailto:m
 - **Hazard context**: NOAA nowCOAST 15-minute lightning density and NIFC WFIGS current wildfire perimeters, both optional and keyless
 - **Short-fuse storm context**: NOAA/NWS SPC Mesoscale Discussions plus NWS Local Storm Reports, both optional, viewport-bounded, and keyless
 - **Tropical context**: NOAA NHC forecast points, tracks, cones, and coastal watches/warnings from the official tropical weather summary ArcGIS service, optional and keyless
-- **Flood planning context**: NOAA WPC excessive-rainfall/significant-river outlooks plus strictly threshold-authorized USGS/NWPS gauge joins, optional and keyless; the UI explicitly distinguishes outlook guidance from warnings and all-clear claims
+- **Flood planning context**: NOAA WPC excessive-rainfall/significant-river outlooks plus optional keyless NOAA NWPS observed/forecast river gauges; the UI explicitly distinguishes forecast category from observed stage and outlook guidance from warnings and all-clear claims
 - **Local overlays**: GeoJSON/GPX files are validated and rendered entirely on-device; they are never uploaded, linked from properties, cached by the service worker, or included in scene URLs
 - **Cameras**: 30+ official state/local DOT sources (Caltrans, FL511, WSDOT, NYCDOT, IDOT, MDOT, CDOT, WV511, NMRoads, Tennessee SmartWay, Clarksville Traffic Cameras, etc.), OpenTrafficCamMap, NOAA/NWS, USGS, NRAO, NPS, MWRA, EarthCam, first-party IPCamLive destinations, LiveBeaches, and verified-live YouTube streams
 - **City discovery list**: U.S. Census Bureau 2025 Gazetteer places file, filtered to legal city records and written as `City, State`

@@ -18,6 +18,7 @@ const cameraRecordSource = fs.readFileSync(path.join(root, 'js', 'camera-record.
 const cameraFeedSource = fs.readFileSync(path.join(root, 'js', 'camera-feed.js'), 'utf8');
 const serviceWorker = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const radarControllerSource = fs.readFileSync(path.join(root, 'js', 'radar-controller.js'), 'utf8');
+const riverGaugesSource = fs.readFileSync(path.join(root, 'js', 'river-gauges.js'), 'utf8');
 const spatialQuery = fs.readFileSync(path.join(root, 'js', 'spatial-query.js'), 'utf8');
 const spatialQuerySource = spatialQuery;
 const privateAnnotationSource = fs.readFileSync(path.join(root, 'js', 'private-annotations.js'), 'utf8');
@@ -112,6 +113,29 @@ test('extracted lifecycle modules load before app, remain offline, and own one t
   assert.ok(reportsPosition >= 0 && appPosition > reportsPosition);
   assert.match(serviceWorker, /\.\/js\/spc-reports\.js/);
   assert.match(spcReports, /function fetchAllPages/);
+});
+
+test('NWPS river gauges are bounded, forecast-aware, and lifecycle-owned', () => {
+  const floodPosition = html.indexOf('js/flood-outlooks.js');
+  const gaugePosition = html.indexOf('js/river-gauges.js');
+  const appPosition = html.indexOf('js/app.js');
+  assert.ok(floodPosition >= 0 && gaugePosition > floodPosition && appPosition > gaugePosition);
+  assert.match(serviceWorker, /var VERSION = 'v110'/);
+  assert.match(serviceWorker, /\.\/js\/river-gauges\.js/);
+  assert.match(riverGaugesSource, /resultRecordCount: String\(MAX_RECORDS\)/);
+  assert.match(riverGaugesSource, /function buildQueries\(bounds, zoom\)/);
+  assert.match(riverGaugesSource, /function stageflowUrl\(identifier\)/);
+  assert.match(riverGaugesSource, /Promise\.allSettled/);
+  assert.match(riverGaugesSource, /state\.lastGood = Boolean\(state\.layer\)/);
+  assert.match(riverGaugesSource, /gaugeObserved/);
+  assert.match(riverGaugesSource, /gaugeForecast/);
+  assert.match(app, /StormScopeRiverGauges\.create/);
+  assert.match(app, /riverGaugesController\.scheduleMoveRefresh/);
+  assert.doesNotMatch(app, /\bvar usgsGaugeLayer\b/);
+  assert.doesNotMatch(app, /StormScopeFloodOutlooks\.usgsUrl/);
+  assert.match(html, /data-i18n="layers\.usgsGauges"[^>]*>NOAA NWPS River Gauges/);
+  assert.match(i18n.catalogs.en['layers.usgsGauges'], /NOAA NWPS/);
+  assert.match(i18n.catalogs.es['layers.usgsGauges'], /NOAA NWPS/);
 });
 
 test('static CSP removes inline script execution and mirrors trusted frame hosts', () => {
@@ -735,7 +759,7 @@ test('popup anchor hrefs from fetched provider text are scheme-guarded (CVE-2025
   assert.equal(safeExternalUrl(null, loc), '#');
   // Dynamic provider-supplied hrefs must route through the guard.
   assert.match(app, /link\.href = safeExternalUrl\(properties\.advisoryUrl\)/);
-  assert.match(app, /link\.href = safeExternalUrl\(properties\.sourceUrl\)/);
+  assert.match(riverGaugesSource, /options\.safeExternalUrl\(properties\.officialUrl\)/);
   // All feature popups are built as DOM nodes, never HTML strings passed to bindPopup.
   assert.doesNotMatch(app, /bindPopup\(\s*'[^']*<[^']*'/);
 });

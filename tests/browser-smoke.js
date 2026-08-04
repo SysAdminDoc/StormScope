@@ -558,6 +558,40 @@ async function addNetworkFixtures(page, metrics, options) {
         }] }) });
       return;
     }
+    if (url.startsWith('https://mapservices.weather.noaa.gov/eventdriven/rest/services/water/riv_gauges/MapServer/0/query')) {
+      const now = Date.now();
+      metrics.riverGaugeRequests = (metrics.riverGaugeRequests || 0) + 1;
+      metrics.riverGaugeMaxRecordCount = Math.max(metrics.riverGaugeMaxRecordCount || 0,
+        Number(new URL(url).searchParams.get('resultRecordCount') || 0));
+      await route.fulfill({ contentType: 'application/geo+json', headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ type: 'FeatureCollection', exceededTransferLimit: false, features: [{
+          type: 'Feature', geometry: { type: 'Point', coordinates: [-90.18, 38.63] }, properties: {
+            objectid: 1, gaugelid: 'USGS-07010000', status: 'minor', location: 'Mississippi River at St. Louis',
+            waterbody: 'Mississippi River', state: 'MO', obstime: new Date(now - 60000).toISOString(),
+            url: 'https://water.noaa.gov/gauges/07010000', action: 28, units: 'ft', lowthreshu: 'ft',
+            secvalue: 100000, secunit: 'cfs', flood: 30, moderate: 35, major: 40, observed: 31,
+            latitude: 38.63, longitude: -90.18, idp_ingestdate: now - 30000
+          }
+        }] }) });
+      return;
+    }
+    if (url.startsWith('https://mapservices.weather.noaa.gov/eventdriven/rest/services/water/riv_gauges/MapServer/1/query')) {
+      const now = Date.now();
+      metrics.riverGaugeRequests = (metrics.riverGaugeRequests || 0) + 1;
+      metrics.riverGaugeMaxRecordCount = Math.max(metrics.riverGaugeMaxRecordCount || 0,
+        Number(new URL(url).searchParams.get('resultRecordCount') || 0));
+      await route.fulfill({ contentType: 'application/geo+json', headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ type: 'FeatureCollection', exceededTransferLimit: false, features: [{
+          type: 'Feature', geometry: { type: 'Point', coordinates: [-90.18, 38.63] }, properties: {
+            objectid: 1, gaugelid: 'USGS-07010000', status: 'moderate', location: 'Mississippi River at St. Louis',
+            waterbody: 'Mississippi River', state: 'MO', fcsttime: new Date(now + 3600000).toISOString(),
+            fcstissunc: new Date(now - 120000).toISOString(), url: 'https://water.noaa.gov/gauges/07010000',
+            action: 28, units: 'ft', lowthreshu: 'ft', forecast: 36, flood: 30, moderate: 35, major: 40,
+            latitude: 38.63, longitude: -90.18, idp_ingestdate: now - 30000
+          }
+        }] }) });
+      return;
+    }
     if (url.startsWith('https://api.waterdata.usgs.gov/ogcapi/v0/collections/latest-continuous/items')) {
       await route.fulfill({ contentType: 'application/geo+json', headers: { 'Access-Control-Allow-Origin': '*' },
         body: JSON.stringify({ type: 'FeatureCollection', features: [{ type: 'Feature',
@@ -1395,7 +1429,9 @@ async function main() {
     await page.locator('#wildfire-status').filter({ hasText: '2 wildfire perimeters' }).waitFor({ state: 'visible' });
     await page.locator('#tropical-status').filter({ hasText: '1 active tropical cyclones' }).waitFor({ state: 'visible' });
     await page.locator('#wpc-outlook-status').filter({ hasText: '2 official outlook areas' }).waitFor({ state: 'visible' });
-    await page.locator('#usgs-gauge-status').filter({ hasText: '1 gauges with authoritative flood thresholds' }).waitFor({ state: 'visible' });
+    await page.locator('#usgs-gauge-status').filter({ hasText: '1 NOAA NWPS river gauges' }).waitFor({ state: 'visible' });
+    assert.ok(networkMetrics.riverGaugeRequests >= 2);
+    assert.ok(networkMetrics.riverGaugeMaxRecordCount <= 200);
     const popupOpened = await page.evaluate(() => {
       window.__wildfireInjected = false;
       let opened = false;
@@ -1611,8 +1647,21 @@ async function main() {
     });
     assert.equal(gaugePopupOpened, true);
     const gaugePopup = page.locator('.leaflet-popup-content').filter({ hasText: 'Mississippi River at St. Louis' });
-    await gaugePopup.getByRole('link', { name: 'Open official USGS gauge' }).waitFor({ state: 'visible' });
-    assert.match(await gaugePopup.textContent(), /minor threshold: 30 ft/i);
+    await gaugePopup.getByRole('link', { name: 'Open official NOAA NWPS gauge' }).waitFor({ state: 'visible' });
+    assert.match(await gaugePopup.textContent(), /Observed/);
+    assert.match(await gaugePopup.textContent(), /Forecast/);
+    assert.match(await gaugePopup.textContent(), /Minor threshold: 30 ft/i);
+    assert.match(await gaugePopup.textContent(), /Moderate/);
+
+    const failRiverForecast = route => route.fulfill({ status: 503, body: 'fixture unavailable' });
+    await page.route('**/riv_gauges/MapServer/1/query?**', failRiverForecast);
+    await page.evaluate(() => window._stormscope.refreshUsgsGauges());
+    await page.locator('#usgs-gauge-status').filter({ hasText: 'some official products unavailable' }).waitFor({ state: 'visible' });
+    assert.deepEqual(await page.evaluate(() => {
+      const state = window._stormscope.getContextState();
+      return { enabled: state.usgsGauges, status: state.gaugeStatus, count: state.gaugeCount };
+    }), { enabled: true, status: 'partial', count: 1 });
+    await page.unroute('**/riv_gauges/MapServer/1/query?**', failRiverForecast);
 
     await page.locator('#wpc-outlook-day').selectOption('2');
     await page.locator('#wpc-outlook-status').filter({ hasText: 'Day 2' }).waitFor({ state: 'visible' });
