@@ -10,6 +10,8 @@
   var LIGHTNING_WMS = 'https://nowcoast.noaa.gov/geoserver/observations/lightning_detection/ows';
   var WILDFIRE_LAYER = 'https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0';
   var GOES_IMAGE_SERVER = 'https://satellitemaps.nesdis.noaa.gov/arcgis/rest/services/MERGEDGC_Last_24hr/ImageServer';
+  var NOHRSC_SNOW_IMAGE_SERVER = 'https://mapservices.weather.noaa.gov/raster/rest/services/snow/NOHRSC_Snow_Analysis/MapServer';
+  var NOHRSC_SNOW_BOUNDS = Object.freeze({ west: -130.5166666666, south: 24.1000104152, east: -62.2500027306, north: 58.2333423832 });
   var GOES_MAX_FRAMES = 12;
   var GOES_MIN_FRAME_INTERVAL_MS = 10 * 60 * 1000;
   var providers = Object.freeze({
@@ -19,6 +21,12 @@
       maxFrames: GOES_MAX_FRAMES, minFrameIntervalMs: GOES_MIN_FRAME_INTERVAL_MS,
       coverage: '76.5°S–76.5°N, merged GOES East and West',
       attribution: Object.freeze({ text: 'NOAA NESDIS GeoColor', url: 'https://www.nesdis.noaa.gov/imagery/interactive-maps' })
+    }),
+    snow: Object.freeze({
+      id: 'snow', label: 'NOAA NOHRSC snow depth analysis', defaultVisible: false,
+      imageServerUrl: NOHRSC_SNOW_IMAGE_SERVER, refreshMs: 30 * 60 * 1000, staleMs: 2 * 60 * 60 * 1000,
+      coverage: 'CONUS snow depth analysis', coverageBounds: NOHRSC_SNOW_BOUNDS,
+      attribution: Object.freeze({ text: 'NOAA NOHRSC', url: 'https://www.nohrsc.noaa.gov/nsa/' })
     }),
     lightning: Object.freeze({
       id: 'lightning', label: 'NOAA nowCOAST lightning density', defaultVisible: false,
@@ -131,6 +139,33 @@
     }
     return [goesRequest(west, south, 180, north, latestTime, viewport),
       goesRequest(-180, south, east, north, latestTime, viewport)];
+  }
+
+  function buildSnowExportRequest(bounds, viewport) {
+    if (!bounds) throw new TypeError('snow map bounds are required');
+    var rawWest = Number(bounds.west);
+    var rawEast = Number(bounds.east);
+    var rawSouth = Number(bounds.south);
+    var rawNorth = Number(bounds.north);
+    if (![rawWest, rawEast, rawSouth, rawNorth].every(Number.isFinite) || rawSouth >= rawNorth) {
+      throw new TypeError('snow map bounds are invalid');
+    }
+    var coverage = providers.snow.coverageBounds;
+    var south = Math.max(coverage.south, rawSouth, -90);
+    var north = Math.min(coverage.north, rawNorth, 90);
+    var west = rawEast - rawWest >= 360 ? coverage.west : Math.max(coverage.west, rawWest);
+    var east = rawEast - rawWest >= 360 ? coverage.east : Math.min(coverage.east, rawEast);
+    if (south >= north || west >= east) return null;
+    var width = Math.max(320, Math.min(1200, Math.round(Number(viewport && viewport.width) || 1024)));
+    var height = Math.max(240, Math.min(900, Math.round(Number(viewport && viewport.height) || 768)));
+    var parameters = new URLSearchParams({
+      bbox: [west, south, east, north].join(','), bboxSR: '4326', imageSR: '4326',
+      size: width + ',' + height, format: 'png32', transparent: 'true', layers: 'show:0', f: 'image'
+    });
+    return {
+      bounds: [[south, west], [north, east]],
+      url: providers.snow.imageServerUrl + '/export?' + parameters.toString()
+    };
   }
 
   function envelopeUrl(west, south, east, north, offset, pageSize) {
@@ -247,6 +282,7 @@
     parseGoesMetadata: parseGoesMetadata,
     buildGoesFrameTimes: buildGoesFrameTimes,
     buildGoesExportRequests: buildGoesExportRequests,
+    buildSnowExportRequest: buildSnowExportRequest,
     parseLightningCapabilities: parseLightningCapabilities,
     buildWildfireQueries: buildWildfireQueries,
     fetchWildfirePages: fetchWildfirePages,

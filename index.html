@@ -124,6 +124,10 @@
       <input type="checkbox" id="toggle-terminator">
       <span>Day/night terminator</span>
     </label>
+    <label class="toggle-row" data-layer-id="snow">
+      <input type="checkbox" id="toggle-snow">
+      <span>NOHRSC Snow Depth Analysis</span>
+    </label>
     <label class="toggle-row" data-layer-id="cameras">
       <input type="checkbox" id="toggle-cameras" checked>
       <span>Live Cameras</span>
@@ -321,6 +325,7 @@
       <div><i class="watch-swatch" aria-hidden="true"></i><span id="watch-status" role="status" aria-live="polite">Watches off</span><a href="https://www.spc.noaa.gov/products/watch/" target="_blank" rel="noopener noreferrer">SPC</a></div>
       <div><i class="mesoscale-swatch" aria-hidden="true"></i><span id="mesoscale-status" role="status" aria-live="polite">Mesoscale discussions off</span><a href="https://www.spc.noaa.gov/products/md/" target="_blank" rel="noopener noreferrer">SPC</a><p class="context-limitation">Short-fuse guidance—not a warning.</p></div>
       <div><i class="storm-report-swatch" aria-hidden="true"></i><span id="storm-report-status" role="status" aria-live="polite">Local storm reports off</span><a href="https://www.weather.gov/gis/" target="_blank" rel="noopener noreferrer">NWS</a><p class="context-limitation">Reports are observational and may be unverified.</p></div>
+      <div class="snow-status-row"><i class="snow-swatch" aria-hidden="true"></i><span id="snow-status" role="status" aria-live="polite" data-i18n="context.snowOff">Snow analysis off</span><a href="https://www.nohrsc.noaa.gov/nsa/" target="_blank" rel="noopener noreferrer">NOAA NOHRSC</a></div>
     </div>
     <section class="local-overlays-panel" aria-labelledby="local-overlays-heading">
       <div class="local-overlays-heading-row">

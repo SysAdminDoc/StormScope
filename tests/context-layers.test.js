@@ -34,13 +34,33 @@ test('GOES frame enumeration is evenly sampled and capped', () => {
   assert.throws(() => context.buildGoesFrameTimes(2000, 1000), /invalid/);
 });
 
+test('NOHRSC snow export clips to the CONUS raster and bounds image size', () => {
+  const request = context.buildSnowExportRequest(
+    { west: -140, south: 20, east: -60, north: 65 }, { width: 1400, height: 1000 }
+  );
+  const url = new URL(request.url);
+  assert.equal(url.hostname, 'mapservices.weather.noaa.gov');
+  assert.equal(url.searchParams.get('bbox'), '-130.5166666666,24.1000104152,-62.2500027306,58.2333423832');
+  assert.equal(url.searchParams.get('layers'), 'show:0');
+  assert.equal(url.searchParams.get('f'), 'image');
+  assert.equal(url.searchParams.get('size'), '1200,900');
+  assert.deepEqual(request.bounds, [[24.1000104152, -130.5166666666], [58.2333423832, -62.2500027306]]);
+  assert.equal(context.buildSnowExportRequest(
+    { west: 170, south: 20, east: 190, north: 65 }, { width: 600, height: 400 }
+  ), null);
+  assert.throws(() => context.buildSnowExportRequest({ west: -100, south: 40, east: -90, north: 30 }), /invalid/);
+});
+
 test('official context providers are keyless, attributed, and off by default', () => {
   assert.equal(context.providers.satellite.defaultVisible, false);
+  assert.equal(context.providers.snow.defaultVisible, false);
   assert.equal(context.providers.lightning.defaultVisible, false);
   assert.equal(context.providers.wildfires.defaultVisible, false);
   assert.equal(new URL(context.providers.lightning.wmsUrl).hostname, 'nowcoast.noaa.gov');
   assert.equal(new URL(context.providers.wildfires.layerUrl).hostname, 'services3.arcgis.com');
+  assert.equal(new URL(context.providers.snow.imageServerUrl).hostname, 'mapservices.weather.noaa.gov');
   assert.match(context.providers.lightning.attribution.text, /NOAA/);
+  assert.match(context.providers.snow.attribution.text, /NOAA NOHRSC/);
   assert.match(context.providers.wildfires.attribution.text, /NIFC/);
 });
 

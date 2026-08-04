@@ -9,11 +9,11 @@ const source = fs.readFileSync(path.join(__dirname, '..', 'js', 'layer-registry.
 const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 
 const EXPECTED_IDS = [
-  'radar', 'cameras', 'coverage', 'terminator', 'alerts', 'lightning', 'wildfires', 'satellite', 'tropical',
+  'radar', 'cameras', 'coverage', 'terminator', 'snow', 'alerts', 'lightning', 'wildfires', 'satellite', 'tropical',
   'wpcOutlooks', 'usgsGauges', 'earthquakes', 'convective', 'watches', 'mesoscale', 'stormReports'
 ];
 const EXPECTED_LIFECYCLES = [
-  'terminator', 'alerts', 'lightning', 'wildfires', 'satellite', 'tropical', 'wpc-outlooks', 'usgs-gauges',
+  'terminator', 'snow', 'alerts', 'lightning', 'wildfires', 'satellite', 'tropical', 'wpc-outlooks', 'usgs-gauges',
   'earthquakes', 'convective', 'watches', 'mesoscale', 'storm-reports'
 ];
 

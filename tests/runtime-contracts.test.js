@@ -401,8 +401,10 @@ test('official context layers are optional, attributed, and cannot obscure warni
   assert.match(html, /<input[^>]*type="checkbox"[^>]*id="toggle-lightning"[^>]*>/);
   assert.match(html, /<input[^>]*type="checkbox"[^>]*id="toggle-wildfires"[^>]*>/);
   assert.match(html, /<input[^>]*type="checkbox"[^>]*id="toggle-terminator"[^>]*>/);
+  assert.match(html, /<input[^>]*type="checkbox"[^>]*id="toggle-snow"[^>]*>/);
   assert.match(html, /id="lightning-status"[^>]*role="status"/);
   assert.match(html, /id="wildfire-status"[^>]*role="status"/);
+  assert.match(html, /id="snow-status"[^>]*role="status"/);
   assert.match(html, /https:\/\/nowcoast\.noaa\.gov/);
   assert.match(html, /https:\/\/services3\.arcgis\.com/);
   assert.match(contextLayers, /NOAA nowCOAST/);
@@ -411,6 +413,7 @@ test('official context layers are optional, attributed, and cannot obscure warni
   assert.match(app, /StormScopeSolarTerminator\.buildNightPolygon/);
   assert.match(app, /function getTerminatorState|updatedAt: terminatorUpdatedAt/);
   assert.match(contextLayers, /buildGoesFrameTimes/);
+  assert.match(contextLayers, /buildSnowExportRequest/);
   assert.match(app, /contextRasterPane/);
   assert.match(app, /contextVectorPane/);
   assert.match(app, /style\.zIndex = '325'/);
@@ -420,6 +423,10 @@ test('official context layers are optional, attributed, and cannot obscure warni
   assert.match(app, /StormScopeContextLayers\.buildWildfireQueries/);
   assert.match(app, /satelliteRequestBudget/);
   assert.match(app, /getSatelliteState/);
+  assert.match(app, /function refreshSnow/);
+  assert.match(app, /function disableSnow/);
+  assert.match(app, /getSnowState/);
+  assert.match(layerRegistrySource, /id: 'snow', toggleId: 'toggle-snow'/);
   assert.match(html, /id="satellite-scrubber"/);
 });
 

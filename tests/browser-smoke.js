@@ -310,6 +310,11 @@ async function addNetworkFixtures(page, metrics, options) {
       }) });
       return;
     }
+    if (url.startsWith('https://mapservices.weather.noaa.gov/raster/rest/services/snow/NOHRSC_Snow_Analysis/MapServer/export')) {
+      metrics.snowExports = (metrics.snowExports || 0) + 1;
+      await route.fulfill({ contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: pixel });
+      return;
+    }
     if (url.startsWith('https://nowcoast.noaa.gov/geoserver/observations/lightning_detection/ows') &&
         url.includes('GetCapabilities')) {
       const latest = new Date(Date.now() - 5 * 60000).toISOString();
@@ -1036,6 +1041,20 @@ async function main() {
     assert.deepEqual(await page.evaluate(() => window._stormscope.getTerminatorState()), {
       enabled: false, status: 'off', updatedAt: null
     });
+    assert.deepEqual(await page.evaluate(() => window._stormscope.getSnowState()), {
+      enabled: false, status: 'off', updatedAt: null
+    });
+    await page.locator('#toggle-snow').check();
+    await page.locator('#snow-status').filter({ hasText: 'NOHRSC snow depth' }).waitFor({ state: 'visible' });
+    const snowState = await page.evaluate(() => window._stormscope.getSnowState());
+    assert.equal(snowState.status, 'ready');
+    assert.equal(snowState.enabled, true);
+    assert.ok(Number.isFinite(snowState.updatedAt));
+    assert.equal(networkMetrics.snowExports, 1);
+    await page.locator('#toggle-snow').uncheck();
+    assert.deepEqual(await page.evaluate(() => window._stormscope.getSnowState()), {
+      enabled: false, status: 'off', updatedAt: null
+    });
     await page.locator('#toggle-satellite').check();
     await page.locator('#toggle-lightning').check();
     await page.locator('#toggle-wildfires').check();
@@ -1697,7 +1716,7 @@ async function main() {
     await page.locator('#earthquake-magnitude').selectOption('4.5');
     await page.locator('#earthquake-period').selectOption('week');
     assert.deepEqual(await page.evaluate(() => window._stormscope.getLayerRegistryState().ids), [
-      'radar', 'cameras', 'coverage', 'terminator', 'alerts', 'lightning', 'wildfires', 'satellite', 'tropical',
+      'radar', 'cameras', 'coverage', 'terminator', 'snow', 'alerts', 'lightning', 'wildfires', 'satellite', 'tropical',
       'wpcOutlooks', 'usgsGauges', 'earthquakes', 'convective', 'watches', 'mesoscale', 'stormReports'
     ]);
     await page.locator('#camera-favorites').evaluate(element => {
@@ -1850,7 +1869,7 @@ async function main() {
     });
     const sharedScene = {
       map: { lat: 39.75, lon: -98.25, zoom: 6 },
-      layers: { radar: true, cameras: true, coverage: false, terminator: false, alerts: true, lightning: false, wildfires: false, satellite: false, tropical: false,
+      layers: { radar: true, cameras: true, coverage: false, terminator: false, snow: false, alerts: true, lightning: false, wildfires: false, satellite: false, tropical: false,
         wpcOutlooks: false, usgsGauges: false, earthquakes: false, convective: false, watches: false, mesoscale: false, stormReports: false },
       radar: { opacity: 0.48, palette: 'contrast', speed: 400, frameTime: sceneFixture.frameTime },
       alertSeverity: 'severe',

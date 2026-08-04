@@ -34,7 +34,8 @@
     { id: 'watches', bit: 12, legacyRequired: false },
     { id: 'mesoscale', bit: 13, legacyRequired: false },
     { id: 'stormReports', bit: 14, legacyRequired: false },
-    { id: 'terminator', bit: 15, legacyRequired: false }
+    { id: 'terminator', bit: 15, legacyRequired: false },
+    { id: 'snow', bit: 16, legacyRequired: false }
   ];
   (function assertLayerBitCoverage() {
     var keys = registry.sceneKeys();

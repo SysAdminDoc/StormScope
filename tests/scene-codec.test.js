@@ -9,7 +9,7 @@ function scene(overrides = {}) {
     map: { lat: 39.123456, lon: -98.654321, zoom: 7 },
     layers: {
       radar: true, cameras: true, coverage: false, alerts: true,
-      lightning: false, wildfires: true, satellite: false, terminator: false, tropical: true, wpcOutlooks: true, usgsGauges: false, earthquakes: false, convective: false, watches: false, mesoscale: false, stormReports: false
+      lightning: false, wildfires: true, satellite: false, terminator: false, snow: false, tropical: true, wpcOutlooks: true, usgsGauges: false, earthquakes: false, convective: false, watches: false, mesoscale: false, stormReports: false
     },
     radar: { opacity: 0.72, palette: 'colorblind', speed: 400, frameTime: 1783796400000 },
     alertSeverity: 'severe',
@@ -29,7 +29,7 @@ test('versioned scene token round-trips every documented public field', () => {
     map: { lat: 39.12346, lon: -98.65432, zoom: 7 },
     layers: {
       radar: true, cameras: true, coverage: false, alerts: true,
-      lightning: false, wildfires: true, satellite: false, terminator: false, tropical: true, wpcOutlooks: true, usgsGauges: false, earthquakes: false, convective: false, watches: false, mesoscale: false, stormReports: false
+      lightning: false, wildfires: true, satellite: false, terminator: false, snow: false, tropical: true, wpcOutlooks: true, usgsGauges: false, earthquakes: false, convective: false, watches: false, mesoscale: false, stormReports: false
     },
     radar: { opacity: 0.72, palette: 'colorblind', speed: 400, frameTime: 1783796400000 },
     alertSeverity: 'severe',
@@ -62,7 +62,8 @@ test('scene layer bit positions are pinned and independent of registry order', (
     { id: 'watches', bit: 12, legacyRequired: false },
     { id: 'mesoscale', bit: 13, legacyRequired: false },
     { id: 'stormReports', bit: 14, legacyRequired: false },
-    { id: 'terminator', bit: 15, legacyRequired: false }
+    { id: 'terminator', bit: 15, legacyRequired: false },
+    { id: 'snow', bit: 16, legacyRequired: false }
   ]);
 
   // Enabling exactly one layer must set exactly its pinned bit in the wire payload `l`.
@@ -104,6 +105,7 @@ test('decodes legacy scene tokens with appended layers disabled and Day 1 select
   assert.equal(decoded.layers.mesoscale, false);
   assert.equal(decoded.layers.stormReports, false);
   assert.equal(decoded.layers.terminator, false);
+  assert.equal(decoded.layers.snow, false);
   assert.equal(decoded.layers.wildfires, true);
   assert.equal(decoded.outlookDay, 1);
   assert.equal(decoded.convectiveDay, 1);
@@ -124,7 +126,7 @@ test('invalid, oversized, future, and old scene URLs fail closed', () => {
   assert.throws(() => codec.encode(scene({ earthquake: { magnitude: '3.0', period: 'day' } })), /magnitude/);
   assert.throws(() => codec.encode(scene({ earthquake: { magnitude: '2.5', period: 'year' } })), /period/);
   const excessiveLayerBits = Buffer.from(JSON.stringify({
-    v: 1, m: [0, 0, 1], l: 65536, r: [50, 0, 0, null], a: 0, f: ['', '', 0, 0, 0, 0], c: null
+    v: 1, m: [0, 0, 1], l: 131072, r: [50, 0, 0, null], a: 0, f: ['', '', 0, 0, 0, 0], c: null
   }), 'utf8').toString('base64url');
   assert.throws(() => codec.decode('1.' + excessiveLayerBits), /shape/);
   assert.equal(codec.fromHash('#unrelated=value'), null);

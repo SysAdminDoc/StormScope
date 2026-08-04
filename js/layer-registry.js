@@ -25,6 +25,10 @@
       labelKey: 'layers.terminator', groupId: 'base', groupLabelKey: 'layers.groupBase'
     },
     {
+      id: 'snow', toggleId: 'toggle-snow', defaultEnabled: false, lifecycleId: 'snow',
+      labelKey: 'layers.snow', groupId: 'base', groupLabelKey: 'layers.groupBase'
+    },
+    {
       id: 'alerts', toggleId: 'toggle-alerts', defaultEnabled: true, lifecycleId: 'alerts',
       labelKey: 'layers.alerts', groupId: 'warnings', groupLabelKey: 'layers.groupWarnings',
       searchKeys: ['alerts.minimum']

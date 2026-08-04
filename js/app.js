@@ -132,6 +132,13 @@
   var terminatorRefreshTimer = null;
   var terminatorUpdatedAt = null;
   var terminatorStatusState = 'off';
+  var snowLayer = null;
+  var snowAbort = null;
+  var snowRefreshTimer = null;
+  var snowMoveTimer = null;
+  var snowFetchedAt = null;
+  var snowStatusState = 'off';
+  var snowAttributionAdded = false;
   var tropicalLayer = null;
   var tropicalAbort = null;
   var tropicalRefreshTimer = null;
@@ -916,6 +923,125 @@
     terminatorUpdatedAt = null;
     terminatorStatusState = 'off';
     renderTerminatorStatus();
+  }
+
+  function renderSnowStatus() {
+    if (snowStatusState === 'off') {
+      setContextStatusElement('snow-status', tr('context.snowOff'), 'off');
+      return;
+    }
+    if (snowStatusState === 'loading') {
+      setContextStatusElement('snow-status', tr('context.loading'), 'loading');
+      return;
+    }
+    if (snowStatusState === 'no-coverage') {
+      setContextStatusElement('snow-status', tr('context.snowNoCoverage'), 'off');
+      return;
+    }
+    if (snowStatusState === 'error') {
+      setContextStatusElement('snow-status', tr(snowLayer ? 'context.refreshFailed' : 'context.unavailable'), 'error');
+      return;
+    }
+    var provider = StormScopeContextLayers.providers.snow;
+    var freshness = StormScopeContextLayers.freshness(snowFetchedAt, provider.staleMs);
+    setContextStatusElement('snow-status', tr('context.snowStatus', {
+      freshness: tr('context.' + freshness.state), time: contextTimestamp(snowFetchedAt)
+    }), freshness.state);
+  }
+
+  function scheduleSnowRefresh() {
+    clearTimeout(snowRefreshTimer);
+    snowRefreshTimer = null;
+    if (!document.getElementById('toggle-snow').checked) return;
+    snowRefreshTimer = setTimeout(refreshSnow, StormScopeContextLayers.providers.snow.refreshMs);
+  }
+
+  function ensureSnowAttribution() {
+    if (snowAttributionAdded) return;
+    var provider = StormScopeContextLayers.providers.snow;
+    map.attributionControl.addAttribution('<a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>');
+    snowAttributionAdded = true;
+  }
+
+  function removeSnowAttribution() {
+    if (!snowAttributionAdded) return;
+    var provider = StormScopeContextLayers.providers.snow;
+    map.attributionControl.removeAttribution('<a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>');
+    snowAttributionAdded = false;
+  }
+
+  async function refreshSnow() {
+    if (!document.getElementById('toggle-snow').checked || document.hidden) return;
+    if (snowAbort) snowAbort.abort();
+    var operation = new AbortController();
+    snowAbort = operation;
+    var signal = operation.signal;
+    snowStatusState = 'loading';
+    renderSnowStatus();
+    try {
+      var mapBounds = map.getBounds();
+      var viewport = map.getSize();
+      var request = StormScopeContextLayers.buildSnowExportRequest({
+        west: mapBounds.getWest(), south: mapBounds.getSouth(),
+        east: mapBounds.getEast(), north: mapBounds.getNorth()
+      }, { width: viewport.x, height: viewport.y });
+      if (!request) {
+        if (snowLayer) map.removeLayer(snowLayer);
+        snowLayer = null;
+        snowFetchedAt = null;
+        removeSnowAttribution();
+        snowStatusState = 'no-coverage';
+        renderSnowStatus();
+        return;
+      }
+      var nextLayer = L.imageOverlay(request.url, request.bounds, {
+        opacity: 0.52, pane: 'contextRasterPane', crossOrigin: 'anonymous', interactive: false
+      });
+      var loadPromise = new Promise(function (resolve, reject) {
+        nextLayer.once('load', resolve);
+        nextLayer.once('error', function () { reject(new Error('NOAA NOHRSC snow image failed')); });
+      });
+      nextLayer.addTo(map);
+      try {
+        await loadPromise;
+        if (signal.aborted || !document.getElementById('toggle-snow').checked) {
+          throw new DOMException('Aborted', 'AbortError');
+        }
+        if (snowLayer && snowLayer !== nextLayer) map.removeLayer(snowLayer);
+        snowLayer = nextLayer;
+        snowFetchedAt = Date.now();
+        snowStatusState = 'ready';
+        ensureSnowAttribution();
+        renderSnowStatus();
+      } catch (error) {
+        if (map.hasLayer(nextLayer)) map.removeLayer(nextLayer);
+        throw error;
+      }
+    } catch (error) {
+      if (error.name === 'AbortError') return;
+      snowStatusState = 'error';
+      renderSnowStatus();
+    } finally {
+      if (snowAbort === operation) {
+        snowAbort = null;
+        scheduleSnowRefresh();
+      }
+    }
+  }
+
+  function disableSnow() {
+    if (snowAbort) snowAbort.abort();
+    snowAbort = null;
+    clearTimeout(snowRefreshTimer);
+    clearTimeout(snowMoveTimer);
+    snowRefreshTimer = null;
+    snowMoveTimer = null;
+    if (snowLayer) map.removeLayer(snowLayer);
+    snowLayer = null;
+    snowFetchedAt = null;
+    removeSnowAttribution();
+    snowStatusState = 'off';
+    renderSnowStatus();
   }
 
   function renderLightningStatus() {
@@ -5739,6 +5865,10 @@
         refresh: refreshTerminator, disable: disableTerminator,
         aborts: function () { return null; }, timers: function () { return terminatorRefreshTimer; }
       },
+      snow: {
+        refresh: refreshSnow, disable: disableSnow,
+        aborts: function () { return snowAbort; }, timers: function () { return [snowRefreshTimer, snowMoveTimer]; }
+      },
       alerts: {
         isEnabled: function () { return alertsVisible; },
         refresh: fetchNwsAlerts,
@@ -5973,6 +6103,7 @@
       scheduleSearchRender();
       renderAlerts();
       renderLightningStatus();
+      renderSnowStatus();
       renderSatelliteStatus();
       renderWildfireStatus();
       renderTropicalStatus();
@@ -6236,6 +6367,10 @@
       if (document.getElementById('toggle-satellite').checked) {
         clearTimeout(satelliteMoveTimer);
         satelliteMoveTimer = setTimeout(refreshSatellite, 900);
+      }
+      if (document.getElementById('toggle-snow').checked) {
+        clearTimeout(snowMoveTimer);
+        snowMoveTimer = setTimeout(refreshSnow, 900);
       }
       if (document.getElementById('toggle-usgs-gauges').checked) {
         clearTimeout(usgsGaugeMoveTimer);
@@ -6832,6 +6967,9 @@
     },
     getTerminatorState: function () {
       return { enabled: Boolean(terminatorLayer), status: terminatorStatusState, updatedAt: terminatorUpdatedAt };
+    },
+    getSnowState: function () {
+      return { enabled: Boolean(snowLayer), status: snowStatusState, updatedAt: snowFetchedAt };
     },
     getSpcReportsState: function () {
       return {
