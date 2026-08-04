@@ -198,6 +198,10 @@ test('versioned scene links load before the app and remain available offline', (
   assert.match(html, /id="copy-scene"/);
   assert.match(html, /id="share-scene"/);
   assert.match(app, /StormScopeSceneCodec\.fromHash\(location\.hash\)/);
+  assert.match(app, /window\.addEventListener\('hashchange', applyLocationScene\)/);
+  assert.match(app, /window\.addEventListener\('popstate', applyLocationScene\)/);
+  assert.match(app, /history\.pushState\(\{ stormscopeScene: true \}/);
+  assert.match(app, /function scheduleSceneHashWrite/);
   assert.match(app, /navigator\.share/);
   assert.match(app, /navigator\.clipboard\.writeText/);
   assert.match(serviceWorker, /\.\/js\/scene-codec\.js/);

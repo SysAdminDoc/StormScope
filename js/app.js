@@ -82,6 +82,8 @@
   var startupSceneError = false;
   var pendingSceneFrameTime = null;
   var pendingSceneCameraId = null;
+  var sceneHashTimer = null;
+  var sceneHashApplying = false;
   var cameraDataTimestamp = null;
   var diagnostics = StormScopeDiagnostics.create();
   var radarWasPlaying = false;
@@ -3826,6 +3828,24 @@
     }, StormScopeLayerRegistry.captureControlState(document, 'scene'));
   }
 
+  function scheduleSceneHashWrite() {
+    if (sceneHashApplying) return;
+    clearTimeout(sceneHashTimer);
+    sceneHashTimer = setTimeout(writeSceneHash, 500);
+  }
+
+  function writeSceneHash() {
+    sceneHashTimer = null;
+    if (sceneHashApplying || pendingSceneFrameTime != null || pendingSceneCameraId != null) return;
+    try {
+      var url = new URL(sharedSceneUrl());
+      if (url.hash === location.hash) return;
+      history.pushState({ stormscopeScene: true }, '', url.href);
+    } catch (error) {
+      diagnostics.capture(error, 'scene-hash-write');
+    }
+  }
+
   function sharedSceneUrl() {
     var url = new URL(location.href);
     url.hash = StormScopeSceneCodec.toHash(captureSharedScene());
@@ -3833,6 +3853,7 @@
   }
 
   function applySharedScene(scene) {
+    if (activeCamera) closeCameraModal();
     applyViewSnapshot({
       center: { lat: scene.map.lat, lon: scene.map.lon },
       zoom: scene.map.zoom,
@@ -3859,7 +3880,40 @@
     document.getElementById('camera-favorites').checked = false;
     pendingSceneFrameTime = scene.radar.frameTime;
     pendingSceneCameraId = scene.activeCameraId;
+    applyPendingSceneFrameIfReady();
+    resolvePendingSceneCamera();
     setSavedStateStatus(tr('views.sceneLoaded'));
+  }
+
+  function applyPendingSceneFrameIfReady() {
+    if (pendingSceneFrameTime == null || !radarFrames.length) return;
+    var nearestIndex = 0;
+    var nearestDistance = Infinity;
+    radarFrames.forEach(function (frame, index) {
+      var distance = Math.abs(Number(frame.time) - pendingSceneFrameTime);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestIndex = index;
+      }
+    });
+    if (nearestDistance <= 30 * 60 * 1000) selectRadarFrame(nearestIndex);
+    else setSavedStateStatus(tr('views.sceneFrameExpired'), true);
+    pendingSceneFrameTime = null;
+  }
+
+  async function resolvePendingSceneCamera() {
+    if (pendingSceneCameraId == null || !cameraStore || cameraLoadMetrics.completeMs == null) return;
+    var cameraId = pendingSceneCameraId;
+    pendingSceneCameraId = null;
+    var camera = allCameras.find(function (candidate) { return String(candidate.id) === cameraId; });
+    if (!camera && cameraCatalogDeferred) {
+      try { camera = await cameraStore.loadCameraById(cameraId); } catch (error) { camera = null; }
+      if (camera && !allCameras.some(function (candidate) { return String(candidate.id) === cameraId; })) {
+        addCameraBatch([camera]);
+      }
+    }
+    if (camera) openCameraModal(camera);
+    else setSavedStateStatus(tr('views.sceneCameraUnavailable'), true);
   }
 
   function readStartupSharedScene() {
@@ -3869,6 +3923,26 @@
       startupSceneError = true;
       diagnostics.capture(error, 'scene-url');
       return null;
+    }
+  }
+
+  function applyLocationScene() {
+    clearTimeout(sceneHashTimer);
+    sceneHashTimer = null;
+    var scene;
+    try {
+      scene = StormScopeSceneCodec.fromHash(location.hash);
+    } catch (error) {
+      diagnostics.capture(error, 'scene-navigation');
+      setSavedStateStatus(tr('views.sceneInvalid'), true);
+      return;
+    }
+    if (!scene) return;
+    sceneHashApplying = true;
+    try {
+      applySharedScene(scene);
+    } finally {
+      sceneHashApplying = false;
     }
   }
 
@@ -4003,6 +4077,7 @@
   }
 
   function scheduleLastViewSave() {
+    scheduleSceneHashWrite();
     if (!savedStore) return;
     clearTimeout(saveLastViewTimer);
     saveLastViewTimer = setTimeout(function () {
@@ -4278,6 +4353,7 @@
 
     loadCameraFeed(cam, feedEl);
     fetchWeather(cam.lat, cam.lon, cam);
+    scheduleSceneHashWrite();
   }
 
   function updateModalCameraHealth(cam) {
@@ -4324,6 +4400,7 @@
 
   function closeCameraModal() {
     activeCamera = null;
+    scheduleSceneHashWrite();
     if (weatherAbort) {
       weatherAbort.abort();
       weatherAbort = null;
@@ -6065,7 +6142,10 @@
       if (descriptor.id !== 'alerts') bindOperationalLayer(descriptor, operationalBindings[descriptor.id]);
     });
 
-    document.getElementById('alert-severity').addEventListener('change', fetchNwsAlerts);
+    document.getElementById('alert-severity').addEventListener('change', function () {
+      fetchNwsAlerts();
+      scheduleSceneHashWrite();
+    });
 
     document.getElementById('radar-opacity').addEventListener('input', function () {
       radarOpacity = parseInt(this.value, 10) / 100;
@@ -6117,12 +6197,13 @@
       }
     });
 
-    document.getElementById('radar-prev').addEventListener('click', function () { stepRadar(-1); });
-    document.getElementById('radar-next').addEventListener('click', function () { stepRadar(1); });
+    document.getElementById('radar-prev').addEventListener('click', function () { stepRadar(-1); scheduleSceneHashWrite(); });
+    document.getElementById('radar-next').addEventListener('click', function () { stepRadar(1); scheduleSceneHashWrite(); });
     document.getElementById('radar-play').addEventListener('click', function () { setRadarPlaying(!radarPlaying); });
     document.getElementById('radar-scrubber').addEventListener('input', function () {
       setRadarPlaying(false);
       selectRadarFrame(parseInt(this.value, 10));
+      scheduleSceneHashWrite();
     });
     document.getElementById('radar-speed').addEventListener('change', function () {
       var wasPlaying = radarPlaying;
@@ -6133,6 +6214,7 @@
       try { localStorage.setItem('stormscope-radar-speed', String(radarAnimationSpeed)); } catch (error) { /* optional */ }
       setRadarPlaying(wasPlaying && radarAnimationSpeed > 0);
       if (radarFrames.length) updateRadarTimeDisplay();
+      scheduleSceneHashWrite();
     });
     document.getElementById('satellite-prev').addEventListener('click', function () {
       setSatellitePlaying(false);
@@ -6157,11 +6239,13 @@
     });
     document.getElementById('data-mode').addEventListener('change', function () {
       applyDataMode(this.value, true);
+      scheduleSceneHashWrite();
     });
     document.getElementById('radar-palette').addEventListener('change', function () {
       radarPalette = ['standard', 'colorblind', 'contrast'].indexOf(this.value) === -1 ? 'standard' : this.value;
       try { localStorage.setItem('stormscope-radar-palette', radarPalette); } catch (error) { /* optional */ }
       applyRadarPalette();
+      scheduleSceneHashWrite();
     });
     document.getElementById('radar-retry').addEventListener('click', function () { initRadar(); });
 
@@ -6176,10 +6260,16 @@
     document.querySelector('.monitor-backdrop').addEventListener('click', function () { closeMonitor(true); });
 
     ['camera-query', 'camera-state'].forEach(function (id) {
-      document.getElementById(id).addEventListener('input', function () { scheduleSearchRender(true); });
+      document.getElementById(id).addEventListener('input', function () {
+        scheduleSearchRender(true);
+        scheduleSceneHashWrite();
+      });
     });
     ['camera-source', 'camera-type', 'camera-sort', 'camera-healthy', 'camera-favorites'].forEach(function (id) {
-      document.getElementById(id).addEventListener('change', function () { scheduleSearchRender(true); });
+      document.getElementById(id).addEventListener('change', function () {
+        scheduleSearchRender(true);
+        scheduleSceneHashWrite();
+      });
     });
     document.getElementById('camera-results-scroll').addEventListener('scroll', function () {
       if (suppressNextCameraResultScroll) {
@@ -6336,6 +6426,8 @@
     document.getElementById('clear-local-overlays').addEventListener('click', clearLocalOverlays);
     document.getElementById('copy-scene').addEventListener('click', function () { copyCurrentScene(); });
     document.getElementById('share-scene').addEventListener('click', function () { shareCurrentScene(); });
+    window.addEventListener('hashchange', applyLocationScene);
+    window.addEventListener('popstate', applyLocationScene);
 
     document.addEventListener('keydown', function (e) {
       if (e.key !== 'Escape') return;
@@ -6872,8 +6964,10 @@
     startupSharedScene = readStartupSharedScene();
     initSavedState({ restoreLastView: !startupSharedScene });
     initLocalOverlays();
-    if (startupSharedScene) applySharedScene(startupSharedScene);
-    else if (startupSceneError) setSavedStateStatus(tr('views.sceneInvalid'), true);
+    if (startupSharedScene) {
+      sceneHashApplying = true;
+      try { applySharedScene(startupSharedScene); } finally { sceneHashApplying = false; }
+    } else if (startupSceneError) setSavedStateStatus(tr('views.sceneInvalid'), true);
     bindUI();
     initInstallDiscovery();
     updateMonitorSelectionUi();

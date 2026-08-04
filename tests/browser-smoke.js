@@ -733,9 +733,35 @@ async function main() {
       if (text.startsWith('Failed to load resource') && source && !source.startsWith(baseURL)) return;
       errors.push(text);
     });
-    const networkMetrics = { rainViewerRequests: 0, satelliteExports: 0, satelliteMetadataRequests: 0 };
+    const networkMetrics = { rainViewerRequests: 0, satelliteExports: 0, satelliteMetadataRequests: 0, snowExports: 0 };
     await addNetworkFixtures(page, networkMetrics);
     await waitForApp(page);
+
+    const permalinkPage = await context.newPage();
+    permalinkPage.baseURL = baseURL;
+    await addNetworkFixtures(permalinkPage);
+    await waitForApp(permalinkPage);
+    await permalinkPage.locator('#btn-layers').click();
+    await permalinkPage.locator('#layers-panel').waitFor({ state: 'visible' });
+    await permalinkPage.locator('#toggle-terminator').check();
+    await permalinkPage.waitForFunction(() => location.hash.startsWith('#scene=1.'));
+    const terminatorOnHash = await permalinkPage.evaluate(() => location.hash);
+    assert.equal((await permalinkPage.evaluate(() => window._stormscope.getTerminatorState())).enabled, true);
+    await permalinkPage.locator('#toggle-terminator').uncheck();
+    await permalinkPage.waitForFunction((hash) => location.hash.startsWith('#scene=1.') && location.hash !== hash, terminatorOnHash);
+    const terminatorOffHash = await permalinkPage.evaluate(() => location.hash);
+    await permalinkPage.goBack({ waitUntil: 'commit' }).catch(() => {});
+    await permalinkPage.waitForFunction((hash) => location.hash === hash && window._stormscope.getTerminatorState().enabled, terminatorOnHash);
+    await permalinkPage.goForward({ waitUntil: 'commit' }).catch(() => {});
+    await permalinkPage.waitForFunction((hash) => location.hash === hash && !window._stormscope.getTerminatorState().enabled, terminatorOffHash);
+    await permalinkPage.evaluate((hash) => { location.hash = hash; }, terminatorOnHash.slice(1));
+    await permalinkPage.waitForFunction(() => window._stormscope.getTerminatorState().enabled === true);
+    await permalinkPage.evaluate(() => { location.hash = 'scene=0.e30'; });
+    await permalinkPage.locator('#saved-state-status')
+      .filter({ hasText: 'Shared scene link is invalid or unsupported' }).waitFor({ state: 'visible' });
+    assert.equal((await permalinkPage.evaluate(() => window._stormscope.getTerminatorState())).enabled, true,
+      'invalid live scene links must preserve the current state');
+    await permalinkPage.close();
 
     await page.locator('#alerts-status').filter({ hasText: /1 alert/ }).waitFor({ state: 'visible' });
     await assertSurfaceWithinViewport(page, '#primary-nav', 'desktop primary navigation');
