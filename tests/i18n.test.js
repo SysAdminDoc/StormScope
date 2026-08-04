@@ -5,12 +5,63 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const i18n = require('../js/i18n.js');
+const pseudoLocale = require('./pseudo-locale.js');
+
+const root = path.resolve(__dirname, '..');
+
+function collectStaticTranslationKeys() {
+  const sourceFiles = fs.readdirSync(path.join(root, 'js'))
+    .filter((file) => file.endsWith('.js'))
+    .map((file) => path.join(root, 'js', file));
+  sourceFiles.push(path.join(root, 'index.html'));
+  const keys = new Set();
+  for (const file of sourceFiles) {
+    const source = fs.readFileSync(file, 'utf8');
+    for (const match of source.matchAll(/\btr\(\s*['"]([^'"]+)['"]\s*(?=[,)])/g)) keys.add(match[1]);
+    for (const match of source.matchAll(/data-i18n(?:-[^=]+)?="([^"]+)"/g)) keys.add(match[1]);
+  }
+  return [...keys].sort();
+}
 
 test('English and Spanish catalogs have identical complete key sets', () => {
   assert.deepEqual(Object.keys(i18n.catalogs.es).sort(), Object.keys(i18n.catalogs.en).sort());
-  for (const [key, value] of Object.entries(i18n.catalogs.es)) {
-    assert.ok(value && typeof value === 'string', `Spanish translation missing for ${key}`);
+  for (const locale of ['en', 'es']) {
+    for (const [key, value] of Object.entries(i18n.catalogs[locale])) {
+      assert.ok(value && typeof value === 'string' && value !== key,
+        `${locale} translation missing for ${key}`);
+    }
   }
+});
+
+test('static translation references have non-sentinel entries in every shipped locale', () => {
+  const keys = collectStaticTranslationKeys();
+  assert.ok(keys.length >= 100, `expected broad static translation coverage, found ${keys.length} keys`);
+  for (const locale of i18n.supportedLocales) {
+    assert.deepEqual(pseudoLocale.missingKeySentinels(i18n.catalogs[locale], keys), [],
+      `${locale} has missing-key sentinels`);
+    for (const key of keys) assert.notEqual(i18n.t(key, null, locale), key, `${locale} falls back for ${key}`);
+  }
+});
+
+test('pseudo-locale expands every catalog value without shipping a locale', () => {
+  const expanded = pseudoLocale.expandCatalog(i18n.catalogs.en, 0.35);
+  assert.equal(i18n.supportedLocales.includes(pseudoLocale.PSEUDO_LOCALE), false);
+  assert.equal(Object.hasOwn(i18n.catalogs, pseudoLocale.PSEUDO_LOCALE), false);
+  for (const [key, value] of Object.entries(i18n.catalogs.en)) {
+    assert.match(expanded[key], /^⟦[\s\S]+⟧$/);
+    assert.ok(expanded[key].length >= value.length + Math.ceil(value.length * 0.35) + 2,
+      `${key} should have at least 35% expansion`);
+    assert.notEqual(expanded[key], key);
+  }
+});
+
+test('locale direction is deterministic for LTR and RTL language tags', () => {
+  assert.match(fs.readFileSync(path.join(root, 'index.html'), 'utf8'), /<html lang="en" dir="ltr">/);
+  assert.equal(i18n.directionForLocale('en'), 'ltr');
+  assert.equal(i18n.directionForLocale('es-MX'), 'ltr');
+  assert.equal(i18n.directionForLocale('ar'), 'rtl');
+  assert.equal(i18n.directionForLocale('he-IL'), 'rtl');
+  assert.equal(i18n.directionForLocale('FA_ir'), 'rtl');
 });
 
 test('locale normalization, interpolation, and fallback are deterministic', () => {

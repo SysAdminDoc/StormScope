@@ -6,6 +6,8 @@ const http = require('node:http');
 const path = require('node:path');
 const { chromium } = require('@playwright/test');
 const sceneCodec = require('../js/scene-codec.js');
+const i18n = require('../js/i18n.js');
+const pseudoLocale = require('./pseudo-locale.js');
 
 async function collectJsHeap(page) {
   const session = await page.context().newCDPSession(page);
@@ -140,6 +142,53 @@ async function exerciseNarrowPanelState(page, options) {
   await assertOnlyTopLevelSurface(page, '#situation-panel', `${label} situation summary`);
   await page.locator('#close-summary').click();
   await assertOnlyTopLevelSurface(page, '#alerts-panel', `${label} alerts restored`);
+}
+
+async function exercisePseudoLocale(page) {
+  await page.locator('#app-locale').selectOption('es');
+  const pseudoCatalog = pseudoLocale.expandCatalog(i18n.catalogs.en, 0.35);
+  await page.evaluate((catalog) => {
+    const locale = window.StormScopeI18n;
+    window.__stormscopePseudoOriginal = Object.assign({}, locale.catalogs.en);
+    Object.assign(locale.catalogs.en, catalog);
+  }, pseudoCatalog);
+  await page.locator('#app-locale').selectOption('en');
+  const pseudoResult = await page.evaluate(() => {
+    document.documentElement.dir = 'rtl';
+    const container = document.querySelector('#layers-panel');
+    const failures = [];
+    [...container.querySelectorAll('button, input, select, a[href], [tabindex="0"]')].forEach((element) => {
+      const style = getComputedStyle(element);
+      const initialRect = element.getBoundingClientRect();
+      if (element.disabled || style.display === 'none' || style.visibility === 'hidden' ||
+          initialRect.width === 0 || initialRect.height === 0) return;
+      element.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      const rect = element.getBoundingClientRect();
+      const horizontallyClipped = rect.left < -1 || rect.right > window.innerWidth + 1 ||
+        (!['INPUT', 'SELECT'].includes(element.tagName) && element.scrollWidth > element.clientWidth + 2);
+      if (horizontallyClipped) failures.push({ id: element.id, tag: element.tagName });
+    });
+    const result = {
+      lang: document.documentElement.lang,
+      dir: document.documentElement.dir,
+      pseudoTextPresent: document.body.textContent.includes('⟦'),
+      pageOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+      failures
+    };
+    return result;
+  });
+  assert.equal(pseudoResult.lang, 'en', 'pseudo-locale checks must not ship a locale tag');
+  assert.equal(pseudoResult.dir, 'rtl', 'pseudo-locale layout must exercise RTL direction');
+  assert.equal(pseudoResult.pseudoTextPresent, true, 'pseudo-locale text must be rendered before layout assertions');
+  assert.equal(pseudoResult.pageOverflow, false, 'pseudo-locale RTL layout must not overflow at 320px');
+  assert.deepEqual(pseudoResult.failures, [], 'pseudo-locale controls must remain unclipped at 320px');
+  await page.evaluate(() => {
+    const locale = window.StormScopeI18n;
+    Object.assign(locale.catalogs.en, window.__stormscopePseudoOriginal);
+    delete window.__stormscopePseudoOriginal;
+    locale.setLocale('en');
+    locale.localizeDocument(document);
+  });
 }
 
 async function exerciseLandscapeLayout(page, theme) {
@@ -2396,6 +2445,15 @@ async function main() {
       await narrowContext.setOffline(false);
       await narrow.close();
     }
+    const pseudoPage = await narrowContext.newPage();
+    pseudoPage.baseURL = baseURL;
+    await pseudoPage.setViewportSize({ width: 320, height: 568 });
+    await addNetworkFixtures(pseudoPage);
+    await waitForApp(pseudoPage, false);
+    await pseudoPage.getByRole('button', { name: /Toggle layers panel|Mostrar panel de capas/ }).click();
+    await pseudoPage.locator('#layers-panel').waitFor({ state: 'visible' });
+    await exercisePseudoLocale(pseudoPage);
+    await pseudoPage.close();
     await narrowContext.close();
 
     const mobile = await context.newPage();

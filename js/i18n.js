@@ -8,6 +8,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   var DEFAULT_LOCALE = 'en';
   var STORAGE_KEY = 'stormscope-locale';
+  var RTL_LOCALES = Object.freeze(['ar', 'dv', 'fa', 'he', 'ku', 'ps', 'ur', 'yi']);
   var catalogs = {
     en: {
       'app.title': 'StormScope — Live Weather Radar & Webcams',
@@ -986,6 +987,11 @@
     return Object.prototype.hasOwnProperty.call(catalogs, language) ? language : DEFAULT_LOCALE;
   }
 
+  function directionForLocale(value) {
+    var language = String(value || '').toLowerCase().split(/[-_]/)[0];
+    return RTL_LOCALES.indexOf(language) === -1 ? 'ltr' : 'rtl';
+  }
+
   function interpolate(value, variables) {
     return String(value).replace(/\{([A-Za-z0-9_]+)\}/g, function (_match, key) {
       return variables && variables[key] != null ? String(variables[key]) : '{' + key + '}';
@@ -1057,6 +1063,7 @@
       });
     });
     document.documentElement.lang = currentLocale;
+    document.documentElement.dir = directionForLocale(currentLocale);
   }
 
   function setLocale(locale) {
@@ -1067,9 +1074,11 @@
   return Object.freeze({
     DEFAULT_LOCALE: DEFAULT_LOCALE,
     STORAGE_KEY: STORAGE_KEY,
+    RTL_LOCALES: RTL_LOCALES,
     supportedLocales: Object.freeze(['en', 'es']),
     catalogs: catalogs,
     normalizeLocale: normalizeLocale,
+    directionForLocale: directionForLocale,
     setLocale: setLocale,
     getLocale: function () { return currentLocale; },
     t: t,
