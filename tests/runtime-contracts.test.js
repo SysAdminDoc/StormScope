@@ -259,6 +259,20 @@ test('PWA update and page lifecycle work are explicit and recoverable', () => {
   assert.match(i18n.catalogs.en['camera.paused'], /Feed paused/);
 });
 
+test('panel and scene changes use progressive, reduced-motion-safe view transitions', () => {
+  assert.match(app, /function runViewTransition\(update, afterUpdate\)/);
+  assert.match(app, /typeof document\.startViewTransition !== 'function'/);
+  assert.match(app, /prefersReducedMotion\(\)/);
+  assert.match(app, /viewTransitionInFlight/);
+  assert.match(app, /viewTransitionReady = true/);
+  assert.match(app, /runViewTransition\(function \(\) \{[\s\S]*applyViewSnapshot/);
+  assert.match(app, /runViewTransition\(function \(\) \{[\s\S]*TOP_LEVEL_PANELS/);
+  assert.match(css, /@supports \(view-transition-name: none\)/);
+  assert.match(css, /view-transition-name: stormscope-surface/);
+  assert.match(css, /::view-transition-group\(root\)/);
+  assert.match(css, /prefers-reduced-motion: reduce/);
+});
+
 test('saved views provide foreground NWS alert polling with bounded notices', () => {
   assert.match(html, /id="saved-location-alert-banner"[^>]*role="status"/);
   assert.match(html, /id="saved-location-alert-review"/);

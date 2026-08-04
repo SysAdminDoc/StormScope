@@ -1936,6 +1936,36 @@ button:focus-visible {
   50% { opacity: 0.4; }
 }
 
+/* View Transitions progressively animate the active shell surface and scene
+   changes. JavaScript feature-detects the API; these rules remain inert where
+   the pseudo-elements are unsupported. */
+@supports (view-transition-name: none) {
+  .panel,
+  .search-panel,
+  .situation-panel,
+  .alerts-panel {
+    view-transition-name: stormscope-surface;
+  }
+
+  ::view-transition-group(root),
+  ::view-transition-group(stormscope-surface) {
+    animation-duration: 180ms;
+    animation-timing-function: ease-out;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    ::view-transition-group(root),
+    ::view-transition-group(stormscope-surface),
+    ::view-transition-old(root),
+    ::view-transition-new(root),
+    ::view-transition-old(stormscope-surface),
+    ::view-transition-new(stormscope-surface) {
+      animation-duration: 0.01ms;
+      animation-iteration-count: 1;
+    }
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .feed-refresh-indicator {
     animation: none;

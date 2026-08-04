@@ -73,6 +73,15 @@ async function assertEveryControlReachable(page, containerSelector, label) {
 
 async function assertOnlyTopLevelSurface(page, expected, label) {
   const selectors = ['#alerts-panel', '#layers-panel', '#search-panel', '#situation-panel'];
+  await page.locator(expected).waitFor({ state: 'visible' });
+  await page.waitForFunction((expectedSelector) => {
+    const visible = ['#alerts-panel', '#layers-panel', '#search-panel', '#situation-panel']
+      .filter((selector) => {
+        const element = document.querySelector(selector);
+        return element && getComputedStyle(element).display !== 'none' && element.getBoundingClientRect().width > 0;
+      });
+    return visible.length === 1 && visible[0] === expectedSelector;
+  }, expected);
   const visible = [];
   for (const selector of selectors) {
     if (await page.locator(selector).isVisible()) visible.push(selector);
@@ -1092,11 +1101,44 @@ async function main() {
     const networkMetrics = { rainViewerRequests: 0, satelliteExports: 0, satelliteMetadataRequests: 0, snowExports: 0, surfaceObservationRequests: 0 };
     await addNetworkFixtures(page, networkMetrics);
     await waitForApp(page);
+    await page.evaluate(() => {
+      window.__viewTransitionCalls = 0;
+      Object.defineProperty(document, 'startViewTransition', {
+        configurable: true,
+        value: (update) => {
+          window.__viewTransitionCalls += 1;
+          update();
+          return { finished: Promise.resolve() };
+        }
+      });
+    });
+    const transitionBaseline = await page.evaluate(() => window.__viewTransitionCalls);
+    await page.locator('#btn-layers').click();
+    await page.locator('#layers-panel').waitFor({ state: 'visible' });
+    assert.equal(await page.evaluate(() => window.__viewTransitionCalls), transitionBaseline + 1,
+      'opening a top-level panel should use the progressive transition hook');
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.locator('#btn-layers').click();
+    await page.locator('#layers-panel').waitFor({ state: 'hidden' });
+    assert.equal(await page.evaluate(() => window.__viewTransitionCalls), transitionBaseline + 1,
+      'reduced motion should keep panel changes immediate');
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
 
     const permalinkPage = await context.newPage();
     permalinkPage.baseURL = baseURL;
     await addNetworkFixtures(permalinkPage);
     await waitForApp(permalinkPage, false);
+    await permalinkPage.evaluate(() => {
+      window.__viewTransitionCalls = 0;
+      Object.defineProperty(document, 'startViewTransition', {
+        configurable: true,
+        value: (update) => {
+          window.__viewTransitionCalls += 1;
+          update();
+          return { finished: Promise.resolve() };
+        }
+      });
+    });
     await permalinkPage.locator('#btn-layers').click();
     await permalinkPage.locator('#layers-panel').waitFor({ state: 'visible' });
     await ensureProLayerMode(permalinkPage);
@@ -1109,6 +1151,7 @@ async function main() {
     const terminatorOffHash = await permalinkPage.evaluate(() => location.hash);
     await permalinkPage.goBack({ waitUntil: 'commit' }).catch(() => {});
     await permalinkPage.waitForFunction((hash) => location.hash === hash && window._stormscope.getTerminatorState().enabled, terminatorOnHash);
+    await permalinkPage.waitForFunction(() => window.__viewTransitionCalls >= 2);
     await permalinkPage.goForward({ waitUntil: 'commit' }).catch(() => {});
     await permalinkPage.waitForFunction((hash) => location.hash === hash && !window._stormscope.getTerminatorState().enabled, terminatorOffHash);
     await permalinkPage.evaluate((hash) => { location.hash = hash; }, terminatorOnHash.slice(1));
@@ -2596,6 +2639,7 @@ async function main() {
     });
     await page.locator('#saved-views').selectOption({ label: 'Smoke view' });
     await page.getByRole('button', { name: 'Load', exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('#data-mode').value === 'low');
     assert.equal(await page.locator('#data-mode').inputValue(), 'low');
     assert.equal(await page.locator('#radar-palette').inputValue(), 'contrast');
     assert.equal(await page.locator('#radar-speed').inputValue(), '0');
@@ -2692,6 +2736,7 @@ async function main() {
     await page.locator('#saved-views').selectOption('preset:severe');
     assert.equal(await page.getByRole('button', { name: 'Delete', exact: true }).isDisabled(), true);
     await page.getByRole('button', { name: 'Load', exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('#radar-palette').value === 'colorblind');
     assert.equal(await page.locator('#radar-palette').inputValue(), 'colorblind');
     assert.equal(await page.locator('#alert-severity').inputValue(), 'severe');
     assert.equal(await page.locator('#toggle-coverage').isChecked(), true);
@@ -3151,8 +3196,8 @@ async function main() {
     await waitForApp(mobile, false);
     assert.equal(await mobile.locator('html').evaluate((element) => element.scrollWidth > element.clientWidth), false);
     await mobile.getByRole('button', { name: 'Toggle layers panel' }).click();
-    assert.equal(await mobile.getByRole('button', { name: 'Toggle layers panel' }).getAttribute('aria-expanded'), 'true');
     await mobile.getByRole('region', { name: 'Map layers' }).waitFor({ state: 'visible' });
+    assert.equal(await mobile.getByRole('button', { name: 'Toggle layers panel' }).getAttribute('aria-expanded'), 'true');
     await mobile.getByRole('button', { name: 'Open situation summary' }).click();
     await mobile.locator('#situation-panel').waitFor({ state: 'visible' });
     await assertSurfaceWithinViewport(mobile, '#situation-panel', 'mobile situation summary');
