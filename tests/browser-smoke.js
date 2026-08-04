@@ -679,12 +679,54 @@ async function addNetworkFixtures(page, metrics, options) {
           features: [
             { type: 'Feature', id: 'eq1', geometry: { type: 'Point', coordinates: [-97, 38, 8] },
               properties: { mag: 4.6, place: '<img src=x onerror=window.__quakeInjected=true> 5km N of Fixtureville',
-                time: Date.now() - 300000, url: 'javascript:window.__quakeHref=true' } },
+                time: Date.now() - 300000, url: 'javascript:window.__quakeHref=true',
+                detail: 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/eq1.geojson' } },
             { type: 'Feature', id: 'eq2', geometry: { type: 'Point', coordinates: [-99, 40, 3] },
               properties: { mag: 2.7, place: '3km S of Testburg', time: Date.now() - 900000,
                 url: 'https://earthquake.usgs.gov/earthquakes/eventpage/eq2' } }
           ]
         })
+      });
+      return;
+    }
+    if (url === 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/eq1.geojson') {
+      const now = Date.now();
+      metrics.earthquakeIntensityRequests = (metrics.earthquakeIntensityRequests || 0) + 1;
+      await route.fulfill({
+        contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ type: 'Feature', id: 'eq1', properties: {
+          url: 'https://earthquake.usgs.gov/earthquakes/eventpage/eq1', updated: now - 60000,
+          products: {
+            shakemap: [{ preferredWeight: 1, updateTime: now - 60000, source: 'us', contents: {
+              'download/cont_mmi.json': { url: 'https://earthquake.usgs.gov/pdl/products/fixture/cont_mmi.json' }
+            } }],
+            dyfi: [{ preferredWeight: 1, updateTime: now - 50000, source: 'us', contents: {
+              'dyfi_geo_10km.geojson': { url: 'https://earthquake.usgs.gov/pdl/products/fixture/dyfi_geo_10km.geojson' }
+            } }]
+          }
+        } })
+      });
+      return;
+    }
+    if (url === 'https://earthquake.usgs.gov/pdl/products/fixture/cont_mmi.json') {
+      metrics.earthquakeIntensityRequests = (metrics.earthquakeIntensityRequests || 0) + 1;
+      await route.fulfill({
+        contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ type: 'FeatureCollection', features: [{
+          type: 'Feature', geometry: { type: 'MultiLineString', coordinates: [[[-98, 37], [-97, 38], [-96, 37]]] },
+          properties: { value: 5 }
+        }] })
+      });
+      return;
+    }
+    if (url === 'https://earthquake.usgs.gov/pdl/products/fixture/dyfi_geo_10km.geojson') {
+      metrics.earthquakeIntensityRequests = (metrics.earthquakeIntensityRequests || 0) + 1;
+      await route.fulfill({
+        contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ type: 'FeatureCollection', features: [{
+          type: 'Feature', geometry: { type: 'Polygon', coordinates: [[[-98, 37], [-96, 37], [-96, 39], [-98, 37]]] },
+          properties: { cdi: 4.5, nresp: 8, dist: 12, name: 'Fixture area' }
+        }] })
       });
       return;
     }
@@ -1759,7 +1801,9 @@ async function main() {
       return opened;
     });
     assert.equal(popupOpened, true);
-    const hostilePopup = page.locator('.leaflet-popup-content');
+    const hostilePopup = page.locator('.leaflet-popup-content').filter({
+      hasText: '<img src=x onerror=window.__wildfireInjected=true>'
+    });
     await hostilePopup.waitFor({ state: 'visible' });
     assert.match(await hostilePopup.textContent(), /<img src=x onerror=window\.__wildfireInjected=true>/);
     assert.equal(await hostilePopup.locator('img').count(), 0);
@@ -1806,8 +1850,32 @@ async function main() {
     assert.equal(await page.evaluate(() => window.__quakeInjected), false);
     assert.equal(await quakePopup.locator('a').getAttribute('href'), '#');
     assert.equal(await page.evaluate(() => window.__quakeHref), false);
+    await quakePopup.getByRole('button', { name: 'Load ShakeMap / DYFI intensity context' }).click();
+    await page.locator('.earthquake-intensity-message').filter({ hasText: '2 intensity areas' }).waitFor({ state: 'visible' });
+    const intensityState = await page.evaluate(() => window._stormscope.getEarthquakeIntensityState());
+    assert.equal(intensityState.status, 'ready');
+    assert.equal(intensityState.eventId, 'eq1');
+    assert.equal(intensityState.count, 2);
+    assert.equal(intensityState.productCount, 2);
+    assert.equal(networkMetrics.earthquakeIntensityRequests, 3);
+    const intensityPopupOpened = await page.evaluate(() => {
+      let opened = false;
+      window._stormscope.getMap().eachLayer(layer => {
+        if (opened || typeof layer.getLayers !== 'function') return;
+        const child = layer.getLayers().find(item => item.feature && item.feature.properties &&
+          item.feature.properties.kind === 'shakemap');
+        if (child) { child.openPopup(); opened = true; }
+      });
+      return opened;
+    });
+    assert.equal(intensityPopupOpened, true);
+    await page.locator('.earthquake-intensity-popup').waitFor({ state: 'visible' });
+    assert.match(await page.locator('.earthquake-intensity-popup').textContent(), /Intensity 5/);
     await page.locator('#toggle-earthquakes').uncheck();
     assert.equal((await page.evaluate(() => window._stormscope.getContextState())).earthquakes, false);
+    assert.deepEqual(await page.evaluate(() => window._stormscope.getEarthquakeIntensityState()), {
+      status: 'off', eventId: null, count: 0, productCount: 0, enabled: false, layer: null
+    });
 
     // SPC convective outlooks: toggle on, verify count/status/day, then switch day.
     await page.evaluate(() => window._stormscope.getMap().closePopup());

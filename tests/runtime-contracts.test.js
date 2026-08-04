@@ -21,6 +21,7 @@ const radarControllerSource = fs.readFileSync(path.join(root, 'js', 'radar-contr
 const radarMotionSource = fs.readFileSync(path.join(root, 'js', 'radar-motion.js'), 'utf8');
 const radarMotionWorkerSource = fs.readFileSync(path.join(root, 'js', 'radar-motion-worker.js'), 'utf8');
 const riverGaugesSource = fs.readFileSync(path.join(root, 'js', 'river-gauges.js'), 'utf8');
+const earthquakeSource = fs.readFileSync(path.join(root, 'js', 'earthquakes.js'), 'utf8');
 const winterOutlooksSource = fs.readFileSync(path.join(root, 'js', 'winter-outlooks.js'), 'utf8');
 const fireWeatherSource = fs.readFileSync(path.join(root, 'js', 'fire-weather.js'), 'utf8');
 const spaceWeatherSource = fs.readFileSync(path.join(root, 'js', 'space-weather.js'), 'utf8');
@@ -860,6 +861,13 @@ test('USGS earthquakes are an optional, attributed, keyless layer wired end to e
   assert.match(app, /function disableEarthquakes/);
   assert.match(app, /StormScopeEarthquakes\.buildFeedUrl/);
   assert.match(app, /StormScopeEarthquakes\.normalizeCollection/);
+  assert.match(app, /StormScopeEarthquakes\.normalizeDetail/);
+  assert.match(app, /StormScopeEarthquakes\.normalizeIntensityCollection/);
+  assert.match(app, /getEarthquakeIntensityState/);
+  assert.match(earthquakeSource, /\['shakemap', 'dyfi'\]/);
+  assert.match(earthquakeSource, /kind === 'shakemap'/);
+  assert.match(earthquakeSource, /MultiLineString/);
+  assert.match(earthquakeSource, /MAX_INTENSITY_FEATURES = 500/);
   // Popup href is scheme-guarded and the layer participates in scene state.
   assert.match(app, /link\.href = safeExternalUrl\(properties\.url\)/);
   assert.match(layerRegistrySource, /id: 'earthquakes', toggleId: 'toggle-earthquakes'/);

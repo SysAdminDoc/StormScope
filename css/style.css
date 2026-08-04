@@ -887,6 +887,8 @@ button:focus-visible {
 .context-popup { color: #1d1d25; font: 12px/1.45 system-ui, sans-serif; }
 .context-popup strong, .context-popup span, .context-popup a { display: block; }
 .context-popup a { margin-top: 5px; }
+.context-popup .earthquake-intensity-load { margin-top: 8px; width: 100%; }
+.context-popup .earthquake-intensity-message { color: #555565; margin-top: 5px; }
 
 .incident-cameras {
   margin-top: 10px;

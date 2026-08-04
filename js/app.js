@@ -187,6 +187,13 @@
   var earthquakeCount = 0;
   var earthquakeStatusState = 'off';
   var earthquakeAttributionAdded = false;
+  var earthquakeIntensityLayer = null;
+  var earthquakeIntensityAbort = null;
+  var earthquakeIntensityGeneration = 0;
+  var earthquakeIntensityState = 'off';
+  var earthquakeIntensityEventId = null;
+  var earthquakeIntensityCount = 0;
+  var earthquakeIntensityProductCount = 0;
   var convectiveLayer = null;
   var convectiveAbort = null;
   var convectiveGeneration = 0;
@@ -3016,7 +3023,159 @@
       link.textContent = tr('context.usgsSource');
       container.appendChild(link);
     }
+    if (properties.significant && properties.detailUrl) {
+      var load = document.createElement('button');
+      load.type = 'button';
+      load.className = 'earthquake-intensity-load';
+      load.textContent = tr('context.earthquakeIntensityLoad');
+      var message = document.createElement('span');
+      message.className = 'earthquake-intensity-message';
+      message.setAttribute('role', 'status');
+      message.setAttribute('aria-live', 'polite');
+      load.addEventListener('click', function () {
+        loadEarthquakeIntensity(feature, load, message);
+      });
+      container.appendChild(load);
+      container.appendChild(message);
+    }
     return container;
+  }
+
+  function intensityProductLabel(kind) {
+    return tr('context.earthquakeIntensity.' + (kind === 'dyfi' ? 'dyfi' : 'shakemap'));
+  }
+
+  function earthquakeIntensityPopup(feature) {
+    var properties = feature.properties || {};
+    var container = document.createElement('div');
+    container.className = 'context-popup earthquake-intensity-popup';
+    var heading = document.createElement('strong');
+    heading.textContent = tr('context.earthquakeIntensityFeature', { product: intensityProductLabel(properties.kind) });
+    container.appendChild(heading);
+    var value = document.createElement('span');
+    value.textContent = tr('context.earthquakeIntensityValue', { value: localNumber(properties.intensity) });
+    container.appendChild(value);
+    if (properties.responses != null) {
+      var responses = document.createElement('span');
+      responses.textContent = tr('context.earthquakeIntensityResponses', { count: localNumber(properties.responses) });
+      container.appendChild(responses);
+    }
+    if (properties.distanceKm != null) {
+      var distance = document.createElement('span');
+      distance.textContent = tr('context.earthquakeIntensityDistance', { distance: localNumber(properties.distanceKm) });
+      container.appendChild(distance);
+    }
+    if (properties.place) {
+      var place = document.createElement('span');
+      place.textContent = properties.place;
+      container.appendChild(place);
+    }
+    var issued = document.createElement('span');
+    issued.textContent = tr('context.earthquakeIntensityIssued', {
+      time: properties.issuedAt == null ? tr('weather.unknown') : localTime(properties.issuedAt)
+    });
+    container.appendChild(issued);
+    var source = document.createElement('a');
+    source.href = safeExternalUrl(properties.sourceUrl);
+    source.target = '_blank';
+    source.rel = 'noopener noreferrer';
+    source.textContent = tr('context.earthquakeIntensitySource');
+    container.appendChild(source);
+    return container;
+  }
+
+  function clearEarthquakeIntensity() {
+    earthquakeIntensityGeneration += 1;
+    if (earthquakeIntensityAbort) earthquakeIntensityAbort.abort();
+    earthquakeIntensityAbort = null;
+    if (earthquakeIntensityLayer) map.removeLayer(earthquakeIntensityLayer);
+    earthquakeIntensityLayer = null;
+    earthquakeIntensityState = 'off';
+    earthquakeIntensityEventId = null;
+    earthquakeIntensityCount = 0;
+    earthquakeIntensityProductCount = 0;
+  }
+
+  function createEarthquakeIntensityLayer(collection) {
+    return L.geoJSON(collection, {
+      pane: 'contextVectorPane',
+      style: function (feature) { return StormScopeEarthquakes.intensityStyle(feature.properties); },
+      onEachFeature: function (feature, layer) {
+        layer.bindPopup(function () { return earthquakeIntensityPopup(feature); }, { autoPan: false, maxWidth: 320, maxHeight: 360 });
+      }
+    }).addTo(map);
+  }
+
+  async function fetchEarthquakeJson(url, signal, maximumBytes) {
+    var response = await fetch(url, { cache: 'no-store', signal: signal });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    var contentLength = Number(response.headers && typeof response.headers.get === 'function'
+      ? response.headers.get('content-length') : NaN);
+    if (Number.isFinite(contentLength) && contentLength > maximumBytes) throw new Error('USGS response exceeds size limit');
+    return response.json();
+  }
+
+  async function loadEarthquakeIntensity(feature, button, message) {
+    var properties = feature && feature.properties || {};
+    if (!properties.significant || !properties.detailUrl) return;
+    if (earthquakeIntensityEventId === properties.id && earthquakeIntensityState === 'ready') {
+      message.textContent = tr('context.earthquakeIntensityReady', {
+        count: localNumber(earthquakeIntensityCount), products: localNumber(earthquakeIntensityProductCount)
+      });
+      return;
+    }
+    if (earthquakeIntensityAbort) earthquakeIntensityAbort.abort();
+    earthquakeIntensityAbort = new AbortController();
+    var signal = earthquakeIntensityAbort.signal;
+    var token = ++earthquakeIntensityGeneration;
+    if (earthquakeIntensityLayer) map.removeLayer(earthquakeIntensityLayer);
+    earthquakeIntensityLayer = null;
+    earthquakeIntensityState = 'loading';
+    earthquakeIntensityEventId = null;
+    earthquakeIntensityCount = 0;
+    earthquakeIntensityProductCount = 0;
+    button.disabled = true;
+    message.textContent = tr('context.earthquakeIntensityLoading');
+    try {
+      var detail = StormScopeEarthquakes.normalizeDetail(await fetchEarthquakeJson(
+        properties.detailUrl, signal, StormScopeEarthquakes.MAX_DETAIL_BYTES
+      ));
+      if (signal.aborted || token !== earthquakeIntensityGeneration) return;
+      var settled = await Promise.allSettled(detail.products.map(async function (product) {
+        return StormScopeEarthquakes.normalizeIntensityCollection(
+          await fetchEarthquakeJson(product.url, signal, StormScopeEarthquakes.MAX_PRODUCT_BYTES),
+          Object.assign({}, product, { eventId: detail.eventId, issuedAt: detail.issuedAt })
+        );
+      }));
+      if (signal.aborted || token !== earthquakeIntensityGeneration) return;
+      var successful = settled.filter(function (result) { return result.status === 'fulfilled'; }).map(function (result) { return result.value; });
+      var merged = StormScopeEarthquakes.mergeIntensityCollections(successful);
+      if (!merged.count) {
+        earthquakeIntensityState = settled.some(function (result) { return result.status === 'rejected'; }) ? 'error' : 'none';
+        message.textContent = tr(earthquakeIntensityState === 'error'
+          ? 'context.earthquakeIntensityUnavailable' : 'context.earthquakeIntensityNone');
+        return;
+      }
+      earthquakeIntensityLayer = createEarthquakeIntensityLayer(merged.collection);
+      earthquakeIntensityState = settled.some(function (result) { return result.status === 'rejected'; }) ? 'partial' : 'ready';
+      earthquakeIntensityEventId = detail.eventId;
+      earthquakeIntensityCount = merged.count;
+      earthquakeIntensityProductCount = merged.productCount;
+      message.textContent = tr('context.earthquakeIntensityReady', {
+        count: localNumber(merged.count), products: localNumber(merged.productCount)
+      });
+      button.textContent = tr('context.earthquakeIntensityReload');
+    } catch (error) {
+      if (error && error.name === 'AbortError') return;
+      if (token !== earthquakeIntensityGeneration) return;
+      earthquakeIntensityState = 'error';
+      message.textContent = tr('context.earthquakeIntensityUnavailable');
+    } finally {
+      if (token === earthquakeIntensityGeneration) {
+        earthquakeIntensityAbort = null;
+        button.disabled = false;
+      }
+    }
   }
 
   function scheduleEarthquakeRefresh() {
@@ -3042,6 +3201,9 @@
       if (!response.ok) throw new Error('HTTP ' + response.status);
       var normalized = StormScopeEarthquakes.normalizeCollection(await response.json());
       if (generation !== earthquakeGeneration) return;
+      if (earthquakeIntensityEventId && !normalized.collection.features.some(function (feature) {
+        return feature.properties.id === earthquakeIntensityEventId;
+      })) clearEarthquakeIntensity();
       var nextLayer = L.geoJSON(normalized.collection, {
         pane: 'contextVectorPane',
         pointToLayer: function (feature, latlng) {
@@ -3091,6 +3253,7 @@
     earthquakeCount = 0;
     earthquakeGeneratedAt = null;
     earthquakeStatusState = 'off';
+    clearEarthquakeIntensity();
     renderEarthquakeStatus();
   }
 
@@ -8639,6 +8802,13 @@
         tropicalZ: map.getPane('tropicalPane').style.zIndex,
         warningZ: map.getPane('overlayPane').style.zIndex || '400',
         cameraZ: map.getPane('markerPane').style.zIndex || '600'
+      };
+    },
+    getEarthquakeIntensityState: function () {
+      return {
+        status: earthquakeIntensityState, eventId: earthquakeIntensityEventId,
+        count: earthquakeIntensityCount, productCount: earthquakeIntensityProductCount,
+        enabled: Boolean(earthquakeIntensityLayer), layer: earthquakeIntensityLayer
       };
     },
     getPrivateAnnotationState: function () {
