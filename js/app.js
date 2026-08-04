@@ -76,6 +76,8 @@
   var cameraDataTimestamp = null;
   var diagnostics = StormScopeDiagnostics.create();
   var radarWasPlaying = false;
+  var radarExportInFlight = false;
+  var radarExportStatusState = null;
   var feedPausedForVisibility = false;
   var operationalControllers = null;
   var teardownResources = [];
@@ -412,6 +414,303 @@
       status.textContent = tr('radar.motionOff');
     } else {
       status.textContent = tr('radar.motionFallback', { reason: motionReasonLabel(result.reason) });
+    }
+  }
+
+  var RADAR_EXPORT_TILE_WAIT_MS = 5000;
+
+  function radarExportReasonLabel(reason) {
+    var key = 'radar.exportReason.' + String(reason || 'failed');
+    var translated = tr(key);
+    return translated === key ? tr('radar.exportReason.failed') : translated;
+  }
+
+  function renderRadarExportStatus() {
+    var status = document.getElementById('radar-export-status');
+    if (!status || !radarExportStatusState) return;
+    status.textContent = tr(radarExportStatusState.key, radarExportStatusState.variables);
+    status.dataset.status = radarExportStatusState.key.replace(/^radar\.export/, '').toLowerCase();
+    status.classList.toggle('error', radarExportStatusState.state === 'error');
+  }
+
+  function setRadarExportStatus(key, variables, state) {
+    radarExportStatusState = { key: key, variables: variables || {}, state: state || '' };
+    renderRadarExportStatus();
+  }
+
+  function radarExportTileImages() {
+    var radar = radarController.getState();
+    var layer = radar.layer;
+    var container = layer && typeof layer.getContainer === 'function' ? layer.getContainer() : layer && layer._container;
+    function usableImages(images) {
+      return Array.prototype.slice.call(images || []).filter(function (image) {
+        if (!image || image.tagName !== 'IMG' || !image.complete || !(Number(image.naturalWidth) > 0)) return false;
+        var rect = image.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      });
+    }
+    var layerImages = container && typeof container.querySelectorAll === 'function'
+      ? usableImages(container.querySelectorAll('img.leaflet-tile, img')) : [];
+    if (layerImages.length) return layerImages;
+    if (!document || typeof document.querySelectorAll !== 'function') return [];
+    var frame = radar.frames[radar.index];
+    var provider = StormScopeRadarProviders.providers[radar.providerId];
+    var sourceTokens = [];
+    if (frame && typeof frame.path === 'string') sourceTokens.push(frame.path);
+    if (frame && typeof frame.tileHost === 'string') sourceTokens.push(frame.tileHost);
+    if (provider && provider.tile && typeof provider.tile.endpoint === 'string') {
+      try { sourceTokens.push(new URL(provider.tile.endpoint).origin); } catch (error) { /* ignore invalid provider metadata */ }
+    }
+    if (!sourceTokens.length) return [];
+    var radarImages = Array.prototype.slice.call(document.querySelectorAll('.leaflet-tile-pane img.leaflet-tile'))
+      .filter(function (image) {
+        var source = String(image.src || '');
+        return sourceTokens.some(function (token) { return token && source.indexOf(token) !== -1; });
+      });
+    return usableImages(radarImages);
+  }
+
+  function waitForRadarExportTiles(frameIndex) {
+    var startedAt = Date.now();
+    return new Promise(function (resolve) {
+      function poll() {
+        var radar = radarController.getState();
+        if (radar.index !== frameIndex) {
+          resolve(null);
+          return;
+        }
+        var tiles = radarExportTileImages();
+        if (tiles.length) {
+          resolve(tiles);
+          return;
+        }
+        if (Date.now() - startedAt >= RADAR_EXPORT_TILE_WAIT_MS) {
+          resolve(null);
+          return;
+        }
+        setTimeout(poll, 80);
+      }
+      poll();
+    });
+  }
+
+  function fitRadarExportText(context, text, maxWidth) {
+    text = String(text || '');
+    if (!context.measureText || context.measureText(text).width <= maxWidth) return text;
+    var shortened = text;
+    while (shortened.length > 1 && context.measureText(shortened + '…').width > maxWidth) {
+      shortened = shortened.slice(0, -1);
+    }
+    return shortened.length < text.length ? shortened + '…' : shortened;
+  }
+
+  async function drawRadarExportFrame(frameIndex, context, canvas) {
+    var radar = radarController.getState();
+    if (radar.index !== frameIndex) radarController.selectFrame(frameIndex);
+    var tiles = await waitForRadarExportTiles(frameIndex);
+    if (!tiles || !tiles.length) {
+      var unavailable = new Error('Radar tiles were unavailable.');
+      unavailable.reason = 'tiles';
+      throw unavailable;
+    }
+    var mapContainer = map && typeof map.getContainer === 'function' ? map.getContainer() : null;
+    var mapRect = mapContainer && mapContainer.getBoundingClientRect ? mapContainer.getBoundingClientRect() : null;
+    if (!mapRect || mapRect.width <= 0 || mapRect.height <= 0) {
+      var invalidBounds = new Error('The map bounds were unavailable.');
+      invalidBounds.reason = 'bounds';
+      throw invalidBounds;
+    }
+
+    context.save();
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = '#07111f';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    var scaleX = canvas.width / mapRect.width;
+    var scaleY = canvas.height / mapRect.height;
+    try {
+      tiles.forEach(function (image) {
+        var rect = image.getBoundingClientRect();
+        context.drawImage(image, (rect.left - mapRect.left) * scaleX, (rect.top - mapRect.top) * scaleY,
+          rect.width * scaleX, rect.height * scaleY);
+      });
+      // A CORS failure taints the canvas. Test it before burning metadata so
+      // the export can explain why the browser cannot safely encode this feed.
+      context.getImageData(0, 0, 1, 1);
+    } catch (error) {
+      context.restore();
+      var unsafeCanvas = new Error('The radar frame could not be rendered safely.');
+      unsafeCanvas.reason = 'canvas';
+      throw unsafeCanvas;
+    }
+
+    var frame = radarController.getFrame(frameIndex) || radar.frames[frameIndex];
+    var provider = StormScopeRadarProviders.providers[radar.providerId];
+    var age = StormScopeRadarProviders.getFrameAge(frame, radar.providerId);
+    var sourceText = provider && provider.label || 'Radar';
+    var timeText = frame && frame.time != null
+      ? StormScopeI18n.formatDateTime(frame.time, { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }, appLocale)
+      : tr('weather.unknown');
+    var ageText = age && age.known ? StormScopeI18n.formatAge(age.ageMinutes, appLocale) : tr('radar.ageUnknown');
+    var detailsText = timeText + ' • ' + ageText;
+    var padding = Math.max(6, Math.round(canvas.width / 64));
+    var overlayHeight = Math.max(40, Math.round(canvas.height / 7));
+    context.fillStyle = 'rgba(3, 10, 20, 0.84)';
+    context.fillRect(0, canvas.height - overlayHeight, canvas.width, overlayHeight);
+    context.fillStyle = '#ffffff';
+    context.font = '600 12px system-ui, sans-serif';
+    context.fillText(fitRadarExportText(context, sourceText, canvas.width - padding * 2), padding,
+      canvas.height - overlayHeight + 16);
+    context.font = '11px system-ui, sans-serif';
+    context.fillText(fitRadarExportText(context, detailsText, canvas.width - padding * 2), padding,
+      canvas.height - padding);
+    context.restore();
+  }
+
+  function radarExportTileEstimate(radar) {
+    var layer = radar && radar.layer;
+    var container = layer && typeof layer.getContainer === 'function' ? layer.getContainer() : layer && layer._container;
+    var count = container && typeof container.querySelectorAll === 'function'
+      ? container.querySelectorAll('img.leaflet-tile').length : 0;
+    return Math.max(1, count);
+  }
+
+  function radarExportFrameLimit(radar, check) {
+    var limit = Math.min(check.maxFrames, 6);
+    if (radar.providerId !== 'rainviewer' || typeof radarController.getBudget !== 'function') return limit;
+    var budget = radarController.getBudget();
+    var tileCost = radarExportTileEstimate(radar) + 2;
+    // The active frame is captured from its existing layer and the controller
+    // retains that layer through the off-screen preflight, so only prior
+    // frames consume this export budget.
+    var available = Math.max(0, Number(budget.remaining) - 2);
+    return Math.min(limit, 1 + Math.floor(available / tileCost));
+  }
+
+  async function captureRadarExportFrames(indices, canvas) {
+    var context = canvas.getContext('2d', { willReadFrequently: true });
+    if (!context) {
+      var contextError = new Error('The export canvas was unavailable.');
+      contextError.reason = 'canvas';
+      throw contextError;
+    }
+    var currentIndex = radarController.getState().index;
+    var ordered = indices.slice().sort(function (left, right) {
+      if (left === currentIndex) return -1;
+      if (right === currentIndex) return 1;
+      return right - left;
+    });
+    var cache = Object.create(null);
+    for (var position = 0; position < ordered.length; position += 1) {
+      var frameIndex = ordered[position];
+      setRadarExportStatus('radar.exportBusy', {
+        current: localNumber(position + 1), total: localNumber(indices.length)
+      });
+      await drawRadarExportFrame(frameIndex, context, canvas);
+      try {
+        cache[frameIndex] = context.getImageData(0, 0, canvas.width, canvas.height);
+      } catch (error) {
+        var imageError = new Error('The radar frame could not be cached safely.');
+        imageError.reason = 'canvas';
+        throw imageError;
+      }
+    }
+    return cache;
+  }
+
+  async function exportRadarLoop() {
+    if (radarExportInFlight || !radarController || !map) return;
+    var button = document.getElementById('export-radar-loop');
+    var radar = radarController.getState();
+    var size = typeof map.getSize === 'function' ? map.getSize() : null;
+    var canvas = document.createElement('canvas');
+    var check = StormScopeRadarExport.eligibility({
+      optIn: true,
+      lowData: lowDataMode,
+      reducedMotion: prefersReducedMotion(),
+      visible: radar.visible,
+      frameCount: radar.frames.length,
+      width: size && size.x,
+      height: size && size.y,
+      canvas: canvas,
+      MediaRecorder: window.MediaRecorder
+    });
+    if (!check.enabled) {
+      setRadarExportStatus('radar.exportUnavailable', { reason: radarExportReasonLabel(check.reason) }, 'error');
+      return;
+    }
+
+    var frameLimit = radarExportFrameLimit(radar, check);
+    var indices = StormScopeRadarExport.frameIndices(radar.frames.length, frameLimit, radar.index);
+    if (indices.length < 2) {
+      setRadarExportStatus('radar.exportUnavailable', {
+        reason: radarExportReasonLabel(frameLimit < 2 ? 'budget' : 'frames')
+      }, 'error');
+      return;
+    }
+    canvas.width = check.width;
+    canvas.height = check.height;
+    var original = {
+      index: radar.index, playing: radar.playing, visible: radar.visible,
+      preloadingEnabled: radar.preloadingEnabled !== false
+    };
+    var exportSessionStarted = false;
+    radarExportInFlight = true;
+    if (button) button.disabled = true;
+    setRadarExportStatus('radar.exportBusy', { current: localNumber(0), total: localNumber(indices.length) });
+    try {
+      radarController.setPlaying(false);
+      exportSessionStarted = radarController.beginExport();
+      if (!exportSessionStarted) {
+        var sessionError = new Error('Another radar export is already active.');
+        sessionError.reason = 'failed';
+        throw sessionError;
+      }
+      radarController.setPreloadingEnabled(false);
+      var frameCache = await captureRadarExportFrames(indices, canvas);
+      var result = await StormScopeRadarExport.encode({
+        canvas: canvas,
+        MediaRecorder: window.MediaRecorder,
+        mimeType: check.mimeType,
+        frameIndices: indices,
+        frameDurationMs: check.frameDurationMs,
+        maxBytes: check.maxBytes,
+        drawFrame: function (frameIndex, context) {
+          var imageData = frameCache[frameIndex];
+          if (!imageData) {
+            var missingFrame = new Error('The cached radar frame was unavailable.');
+            missingFrame.reason = 'canvas';
+            throw missingFrame;
+          }
+          context.putImageData(imageData, 0, 0);
+        },
+        onProgress: function (progress) {
+          setRadarExportStatus('radar.exportBusy', {
+            current: localNumber(progress.current), total: localNumber(progress.total)
+          });
+        }
+      });
+      if (result.status === 'ready') {
+        downloadBlob('stormscope-radar-loop.webm', result.blob);
+        setRadarExportStatus('radar.exportReady', { count: localNumber(result.frameCount) });
+      } else {
+        setRadarExportStatus('radar.exportUnavailable', { reason: radarExportReasonLabel(result.reason) }, 'error');
+      }
+    } catch (error) {
+      diagnostics.capture(error, 'radar-export');
+      setRadarExportStatus('radar.exportUnavailable', {
+        reason: radarExportReasonLabel(error && error.reason || 'failed')
+      }, 'error');
+    } finally {
+      try {
+        if (exportSessionStarted) radarController.endExport();
+        radarController.setVisible(original.visible);
+        radarController.setPreloadingEnabled(original.preloadingEnabled);
+        radarController.setPlaying(original.playing);
+      } catch (error) {
+        diagnostics.capture(error, 'radar-export-restore');
+      }
+      radarExportInFlight = false;
+      if (button) button.disabled = false;
     }
   }
 
@@ -2157,14 +2456,17 @@
     }).addTo(map);
   }
 
-  function downloadLocalOverlay(filename, text, mime) {
-    var blob = new Blob([text], { type: mime });
+  function downloadBlob(filename, blob) {
     var href = URL.createObjectURL(blob);
     var link = document.createElement('a');
     link.href = href;
     link.download = filename;
     link.click();
     setTimeout(function () { URL.revokeObjectURL(href); }, 0);
+  }
+
+  function downloadLocalOverlay(filename, text, mime) {
+    downloadBlob(filename, new Blob([text], { type: mime }));
   }
 
   function overlayFeatureCount(record) {
@@ -8193,6 +8495,7 @@
       radarController.updateScrubber();
       radarController.applyPalette();
       updateLowDataUi();
+      renderRadarExportStatus();
       refreshInstallDiscovery();
       if (radarController.getState().frames.length) radarController.updateTimeDisplay();
       if (cameraDataTimestamp) updateDataFreshness();
@@ -8243,6 +8546,9 @@
     });
     document.getElementById('radar-motion-prototype').addEventListener('change', function () {
       radarController.setMotionPrototypeEnabled(this.checked);
+    });
+    document.getElementById('export-radar-loop').addEventListener('click', function () {
+      exportRadarLoop();
     });
     document.getElementById('satellite-prev').addEventListener('click', function () {
       setSatellitePlaying(false);

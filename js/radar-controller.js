@@ -82,6 +82,8 @@
       budgetFallbackPending: false,
       lowDataMode: Boolean(options.lowDataMode),
       pendingFrameTime: null,
+      preloadingEnabled: true,
+      exportSession: null,
       motionEnabled: false,
       motionGeneration: 0,
       motionStatus: 'off',
@@ -557,6 +559,11 @@
     function preloadFrame(index) {
       if (state.nextLayer) map().removeLayer(state.nextLayer);
       timers.clearTimeout(state.preloadTimer);
+      if (!state.preloadingEnabled) {
+        state.nextLayer = null;
+        state.preloadState = { status: 'suppressed-export', durationMs: 0, index: index };
+        return;
+      }
       if (state.lowDataMode) {
         state.nextLayer = null;
         state.preloadState = { status: 'suppressed-low-data', durationMs: 0, index: index };
@@ -592,7 +599,10 @@
 
     function showFrame(index) {
       if (state.layer) {
-        map().removeLayer(state.layer);
+        if (state.exportSession) {
+          state.layer.setOpacity(0);
+          if (state.exportSession.layers.indexOf(state.layer) === -1) state.exportSession.layers.push(state.layer);
+        } else map().removeLayer(state.layer);
         state.layer = null;
       }
       state.layer = createTileLayer(index);
@@ -600,6 +610,44 @@
         state.layer.addTo(map());
         applyPaletteToLayer(state.layer);
       }
+    }
+
+    function beginExport() {
+      if (state.exportSession) return false;
+      state.exportSession = {
+        originalLayer: state.layer,
+        originalIndex: state.index,
+        originalProviderId: state.providerId,
+        originalFrames: state.frames,
+        layers: state.layer ? [state.layer] : []
+      };
+      return true;
+    }
+
+    function endExport() {
+      var session = state.exportSession;
+      if (!session) return;
+      state.exportSession = null;
+      if (state.frames !== session.originalFrames || state.providerId !== session.originalProviderId) {
+        session.layers.forEach(function (layer) {
+          if (layer) map().removeLayer(layer);
+        });
+        if (state.layer) map().removeLayer(state.layer);
+        state.layer = null;
+        return;
+      }
+      session.layers.forEach(function (layer) {
+        if (layer && layer !== session.originalLayer) map().removeLayer(layer);
+      });
+      state.layer = session.originalLayer;
+      state.index = Math.max(0, Math.min(state.frames.length - 1, session.originalIndex));
+      if (state.layer) {
+        state.layer.setOpacity(state.opacity);
+        if (state.visible && !map().hasLayer(state.layer)) state.layer.addTo(map());
+        applyPaletteToLayer(state.layer);
+      }
+      updateTimeDisplay();
+      updateScrubber();
     }
 
     function centerTileCoordinate(zoom) {
@@ -871,6 +919,19 @@
       if (state.motionEnabled) refreshMotionPrototype();
     }
 
+    function setPreloadingEnabled(value) {
+      var enabled = Boolean(value);
+      if (state.preloadingEnabled === enabled) return;
+      state.preloadingEnabled = enabled;
+      if (!enabled) {
+        timers.clearTimeout(state.preloadTimer);
+        state.preloadTimer = null;
+        if (state.nextLayer) map().removeLayer(state.nextLayer);
+        state.nextLayer = null;
+        state.preloadState = { status: 'suppressed-export', durationMs: 0 };
+      }
+    }
+
     function loadPreferences(lowData) {
       var savedSpeed = null;
       var savedPalette = null;
@@ -946,7 +1007,8 @@
         palette: state.palette, opacity: state.opacity, visible: state.visible, providerId: state.providerId,
         providerSelection: state.providerSelection, discovery: state.discovery, layer: state.layer,
         preloadState: Object.assign({}, state.preloadState), semanticState: state.semanticState,
-        host: state.host, pendingFrameTime: state.pendingFrameTime, lowDataMode: state.lowDataMode
+        host: state.host, pendingFrameTime: state.pendingFrameTime, lowDataMode: state.lowDataMode,
+        preloadingEnabled: state.preloadingEnabled
       };
     }
 
@@ -981,6 +1043,8 @@
       applyPalette: applyPalette,
       createComparisonLayer: createComparisonLayer,
       destroy: destroy,
+      beginExport: beginExport,
+      endExport: endExport,
       getBudget: function () { return state.budget.snapshot(); },
       getFrame: function (index) { return state.frames[index] || null; },
       getFrameTime: function () { return state.frames[state.index] ? state.frames[state.index].time : null; },
@@ -1001,6 +1065,7 @@
       refreshMotionPrototype: refreshMotionPrototype,
       setMotionPrototypeEnabled: setMotionPrototypeEnabled,
       setLowDataMode: setLowDataMode,
+      setPreloadingEnabled: setPreloadingEnabled,
       setOpacity: setOpacity,
       setPalette: setPalette,
       setPlaying: setPlaying,

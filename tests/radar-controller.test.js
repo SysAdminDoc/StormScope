@@ -28,6 +28,9 @@ test('radar controller exposes isolated state and lifecycle operations', () => {
   assert.equal(typeof controller.init, 'function');
   assert.equal(typeof controller.createComparisonLayer, 'function');
   assert.equal(typeof controller.sampleCenter, 'function');
+  assert.equal(typeof controller.beginExport, 'function');
+  assert.equal(typeof controller.endExport, 'function');
+  assert.equal(typeof controller.setPreloadingEnabled, 'function');
   assert.equal(controller.getState().frames.length, 0);
   assert.equal(controller.getState().playing, false);
   assert.equal(controller.getBudget().remaining, 90);
@@ -38,6 +41,13 @@ test('radar controller exposes isolated state and lifecycle operations', () => {
   assert.equal(controller.getState().animationSpeed, 400);
   assert.equal(controller.getState().palette, 'contrast');
   assert.equal(controller.hasPendingFrame(), false);
+
+  controller.setPreloadingEnabled(false);
+  assert.equal(controller.getState().preloadingEnabled, false);
+  controller.setPreloadingEnabled(true);
+  assert.equal(controller.getState().preloadingEnabled, true);
+  assert.equal(controller.beginExport(), true);
+  controller.endExport();
 
   controller.destroy();
   assert.equal(controller.getState().frames.length, 0);

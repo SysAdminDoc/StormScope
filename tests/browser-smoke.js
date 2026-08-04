@@ -261,7 +261,7 @@ async function exerciseLandscapeLayout(page, theme) {
   await page.locator('#radar-speed').selectOption('800');
   if (!await page.locator('#toggle-alerts').isChecked()) await page.locator('#toggle-alerts').check();
   await assertSurfaceWithinViewport(page, '#layers-panel', `${theme} layers`);
-  await assertControlsReachable(page, '#layers-panel', ['#toggle-radar', '#alert-severity', '#app-locale', '#keep-offline-data', '#clear-cache']);
+  await assertControlsReachable(page, '#layers-panel', ['#toggle-radar', '#alert-severity', '#app-locale', '#keep-offline-data', '#clear-cache', '#export-radar-loop']);
   assert.ok((await page.screenshot()).length > 1000);
   await layersToggle.click();
 
@@ -1300,6 +1300,10 @@ async function main() {
     assert.ok(['ready', 'fallback'].includes(motionState.status));
     await page.locator('#radar-motion-prototype').uncheck();
     await page.waitForFunction(() => document.getElementById('radar-motion-status').dataset.status === 'off');
+    await page.evaluate(() => { window.MediaRecorder = undefined; });
+    await page.locator('#export-radar-loop').click();
+    await page.waitForFunction(() => document.getElementById('radar-export-status').dataset.status === 'unavailable');
+    assert.match(await page.locator('#radar-export-status').textContent(), /unavailable/);
     await page.locator('#btn-layers').click();
     await page.locator('#layers-panel').waitFor({ state: 'hidden' });
 
@@ -3294,6 +3298,26 @@ async function main() {
     assert.match(await ridgeFallbackPage.locator('#radar-meta').textContent(), /Quality-controlled 1 km CONUS composite/);
     assert.match(await ridgeFallbackPage.locator('#radar-frame-position').textContent(), /Frame 2 of 2/);
     await ridgeFallbackContext.close();
+
+    const exportContext = await browser.newContext({
+      viewport: { width: 1280, height: 720 }, serviceWorkers: 'block', acceptDownloads: true
+    });
+    const exportPage = await exportContext.newPage();
+    exportPage.baseURL = baseURL;
+    exportPage.on('pageerror', (error) => errors.push(error.message));
+    await addNetworkFixtures(exportPage);
+    await waitForApp(exportPage, true);
+    await exportPage.getByRole('button', { name: 'Toggle layers panel' }).click();
+    await exportPage.locator('#layers-panel').waitFor({ state: 'visible' });
+    const radarDownloadPromise = exportPage.waitForEvent('download', { timeout: 45000 });
+    await exportPage.locator('#export-radar-loop').click();
+    const radarDownload = await radarDownloadPromise;
+    await exportPage.locator('#radar-export-status').filter({ hasText: /downloaded/ })
+      .waitFor({ state: 'visible', timeout: 45000 });
+    assert.equal(radarDownload.suggestedFilename(), 'stormscope-radar-loop.webm');
+    assert.match(await exportPage.locator('#radar-export-status').textContent(), /2 frames/);
+    assert.ok((await exportPage.evaluate(() => window._stormscope.getRainViewerBudget())).used <= 90);
+    await exportContext.close();
 
     assert.deepEqual(errors, []);
     console.log('Headless desktop/mobile/modal/offline/cache/accessibility smoke passed.');

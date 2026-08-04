@@ -89,6 +89,7 @@ var SHELL_ASSETS = [
   './js/cpc-outlooks.js',
   './js/radar-motion.js',
   './js/radar-motion-worker.js',
+  './js/radar-export.js',
   './js/radar-controller.js',
   './js/app.js',
   './vendor/leaflet/leaflet.css',

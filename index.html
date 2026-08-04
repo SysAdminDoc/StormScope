@@ -378,6 +378,11 @@
       <canvas id="radar-motion-preview" class="radar-motion-preview hidden" width="128" height="72" role="img" aria-label="Motion-compensated radar preview" data-i18n-aria-label-key="radar.motionPreviewLabel"></canvas>
       <p class="context-limitation" data-i18n="radar.motionLimitation">Prototype preview only; it never replaces observed radar or creates forecast frames.</p>
     </div>
+    <div class="radar-export-controls" data-layer-id="radar">
+      <button id="export-radar-loop" class="radar-export-btn" type="button" data-i18n="radar.exportLoop">Export radar loop (WebM)</button>
+      <div id="radar-export-status" class="context-status" role="status" aria-live="polite"></div>
+      <p class="context-limitation" data-i18n="radar.exportLimitation">Optional local-only WebM export; frames stay in this browser and are never uploaded.</p>
+    </div>
     <div class="select-row" data-layer-id="alerts">
       <label for="alert-severity">Minimum alert severity</label>
       <select id="alert-severity">
@@ -788,6 +793,7 @@
   <script src="js/marine-buoys.js"></script>
   <script src="js/cpc-outlooks.js"></script>
   <script src="js/radar-motion.js"></script>
+  <script src="js/radar-export.js"></script>
   <script src="js/radar-controller.js"></script>
   <script src="js/app.js"></script>
 </body>

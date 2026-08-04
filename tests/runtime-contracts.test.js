@@ -21,6 +21,7 @@ const serviceWorker = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const radarControllerSource = fs.readFileSync(path.join(root, 'js', 'radar-controller.js'), 'utf8');
 const radarMotionSource = fs.readFileSync(path.join(root, 'js', 'radar-motion.js'), 'utf8');
 const radarMotionWorkerSource = fs.readFileSync(path.join(root, 'js', 'radar-motion-worker.js'), 'utf8');
+const radarExportSource = fs.readFileSync(path.join(root, 'js', 'radar-export.js'), 'utf8');
 const riverGaugesSource = fs.readFileSync(path.join(root, 'js', 'river-gauges.js'), 'utf8');
 const earthquakeSource = fs.readFileSync(path.join(root, 'js', 'earthquakes.js'), 'utf8');
 const winterOutlooksSource = fs.readFileSync(path.join(root, 'js', 'winter-outlooks.js'), 'utf8');
@@ -39,6 +40,7 @@ const i18n = require('../js/i18n.js');
 const cameraRecord = require('../js/camera-record.js');
 const cameraFeed = require('../js/camera-feed.js');
 const cameraQuarantine = require('../js/camera-quarantine.js');
+const radarExport = require('../js/radar-export.js');
 const situationSnapshot = require('../js/situation-snapshot.js');
 
 test('RainViewer uses the 2026 past-radar contract', () => {
@@ -83,6 +85,29 @@ test('motion playback remains an opt-in bounded worker preview with crossfade fa
   assert.match(radarControllerSource, /refreshMotionPrototype/);
   assert.match(app, /radar-motion-prototype/);
   assert.match(app, /radar\.motionFallback/);
+});
+
+test('radar loop export is opt-in, local-only, bounded, and cached offline', () => {
+  assert.match(html, /id="export-radar-loop"[^>]*data-i18n="radar\.exportLoop"/);
+  assert.match(html, /id="radar-export-status"[^>]*role="status"/);
+  assert.match(html, /radar\.exportLimitation/);
+  assert.match(html, /js\/radar-export\.js[\s\S]*js\/radar-controller\.js[\s\S]*js\/app\.js/);
+  assert.match(serviceWorker, /\.\/js\/radar-export\.js/);
+  assert.match(radarExportSource, /MAX_FRAMES = 12/);
+  assert.match(radarExportSource, /MAX_WIDTH = 512/);
+  assert.match(radarExportSource, /MAX_HEIGHT = 288/);
+  assert.match(radarExportSource, /MAX_BYTES = 8 \* 1024 \* 1024/);
+  assert.match(radarExportSource, /captureStream/);
+  assert.match(radarExportSource, /MediaRecorder/);
+  assert.doesNotMatch(radarExportSource, /fetch\s*\(|XMLHttpRequest|sendBeacon/);
+  assert.match(radarControllerSource, /beginExport/);
+  assert.match(radarControllerSource, /endExport/);
+  assert.match(radarControllerSource, /preloadingEnabled/);
+  assert.match(app, /function exportRadarLoop\(/);
+  assert.match(app, /downloadBlob\('stormscope-radar-loop\.webm'/);
+  assert.equal(typeof radarExport.encode, 'function');
+  assert.equal(i18n.catalogs.en['radar.exportLoop'], 'Export radar loop (WebM)');
+  assert.match(i18n.catalogs.es['radar.exportLoop'], /Exportar/);
 });
 
 test('embed trust uses exact host-or-subdomain matching', () => {

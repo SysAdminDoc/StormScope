@@ -15,6 +15,7 @@ Live US weather radar with webcam overlays. See real-time radar and click traffi
 
 - **Live Weather Radar** — Animated RainViewer radar with official NOAA/NWS MRMS and RIDGE failover, source/age/coverage status, and adjustable opacity
 - **Accessible Radar Timeline** — Direct frame scrubbing, manual-only/0.5×/1×/2× playback, explicit frame age and light/moderate/heavy scale text, color-accessible palettes, and a rolling request budget that automatically falls back to NOAA before exceeding RainViewer's public limit
+- **Local Radar Loop Export** — An opt-in Layers-panel action captures a bounded 2–6-frame, 512×288-or-smaller WebM locally in the browser, burns the provider/time/age into each frame, never uploads imagery, and explains low-data, reduced-motion, tile, size, and unsupported-encoder fallbacks
 - **Synchronized Map Comparison** — An opt-in two-pane workspace keeps center/zoom aligned while each pane independently selects radar time, GOES satellite, or current NWS hazards; low-data, hidden-tab, request, tile, decoded-memory, and frame-time budgets are enforced
 - **Official Weather Alerts** — Viewport-scoped NWS watches, warnings, and advisories with severity polygons and accessible details
 - **Incident Camera Context** — Alert and wildfire details rank up to eight non-offline cameras inside or within 50 km of the mapped boundary by durable verification evidence, distance, and bearing, with map/open actions and an atomic playable 2–4 camera monitor

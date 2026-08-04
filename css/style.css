@@ -808,6 +808,39 @@ button:focus-visible {
   background: #07111f;
 }
 
+.radar-export-controls {
+  display: grid;
+  gap: 5px;
+  margin-top: 12px;
+}
+
+.radar-export-btn {
+  justify-self: start;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-dark);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.radar-export-btn:hover:not(:disabled),
+.radar-export-btn:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.radar-export-btn:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+#radar-export-status {
+  margin: 0;
+}
+
 .radar-legend {
   margin-top: 8px;
   color: var(--text-dim);
