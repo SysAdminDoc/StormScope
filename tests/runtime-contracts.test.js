@@ -121,7 +121,7 @@ test('NWPS river gauges are bounded, forecast-aware, and lifecycle-owned', () =>
   const gaugePosition = html.indexOf('js/river-gauges.js');
   const appPosition = html.indexOf('js/app.js');
   assert.ok(floodPosition >= 0 && gaugePosition > floodPosition && appPosition > gaugePosition);
-  assert.match(serviceWorker, /var VERSION = 'v111'/);
+  assert.match(serviceWorker, /var VERSION = 'v112'/);
   assert.match(serviceWorker, /\.\/js\/river-gauges\.js/);
   assert.match(riverGaugesSource, /resultRecordCount: String\(MAX_RECORDS\)/);
   assert.match(riverGaugesSource, /function buildQueries\(bounds, zoom\)/);
@@ -533,6 +533,18 @@ test('official context layers are optional, attributed, and cannot obscure warni
   assert.match(layerRegistrySource, /id: 'snow', toggleId: 'toggle-snow'/);
   assert.match(layerRegistrySource, /id: 'surfaceObservations', toggleId: 'toggle-surface-observations'/);
   assert.match(html, /id="satellite-scrubber"/);
+});
+
+test('Web Share Target hands bounded files to the private local-overlay intake without upload fallback', () => {
+  assert.match(serviceWorker, /var SHARE_CACHE = 'stormscope-share-target-v1'/);
+  assert.match(serviceWorker, /function isShareTargetRequest/);
+  assert.match(serviceWorker, /request\.formData\(\)/);
+  assert.match(serviceWorker, /SHARE_TARGET_MAX_BYTES = 5 \* 1024 \* 1024/);
+  assert.match(serviceWorker, /STORMSCOPE_CONSUME_SHARE_TARGET/);
+  assert.match(app, /function consumeShareTarget\(\)/);
+  assert.match(app, /STORMSCOPE_CONSUME_SHARE_TARGET/);
+  assert.match(app, /new File\(\[buffer\], name/);
+  assert.match(app, /StormScopeLocalOverlays\.createRecord/);
 });
 
 test('private measurements and annotations stay bounded and outside shared or diagnostic state', () => {

@@ -140,6 +140,7 @@
   var wpcAttributionAdded = false;
   var localOverlayRecords = [];
   var localOverlayDatabase = null;
+  var localOverlayReady = Promise.resolve();
   var LOCAL_OVERLAY_DB = 'stormscope-local-overlays';
   var privateAnnotationRecords = [];
   var privateAnnotationLayer = null;
@@ -2289,18 +2290,28 @@
     renderPrivateAnnotationList();
   }
 
-  function importLocalOverlay(file) {
-    if (!file) return;
+  function importLocalOverlay(file, options) {
+    options = options || {};
+    var shared = Boolean(options.shared);
+    var successKey = shared ? 'overlays.sharedImported' : 'overlays.imported';
+    var errorKeys = shared ? {
+      size: 'overlays.shareSize', type: 'overlays.shareUnsupported',
+      invalid: 'overlays.shareInvalid', limit: 'overlays.shareLimit'
+    } : {
+      size: 'overlays.error.size', type: 'overlays.error.type',
+      invalid: 'overlays.error.invalid', limit: 'overlays.error.limit'
+    };
+    if (!file) return Promise.resolve(false);
     setLocalOverlayStatus('overlays.reading');
     if (localOverlayRecords.length >= StormScopeLocalOverlays.MAX_OVERLAYS) {
-      setLocalOverlayStatus('overlays.error.limit', null, true);
-      return;
+      setLocalOverlayStatus(errorKeys.limit, null, true);
+      return Promise.resolve(false);
     }
     if (file.size > StormScopeLocalOverlays.MAX_FILE_BYTES) {
-      setLocalOverlayStatus('overlays.error.size', null, true);
-      return;
+      setLocalOverlayStatus(errorKeys.size, null, true);
+      return Promise.resolve(false);
     }
-    file.text().then(function (text) {
+    return Promise.resolve().then(function () { return file.text(); }).then(function (text) {
       var record = StormScopeLocalOverlays.createRecord(file, text);
       var existing = localOverlayRecords.find(function (item) { return item.id === record.id; });
       if (!existing) {
@@ -2310,22 +2321,24 @@
         drawLocalOverlay(record);
       }
       renderLocalOverlayList();
-      setLocalOverlayStatus('overlays.imported', {
+      setLocalOverlayStatus(successKey, {
         name: record.name, count: overlayFeatureCount(record)
       });
+      return true;
     }).catch(function (error) {
       var message = String(error && error.message || '');
-      var key = /size/.test(message) ? 'overlays.error.size'
-        : /type|MIME/.test(message) ? 'overlays.error.type'
-          : /limit/.test(message) ? 'overlays.error.limit' : 'overlays.error.invalid';
+      var key = /size/.test(message) ? errorKeys.size
+        : /type|MIME/.test(message) ? errorKeys.type
+          : /limit/.test(message) ? errorKeys.limit : errorKeys.invalid;
       setLocalOverlayStatus(key, null, true);
+      return false;
     });
   }
 
   function initLocalOverlays() {
     renderLocalOverlayList();
     renderPrivateAnnotationList();
-    openLocalOverlayDatabase().then(function (result) {
+    localOverlayReady = openLocalOverlayDatabase().then(function (result) {
       (result.overlays || []).forEach(function (value) {
         if (localOverlayRecords.length >= StormScopeLocalOverlays.MAX_OVERLAYS) return;
         try {
@@ -2339,6 +2352,67 @@
       initPrivateAnnotations(result.annotations || []);
       renderLocalOverlayList();
     }).catch(function () { localOverlayDatabase = null; initPrivateAnnotations([]); });
+    return localOverlayReady;
+  }
+
+  function clearShareTargetLocation() {
+    var url = new URL(location.href);
+    url.searchParams.delete('share_target');
+    url.searchParams.delete('share_target_error');
+    history.replaceState(history.state, '', url.href);
+  }
+
+  function sharedFileName(value) {
+    var name;
+    try { name = decodeURIComponent(String(value || '')); } catch (error) { name = ''; }
+    name = name.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 100);
+    if (!name || !/\.(?:geojson|json|gpx)$/i.test(name)) throw new TypeError('shared file name is unsupported');
+    return name;
+  }
+
+  function consumeShareTarget() {
+    var url = new URL(location.href);
+    var token = url.searchParams.get('share_target');
+    var error = url.searchParams.get('share_target_error');
+    if (!token && !error) return Promise.resolve(false);
+    clearShareTargetLocation();
+    if (error) {
+      var errorKeys = {
+        unsupported: 'overlays.shareUnsupported', missing: 'overlays.shareMissing',
+        size: 'overlays.shareSize', read: 'overlays.shareReadError'
+      };
+      setLocalOverlayStatus(errorKeys[error] || 'overlays.shareReadError', null, true);
+      return Promise.resolve(false);
+    }
+    if (!/^[A-Za-z0-9_-]{8,80}$/.test(token)) {
+      setLocalOverlayStatus('overlays.shareReadError', null, true);
+      return Promise.resolve(false);
+    }
+    var worker = navigator.serviceWorker && navigator.serviceWorker.controller;
+    if (!worker) {
+      setLocalOverlayStatus('overlays.shareReadError', null, true);
+      return Promise.resolve(false);
+    }
+    return localOverlayReady.then(function () {
+      var artifactUrl = new URL('/__stormscope-share-target__/' + token, location.origin);
+      return fetch(artifactUrl.toString(), { cache: 'no-store', credentials: 'same-origin' }).then(function (response) {
+        if (!response.ok) throw new Error('shared file is unavailable');
+        var name = sharedFileName(response.headers.get('x-stormscope-share-name'));
+        var extensionMime = /\.gpx$/i.test(name) ? 'application/gpx+xml' : 'application/geo+json';
+        return response.arrayBuffer().then(function (buffer) {
+          if (!buffer || buffer.byteLength < 1 || buffer.byteLength > StormScopeLocalOverlays.MAX_FILE_BYTES) {
+            throw new RangeError('shared file size is unsupported');
+          }
+          return importLocalOverlay(new File([buffer], name, { type: extensionMime }), { shared: true });
+        });
+      });
+    }).catch(function () {
+      setLocalOverlayStatus('overlays.shareReadError', null, true);
+      return false;
+    }).then(function (result) {
+      worker.postMessage({ type: 'STORMSCOPE_CONSUME_SHARE_TARGET', token: token });
+      return result;
+    });
   }
 
   function wildfirePopup(feature) {
@@ -7907,6 +7981,7 @@
       try { applySharedScene(startupSharedScene); } finally { sceneHashApplying = false; }
     } else if (startupSceneError) setSavedStateStatus(tr('views.sceneInvalid'), true);
     bindUI();
+    consumeShareTarget();
     initInstallDiscovery();
     updateMonitorSelectionUi();
     radarController.init();

@@ -5,6 +5,7 @@
 - Added local route-corridor situation mode for imported LineStrings, with bounded local geometry, intersecting official hazard context, verified cameras ordered along travel, and a private 2–4 camera route monitor.
 - Added a default-off NOAA NWPS river-gauge layer with viewport/zoom-bounded observed and forecast products, flood-category markers, explicit observed-vs-forecast DOM popups, freshness/attribution, safe raw-source links, and last-good recovery. SW v110.
 - Added a default-off SPC Day 1–8 fire-weather outlook layer with bounded wind/low-humidity and dry-thunderstorm polygons, official risk styling, issue/valid metadata, forecast-vs-observed DOM popups, freshness/attribution, Day selection in scenes and profiles, partial-feed recovery, and headless browser coverage. SW v111.
+- Added Web Share Target intake for bounded GPX/GeoJSON files, routing installed-PWA shares through the private local-overlay validator with session-only defaults, clear rejection states, transient cache cleanup, and no upload fallback. SW v112.
 - Extracted RainViewer discovery, playback, tile budgeting, sampling, coverage, comparison, and lifecycle ownership into a standalone controller with stale-tile guards and unload-safe cleanup. SW v109.
 - Added private distance/bearing measurements and point, line, polygon, and text annotations with bounded validation, undo/clear/export, session-only defaults, explicit IndexedDB Keep locally persistence, and exclusion from shared scenes and diagnostics. SW v108.
 - Added optional SPC Mesoscale Discussion polygons and clustered NWS Local Storm Reports with bounded 24/48/72-hour queries, freshness/last-good recovery, safe official popups, scene/profile persistence, and English/Spanish UI.
@@ -27,7 +28,7 @@
 - A single-camera lookup during the initial catalog load no longer inflates the generation count or forces an unnecessary full-dataset fallback.
 - NWS alert polling backs off geometrically over empty or unchanged viewports instead of re-requesting the national feed every 30 seconds.
 - Hazard and provider map popups stay within the map pane on narrow and short-height screens.
-- The camera weather panel now shows the NWS chance of precipitation and a next-12-hour high/low range, clearly labeled as forecast guidance. SW v111.
+- The camera weather panel now shows the NWS chance of precipitation and a next-12-hour high/low range, clearly labeled as forecast guidance. SW v112.
 
 ## v0.122.0 - 2026-07-14
 

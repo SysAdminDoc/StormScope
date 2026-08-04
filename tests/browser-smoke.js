@@ -2418,6 +2418,47 @@ async function main() {
     assert.match(onlineGeneration, /^2026-07-12T/);
     assert.equal(await page.locator('#saved-views option', { hasText: 'Smoke view' }).count(), 1);
     await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
+    const shareTargetResult = await page.evaluate(async () => {
+      const form = new FormData();
+      const gpx = '<?xml version="1.0"?><gpx version="1.1"><wpt lat="38" lon="-90"><name>Shared point</name></wpt></gpx>';
+      form.append('file', new File([gpx], 'shared-track.gpx', { type: 'application/gpx+xml' }), 'shared-track.gpx');
+      const response = await fetch(new URL('share-target', location.href), { method: 'POST', body: form });
+      return { status: response.status, url: response.url };
+    });
+    assert.equal(shareTargetResult.status, 200, 'share target should redirect back to the app');
+    assert.match(shareTargetResult.url, /[?&]share_target=[A-Za-z0-9_-]{8,80}/);
+    await page.goto(shareTargetResult.url, { waitUntil: 'domcontentloaded' });
+    await page.locator('#camera-count').filter({ hasText: '36,592 indexed' }).waitFor({ state: 'visible' });
+    if (await page.getByRole('button', { name: 'Toggle layers panel' }).getAttribute('aria-expanded') !== 'true') {
+      await page.getByRole('button', { name: 'Toggle layers panel' }).click();
+    }
+    await page.locator('#local-overlay-status').filter({ hasText: 'Received shared “shared-track” with 1 feature' })
+      .waitFor({ state: 'visible' });
+    assert.equal(await page.locator('.local-overlay-item').count(), 1);
+    page.once('dialog', dialog => dialog.accept());
+    await page.locator('#clear-local-overlays').click();
+    await page.locator('.local-overlay-empty').waitFor({ state: 'visible' });
+
+    if (await page.getByRole('button', { name: 'Toggle layers panel' }).getAttribute('aria-expanded') === 'true') {
+      await page.getByRole('button', { name: 'Toggle layers panel' }).click();
+    }
+    const unsupportedShareResult = await page.evaluate(async () => {
+      const form = new FormData();
+      form.append('file', new File(['not an overlay'], 'notes.txt', { type: 'text/plain' }), 'notes.txt');
+      const response = await fetch(new URL('share-target', location.href), { method: 'POST', body: form });
+      return { status: response.status, url: response.url };
+    });
+    assert.equal(unsupportedShareResult.status, 200);
+    assert.match(unsupportedShareResult.url, /[?&]share_target_error=unsupported/);
+    await page.goto(unsupportedShareResult.url, { waitUntil: 'domcontentloaded' });
+    await page.locator('#camera-count').filter({ hasText: '36,592 indexed' }).waitFor({ state: 'visible' });
+    if (await page.getByRole('button', { name: 'Toggle layers panel' }).getAttribute('aria-expanded') !== 'true') {
+      await page.getByRole('button', { name: 'Toggle layers panel' }).click();
+    }
+    await page.locator('#local-overlay-status').filter({ hasText: 'Shared file rejected: choose a GPX or GeoJSON file.' })
+      .waitFor({ state: 'visible' });
+    assert.equal(await page.locator('.local-overlay-item').count(), 0);
+    await page.getByRole('button', { name: 'Toggle layers panel' }).click();
     await page.waitForFunction(async () => {
       const cache = await caches.open('stormscope-data-v2');
       const keys = (await cache.keys()).map((request) => new URL(request.url).pathname);

@@ -25,6 +25,20 @@ test('manifest has stable identity and exact wide and narrow screenshots', () =>
   });
 });
 
+test('manifest receives bounded GPX and GeoJSON share files through the service worker', () => {
+  assert.deepEqual(manifest.share_target, {
+    action: './share-target',
+    method: 'POST',
+    enctype: 'multipart/form-data',
+    params: {
+      files: [{
+        name: 'file',
+        accept: ['.gpx', '.geojson', '.json', 'application/gpx+xml', 'application/geo+json', 'application/json']
+      }]
+    }
+  });
+});
+
 test('manifest shortcuts are bounded valid public scenes with existing icons', () => {
   assert.equal(manifest.shortcuts.length, 2);
   const scenes = manifest.shortcuts.map(shortcut => {

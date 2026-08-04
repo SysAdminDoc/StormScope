@@ -12,6 +12,7 @@ const runtimeCacheVersion = workerSource.match(/var RUNTIME_CACHE_VERSION = '([^
 const shellCache = 'stormscope-shell-' + workerVersion;
 const tileCache = 'stormscope-tiles-' + runtimeCacheVersion;
 const dataCache = 'stormscope-data-' + runtimeCacheVersion;
+const shareCache = 'stormscope-share-target-v1';
 
 function response(options) {
   const config = Object.assign({ ok: true, type: 'basic', size: 0, status: 200 }, options);
@@ -143,6 +144,86 @@ test('activation tolerates unavailable or rejected navigation preload', async ()
     worker.handlers.activate({ waitUntil(promise) { lifetime = promise; } });
     await lifetime;
   }
+});
+
+test('share target stores a bounded local artifact, redirects into the app, and consumes it once', async () => {
+  const gpx = '<?xml version="1.0"?><gpx version="1.1"></gpx>';
+  const bytes = new TextEncoder().encode(gpx).buffer;
+  const cache = memoryCache();
+  let networkCalls = 0;
+  const worker = loadWorker({
+    cachesByName: { [shareCache]: cache },
+    fetch: () => { networkCalls += 1; return Promise.reject(new Error('share target must not upload')); }
+  });
+  const file = {
+    name: 'route plan.gpx', type: 'application/gpx+xml', size: bytes.byteLength,
+    arrayBuffer: () => Promise.resolve(bytes)
+  };
+  const postRequest = {
+    url: 'https://example.test/share-target', method: 'POST',
+    formData: () => Promise.resolve({ get: name => name === 'file' ? file : null })
+  };
+  let routed;
+  worker.handlers.fetch({ request: postRequest, respondWith(promise) { routed = promise; } });
+  const redirect = await routed;
+  assert.equal(redirect.status, 303);
+  assert.equal(networkCalls, 0);
+  const redirectUrl = new URL(redirect.headers.get('location'));
+  const token = redirectUrl.searchParams.get('share_target');
+  assert.match(token, /^[A-Za-z0-9_-]{8,80}$/);
+  assert.equal(cache.entries.size, 1);
+
+  let artifactResponse;
+  worker.handlers.fetch({
+    request: { url: `https://example.test/__stormscope-share-target__/${token}`, method: 'GET' },
+    respondWith(promise) { artifactResponse = promise; }
+  });
+  const artifact = await artifactResponse;
+  assert.equal(artifact.status, 200);
+  assert.equal(await artifact.text(), gpx);
+  assert.equal(artifact.headers.get('x-stormscope-share-name'), encodeURIComponent('route plan.gpx'));
+
+  let consumed;
+  worker.handlers.message({
+    data: { type: 'STORMSCOPE_CONSUME_SHARE_TARGET', token },
+    waitUntil(promise) { consumed = promise; }
+  });
+  await consumed;
+  assert.equal(cache.entries.size, 0);
+});
+
+test('share target rejects unsupported files, oversized files, and malformed form data without network fallback', async () => {
+  let networkCalls = 0;
+  const cache = memoryCache();
+  const worker = loadWorker({
+    cachesByName: { [shareCache]: cache },
+    fetch: () => { networkCalls += 1; return Promise.reject(new Error('share target must not upload')); }
+  });
+  const cases = [
+    { name: 'notes.txt', type: 'text/plain', size: 4, bytes: 'text', reason: 'unsupported' },
+    { name: 'huge.geojson', type: 'application/geo+json', size: 5 * 1024 * 1024 + 1, bytes: '{}', reason: 'size' },
+    { name: null, type: '', size: 0, bytes: '', reason: 'missing' }
+  ];
+  for (const item of cases) {
+    const bytes = new TextEncoder().encode(item.bytes).buffer;
+    const file = item.name == null ? null : {
+      name: item.name, type: item.type, size: item.size,
+      arrayBuffer: () => Promise.resolve(bytes)
+    };
+    let routed;
+    worker.handlers.fetch({
+      request: {
+        url: 'https://example.test/share-target', method: 'POST',
+        formData: () => Promise.resolve({ get: name => name === 'file' ? file : null })
+      },
+      respondWith(promise) { routed = promise; }
+    });
+    const redirect = await routed;
+    assert.equal(redirect.status, 303);
+    assert.equal(new URL(redirect.headers.get('location')).searchParams.get('share_target_error'), item.reason);
+  }
+  assert.equal(cache.entries.size, 0);
+  assert.equal(networkCalls, 0);
 });
 
 test('tile caching rejects lookalike provider hosts', () => {

@@ -11,16 +11,20 @@
  *   - RainViewer's small frame manifest: network-first with last-known-good
  *     fallback so already-cached radar tiles can initialize offline.
  *   - Live weather APIs (NWS, Open-Meteo): browser-network only, never cached.
+ *   - Web Share Target GPX/GeoJSON files use a transient same-origin cache
+ *     handoff into the existing bounded local-overlay importer; they are
+ *     never uploaded or retained after consumption.
  *   - Other cross-origin context APIs fall through to the browser network and
  *     are likewise never persisted by this worker.
  */
 'use strict';
 
-var VERSION = 'v111';
+var VERSION = 'v112';
 var RUNTIME_CACHE_VERSION = 'v2';
 var SHELL_CACHE = 'stormscope-shell-' + VERSION;
 var TILE_CACHE = 'stormscope-tiles-' + RUNTIME_CACHE_VERSION;
 var DATA_CACHE = 'stormscope-data-' + RUNTIME_CACHE_VERSION;
+var SHARE_CACHE = 'stormscope-share-target-v1';
 
 var TILE_CACHE_LIMIT = 600; // ~radar frames + visible basemap tiles
 var CAMERA_INDEX_MAX_BYTES = 256 * 1024;
@@ -29,6 +33,10 @@ var CAMERA_MONOLITH_MAX_BYTES = 32 * 1024 * 1024;
 var CAMERA_CACHE_MAX_BYTES = 64 * 1024 * 1024;
 var CAMERA_GENERATION_STATE_PATH = '/__stormscope-camera-generations__';
 var CAMERA_GENERATIONS_TO_KEEP = 2;
+var SHARE_TARGET_PATH = '/share-target';
+var SHARE_ARTIFACT_PREFIX = '/__stormscope-share-target__/';
+var SHARE_ARTIFACT_MAX_ENTRIES = 2;
+var SHARE_TARGET_MAX_BYTES = 5 * 1024 * 1024; // Must match local-overlays.js.
 var CACHE_PREFIX = 'stormscope-';
 var trimQueues = Object.create(null);
 var runtimeWrites = [];
@@ -106,7 +114,7 @@ self.addEventListener('install', function (event) {
 
 // ── Activate: drop stale caches ──
 self.addEventListener('activate', function (event) {
-  var keep = [SHELL_CACHE, TILE_CACHE, DATA_CACHE];
+  var keep = [SHELL_CACHE, TILE_CACHE, DATA_CACHE, SHARE_CACHE];
   event.waitUntil(
     caches.keys().then(function (names) {
       return Promise.all(names.map(function (name) {
@@ -161,6 +169,125 @@ function isCameraShard(url) {
 
 function isCameraMonolith(url) {
   return url.origin === self.location.origin && /\/data\/cameras\.json$/.test(url.pathname);
+}
+
+function isShareTargetRequest(url) {
+  return url.origin === self.location.origin && url.pathname === SHARE_TARGET_PATH;
+}
+
+function shareTargetTokenIsValid(token) {
+  return typeof token === 'string' && /^[A-Za-z0-9_-]{8,80}$/.test(token);
+}
+
+function shareTargetArtifactToken(url) {
+  if (!url || url.origin !== self.location.origin || url.pathname.indexOf(SHARE_ARTIFACT_PREFIX) !== 0) return null;
+  var token = url.pathname.slice(SHARE_ARTIFACT_PREFIX.length);
+  return shareTargetTokenIsValid(token) ? token : null;
+}
+
+function shareTargetArtifactRequest(token) {
+  return new Request(self.location.origin + SHARE_ARTIFACT_PREFIX + token, { method: 'GET' });
+}
+
+function shareTargetRedirect(request, reason, token) {
+  var url = new URL('./index.html', request.url);
+  if (reason) url.searchParams.set('share_target_error', reason);
+  if (token) url.searchParams.set('share_target', token);
+  var location = url.toString();
+  return new Response('', {
+    status: 303,
+    headers: { 'cache-control': 'no-store', location: location }
+  });
+}
+
+function shareTargetName(value) {
+  var name = String(value || '').replace(/[\u0000-\u001f\u007f]/g, '').trim();
+  return name.slice(0, 100);
+}
+
+function shareTargetFormat(name, type) {
+  var extension = String(name || '').toLowerCase().match(/\.(geojson|json|gpx)$/);
+  if (!extension) return null;
+  var mime = String(type || '').toLowerCase();
+  var allowed = extension[1] === 'gpx'
+    ? ['application/gpx+xml', 'application/xml', 'text/xml', 'application/octet-stream', '']
+    : ['application/geo+json', 'application/json', 'text/json', 'application/octet-stream', ''];
+  if (allowed.indexOf(mime) === -1) return null;
+  return extension[1] === 'gpx' ? 'application/gpx+xml' : 'application/geo+json';
+}
+
+function shareTargetEncodedName(name) {
+  try { return encodeURIComponent(name); } catch (error) { return ''; }
+}
+
+function trimShareTargetCache() {
+  return caches.open(SHARE_CACHE).then(function (cache) {
+    return cache.keys().then(function (keys) {
+      if (keys.length <= SHARE_ARTIFACT_MAX_ENTRIES) return null;
+      return Promise.all(keys.slice(0, keys.length - SHARE_ARTIFACT_MAX_ENTRIES).map(function (key) {
+        return cache.delete(key);
+      }));
+    });
+  });
+}
+
+function handleShareTarget(request) {
+  return request.formData().then(function (formData) {
+    var file = formData && formData.get('file');
+    if (!file || typeof file.arrayBuffer !== 'function') return shareTargetRedirect(request, 'missing');
+    var size = Number(file.size);
+    var name = shareTargetName(file.name);
+    var mime = shareTargetFormat(name, file.type);
+    if (!name || !mime) return shareTargetRedirect(request, 'unsupported');
+    if (!Number.isFinite(size) || size < 1 || size > SHARE_TARGET_MAX_BYTES) {
+      return shareTargetRedirect(request, 'size');
+    }
+    return file.arrayBuffer().then(function (buffer) {
+      if (!buffer || buffer.byteLength < 1 || buffer.byteLength > SHARE_TARGET_MAX_BYTES) {
+        return shareTargetRedirect(request, 'size');
+      }
+      var token = (self.crypto && typeof self.crypto.randomUUID === 'function')
+        ? self.crypto.randomUUID()
+        : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
+      var artifact = new URL(SHARE_ARTIFACT_PREFIX + token, request.url);
+      var encodedName = shareTargetEncodedName(name);
+      if (!encodedName) return shareTargetRedirect(request, 'read');
+      return caches.open(SHARE_CACHE).then(function (cache) {
+        return cache.put(artifact.toString(), new Response(buffer, {
+          headers: {
+            'cache-control': 'no-store',
+            'content-type': mime,
+            'x-stormscope-share-name': encodedName
+          }
+        })).then(trimShareTargetCache).then(function () {
+          return shareTargetRedirect(request, null, token);
+        });
+      });
+    });
+  }).catch(function () {
+    return shareTargetRedirect(request, 'read');
+  });
+}
+
+function readShareTargetArtifact(request) {
+  var token = shareTargetArtifactToken(new URL(request.url));
+  if (!token) return Promise.resolve(new Response('Not found', { status: 404 }));
+  return caches.open(SHARE_CACHE).then(function (cache) {
+    return cache.match(shareTargetArtifactRequest(token)).then(function (response) {
+      return response || new Response('Not found', { status: 404 });
+    });
+  });
+}
+
+function consumeShareTarget(token) {
+  if (!shareTargetTokenIsValid(token)) {
+    return Promise.resolve({ type: 'STORMSCOPE_SHARE_TARGET_ERROR', reason: 'invalid-token' });
+  }
+  return caches.open(SHARE_CACHE).then(function (cache) {
+    return cache.delete(shareTargetArtifactRequest(token)).then(function (deleted) {
+      return { type: 'STORMSCOPE_SHARE_TARGET_CONSUMED', token: token, deleted: deleted };
+    });
+  });
 }
 
 function isTransientHttpResponse(response) {
@@ -367,7 +494,7 @@ function stormScopeCacheNames() {
 function stormScopeRuntimeCacheNames() {
   return caches.keys().then(function (names) {
     return names.filter(function (name) {
-      return name.indexOf('stormscope-tiles-') === 0 || name.indexOf('stormscope-data-') === 0;
+      return name.indexOf('stormscope-tiles-') === 0 || name.indexOf('stormscope-data-') === 0 || name === SHARE_CACHE;
     });
   });
 }
@@ -596,6 +723,9 @@ self.addEventListener('message', function (event) {
       operation = rememberCompleteCameraGeneration(generation);
     }
   }
+  if (type === 'STORMSCOPE_CONSUME_SHARE_TARGET') {
+    operation = consumeShareTarget(event.data && event.data.token);
+  }
   if (!operation) return;
 
   event.waitUntil(operation.then(function (message) {
@@ -611,12 +741,22 @@ self.addEventListener('message', function (event) {
 // ── Fetch routing ──
 self.addEventListener('fetch', function (event) {
   var request = event.request;
-  if (request.method !== 'GET') return;
 
   var url;
   try {
     url = new URL(request.url);
   } catch (e) {
+    return;
+  }
+
+  if (request.method === 'POST' && isShareTargetRequest(url)) {
+    event.respondWith(handleShareTarget(request));
+    return;
+  }
+  if (request.method !== 'GET') return;
+
+  if (shareTargetArtifactToken(url)) {
+    event.respondWith(readShareTargetArtifact(request));
     return;
   }
 
