@@ -8,6 +8,7 @@
 - Added current US AQI and primary-pollutant context to the camera weather panel through the independently recoverable Open-Meteo Air Quality feed. SW v100.
 - Added an opt-in NOAA NOHRSC snow-depth analysis raster with viewport-bounded exports, CONUS coverage handling, freshness/attribution, scene/profile persistence, and teardown below operational overlays. SW v101.
 - Added live public scene permalinks with debounced hash history, no-reload back/forward re-application, and fail-closed invalid-link preservation. SW v102.
+- Added foreground-only saved-view NWS alert polling with a 12-location cap, first-response baselining, bounded retry/backoff, hidden-tab suspension, and a localized dismissible review banner. SW v103.
 
 ## v0.123.0 - 2026-07-15
 
@@ -17,7 +18,7 @@
 - A single-camera lookup during the initial catalog load no longer inflates the generation count or forces an unnecessary full-dataset fallback.
 - NWS alert polling backs off geometrically over empty or unchanged viewports instead of re-requesting the national feed every 30 seconds.
 - Hazard and provider map popups stay within the map pane on narrow and short-height screens.
-- The camera weather panel now shows the NWS chance of precipitation and a next-12-hour high/low range, clearly labeled as forecast guidance. SW v102.
+- The camera weather panel now shows the NWS chance of precipitation and a next-12-hour high/low range, clearly labeled as forecast guidance. SW v103.
 
 ## v0.122.0 - 2026-07-14
 

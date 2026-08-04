@@ -89,6 +89,16 @@
     <span>A StormScope update is ready.</span>
     <button id="apply-update" type="button">Apply update</button>
   </div>
+  <div id="saved-location-alert-banner" class="saved-location-alert-banner hidden" role="status" aria-live="polite" aria-atomic="true">
+    <div class="saved-location-alert-copy">
+      <strong id="saved-location-alert-heading"></strong>
+      <span id="saved-location-alert-message"></span>
+    </div>
+    <div class="saved-location-alert-actions">
+      <button id="saved-location-alert-review" type="button" data-i18n="alerts.savedLocationReview">Review alerts</button>
+      <button id="saved-location-alert-dismiss" type="button" data-i18n="alerts.savedLocationDismiss">Dismiss</button>
+    </div>
+  </div>
   <div id="fatal-recovery" class="fatal-recovery hidden" role="alert" aria-live="assertive">
     <span id="fatal-recovery-message" data-i18n="diagnostics.fatal">StormScope encountered an error.</span>
     <button id="fatal-reload" type="button" data-i18n="diagnostics.reload">Reload</button>
@@ -373,6 +383,7 @@
       </div>
       <label for="saved-views">Saved views</label>
       <select id="saved-views"><option value="">Choose a view</option></select>
+      <p class="saved-location-alert-help" data-i18n="alerts.savedLocationHelp">Saved views are checked for new NWS alerts while this tab is in the foreground.</p>
       <div class="saved-view-actions">
         <button id="load-view" type="button" disabled>Load</button>
         <button id="delete-view" type="button" disabled>Delete</button>

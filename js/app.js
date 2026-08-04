@@ -106,6 +106,12 @@
   var alertDetailReturnFocus = null;
   var alertNationalPayload = null;
   var alertNationalFetchedAt = 0;
+  var savedLocationAlertAbort = null;
+  var savedLocationAlertTimer = null;
+  var savedLocationAlertRetryMetadata = null;
+  var savedLocationAlertSeen = Object.create(null);
+  var savedLocationAlertNotices = [];
+  var SAVED_LOCATION_ALERT_CAP = 12;
   var appLocale = 'en';
   var monitorSelection = new StormScopeMultiCamera.Selection({ minimum: 2, maximum: 4 });
   var monitorRegistry = null;
@@ -5243,6 +5249,178 @@
     alertRefreshTimer = setTimeout(fetchNwsAlerts, Math.max(StormScopeNwsAlerts.MIN_REFRESH_MS, delay));
   }
 
+  function savedLocationAlertTargets() {
+    if (!savedStore) return [];
+    var byKey = Object.create(null);
+    savedStore.listViews().forEach(function (view) {
+      var center = view && view.snapshot && view.snapshot.center;
+      var latitude = Number(center && center.lat);
+      var longitude = Number(center && center.lon);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude) ||
+          !StormScopeWeather.inNwsCoverageBounds(latitude, longitude)) return;
+      var key = latitude.toFixed(4) + ',' + longitude.toFixed(4);
+      if (!byKey[key]) byKey[key] = { key: key, center: { lat: latitude, lon: longitude }, names: [] };
+      if (view.name && byKey[key].names.indexOf(view.name) === -1) byKey[key].names.push(view.name);
+    });
+    return Object.keys(byKey).slice(0, SAVED_LOCATION_ALERT_CAP).map(function (key) { return byKey[key]; });
+  }
+
+  function savedLocationAlertSignature(alert) {
+    return [alert.dedupeKey, alert.sentMs == null ? (alert.sent || alert.id) : alert.sentMs, alert.messageType].join('@');
+  }
+
+  function savedLocationAlertLocation(target) {
+    return target.names.join(' / ') || target.key;
+  }
+
+  function renderSavedLocationAlertBanner() {
+    var banner = document.getElementById('saved-location-alert-banner');
+    if (!banner) return;
+    if (!savedLocationAlertNotices.length) {
+      banner.classList.add('hidden');
+      return;
+    }
+    var first = savedLocationAlertNotices[0];
+    var location = savedLocationAlertLocation(first.target);
+    document.getElementById('saved-location-alert-heading').textContent = savedLocationAlertNotices.length === 1
+      ? tr('alerts.savedLocationOne', { location: location })
+      : tr('alerts.savedLocationMany', { count: localNumber(savedLocationAlertNotices.length) });
+    document.getElementById('saved-location-alert-message').textContent = savedLocationAlertNotices.slice(0, 3).map(function (notice) {
+      return tr('alerts.savedLocationNotice', {
+        event: notice.alert.event || tr('alerts.weatherAlert'),
+        location: savedLocationAlertLocation(notice.target)
+      });
+    }).join(' • ');
+    document.getElementById('saved-location-alert-review').textContent = tr('alerts.savedLocationReview');
+    document.getElementById('saved-location-alert-dismiss').textContent = tr('alerts.savedLocationDismiss');
+    banner.classList.remove('hidden');
+  }
+
+  function dismissSavedLocationAlerts() {
+    savedLocationAlertNotices = [];
+    renderSavedLocationAlertBanner();
+  }
+
+  function reviewSavedLocationAlerts() {
+    var notice = savedLocationAlertNotices[0];
+    if (!notice) return;
+    var center = notice.target.center;
+    dismissSavedLocationAlerts();
+    if (!alertsVisible) {
+      alertsVisible = true;
+      document.getElementById('toggle-alerts').checked = true;
+      scheduleLastViewSave();
+    }
+    map.setView([center.lat, center.lon], Math.max(map.getZoom(), 7), { animate: false });
+    fetchNwsAlerts();
+    openAlertsFromSummary();
+  }
+
+  function scheduleSavedLocationAlertPoll(delay) {
+    clearTimeout(savedLocationAlertTimer);
+    savedLocationAlertTimer = null;
+    if (document.hidden || !savedStore || !savedLocationAlertTargets().length) return;
+    var wait = delay == null ? 0 : Number(delay);
+    if (!Number.isFinite(wait) || wait < 0) wait = 0;
+    savedLocationAlertTimer = setTimeout(refreshSavedLocationAlerts, wait);
+  }
+
+  function restartSavedLocationAlertPolling() {
+    if (savedLocationAlertAbort) savedLocationAlertAbort.abort();
+    scheduleSavedLocationAlertPoll(0);
+  }
+
+  async function refreshSavedLocationAlerts() {
+    if (document.hidden || !savedStore) return;
+    var targets = savedLocationAlertTargets();
+    if (!targets.length) {
+      clearTimeout(savedLocationAlertTimer);
+      savedLocationAlertTimer = null;
+      savedLocationAlertSeen = Object.create(null);
+      savedLocationAlertNotices = [];
+      renderSavedLocationAlertBanner();
+      return;
+    }
+    if (savedLocationAlertAbort) savedLocationAlertAbort.abort();
+    var controller = new AbortController();
+    savedLocationAlertAbort = controller;
+    var signal = controller.signal;
+    var nextDelay = null;
+    try {
+      var results = await Promise.allSettled(targets.map(function (target) {
+        return fetchAlertPayload(StormScopeNwsAlerts.buildPointQuery(target.center.lat, target.center.lon), signal);
+      }));
+      if (signal.aborted || document.hidden) return;
+      var failures = [];
+      var successes = 0;
+      var newNotices = [];
+      var targetByKey = Object.create(null);
+      targets.forEach(function (target) { targetByKey[target.key] = target; });
+      results.forEach(function (result, index) {
+        var target = targets[index];
+        if (result.status !== 'fulfilled') {
+          if (!result.reason || result.reason.name !== 'AbortError') failures.push(result.reason || new Error('NWS alert request failed'));
+          return;
+        }
+        successes += 1;
+        var previous = savedLocationAlertSeen[target.key];
+        var current = Object.create(null);
+        StormScopeNwsAlerts.normalizeCollection(result.value || { features: [] }).forEach(function (alert) {
+          var signature = savedLocationAlertSignature(alert);
+          current[signature] = true;
+          if (previous && !previous[signature]) {
+            newNotices.push({ key: target.key + '@' + signature, target: target, alert: alert });
+          }
+        });
+        savedLocationAlertSeen[target.key] = current;
+      });
+      Object.keys(savedLocationAlertSeen).forEach(function (key) {
+        if (!targetByKey[key]) delete savedLocationAlertSeen[key];
+      });
+      savedLocationAlertNotices = savedLocationAlertNotices.filter(function (notice) {
+        return Boolean(targetByKey[notice.target.key]);
+      }).map(function (notice) {
+        notice.target = targetByKey[notice.target.key];
+        return notice;
+      });
+      var noticeKeys = Object.create(null);
+      savedLocationAlertNotices = newNotices.concat(savedLocationAlertNotices).filter(function (notice) {
+        if (noticeKeys[notice.key]) return false;
+        noticeKeys[notice.key] = true;
+        return true;
+      }).slice(0, 8);
+      renderSavedLocationAlertBanner();
+      if (failures.length || successes < targets.length) {
+        savedLocationAlertRetryMetadata = StormScopeNwsAlerts.nextRetryMetadata(
+          savedLocationAlertRetryMetadata, failures[0] || new Error('NWS alert request failed'));
+      } else {
+        savedLocationAlertRetryMetadata = StormScopeNwsAlerts.successMetadata(undefined, {
+          idle: newNotices.length === 0, previous: savedLocationAlertRetryMetadata
+        });
+      }
+      nextDelay = savedLocationAlertRetryMetadata.delayMs;
+    } catch (error) {
+      if (error.name === 'AbortError') return;
+      savedLocationAlertRetryMetadata = StormScopeNwsAlerts.nextRetryMetadata(savedLocationAlertRetryMetadata, error);
+      nextDelay = savedLocationAlertRetryMetadata.delayMs;
+    } finally {
+      if (savedLocationAlertAbort === controller) {
+        savedLocationAlertAbort = null;
+        if (!signal.aborted && !document.hidden) scheduleSavedLocationAlertPoll(nextDelay);
+      }
+    }
+  }
+
+  function getSavedLocationAlertState() {
+    return {
+      targetCount: savedLocationAlertTargets().length,
+      noticeCount: savedLocationAlertNotices.length,
+      polling: Boolean(savedLocationAlertTimer),
+      inFlight: Boolean(savedLocationAlertAbort),
+      retry: savedLocationAlertRetryMetadata ? Object.assign({}, savedLocationAlertRetryMetadata) : null
+    };
+  }
+
   function alertColor(alert) {
     if (alert.severity === 'Extreme') return '#ff2d55';
     if (alert.severity === 'Severe') return '#ff7b00';
@@ -6027,6 +6205,8 @@
 
   function bindUI() {
     initLayerNavigation();
+    document.getElementById('saved-location-alert-review').addEventListener('click', reviewSavedLocationAlerts);
+    document.getElementById('saved-location-alert-dismiss').addEventListener('click', dismissSavedLocationAlerts);
     document.getElementById('btn-radar').addEventListener('click', showRadarCanvas);
     document.getElementById('btn-alerts').addEventListener('click', toggleAlertsPanel);
     document.getElementById('close-alerts').addEventListener('click', function () {
@@ -6179,6 +6359,7 @@
       renderCameraSourceHealth();
       refreshCameraMarkerLabels();
       refreshSavedViews(document.getElementById('saved-views').value);
+      renderSavedLocationAlertBanner();
       updateMonitorSelectionUi();
       scheduleSearchRender();
       renderAlerts();
@@ -6298,6 +6479,7 @@
         var saved = state.views.find(function (view) { return view.name.toLowerCase() === normalizedName; });
         refreshSavedViews(saved && saved.id);
         setSavedStateStatus(tr('views.savedStatus'));
+        restartSavedLocationAlertPolling();
       } catch (error) {
         setSavedStateStatus(tr('views.saveError'), true);
       }
@@ -6333,6 +6515,7 @@
         return;
       }
       refreshSavedViews();
+      restartSavedLocationAlertPolling();
       document.getElementById('view-name').value = '';
       offerRecoveryAction(
         'saved-state-status',
@@ -6342,6 +6525,7 @@
         function () {
           savedStore.restoreView(view);
           refreshSavedViews(view.id);
+          restartSavedLocationAlertPolling();
           document.getElementById('view-name').value = view.name;
           setSavedStateStatus(tr('views.restored', { name: view.name }));
         },
@@ -6376,6 +6560,7 @@
           var json = StormScopeSavedState.decodeImportBytes(reader.result);
           var imported = savedStore.importJson(json);
           refreshSavedViews();
+          restartSavedLocationAlertPolling();
           updateFavoriteButton(activeCamera);
           scheduleSearchRender();
           offerRecoveryAction(
@@ -6386,6 +6571,7 @@
             function () {
               savedStore.replaceState(imported.previous);
               refreshSavedViews();
+              restartSavedLocationAlertPolling();
               updateFavoriteButton(activeCamera);
               scheduleSearchRender();
               setSavedStateStatus(tr('views.importRestored'));
@@ -6736,6 +6922,9 @@
           feedPausedForVisibility = true;
         }
         operationalControllers.suspend();
+        if (savedLocationAlertAbort) savedLocationAlertAbort.abort();
+        clearTimeout(savedLocationAlertTimer);
+        savedLocationAlertTimer = null;
         resetPlaceSearch();
         return;
       }
@@ -6753,6 +6942,7 @@
         loadCameraFeed(activeCamera, container);
       }
       operationalControllers.refreshEnabled();
+      scheduleSavedLocationAlertPoll(0);
     });
 
     window.addEventListener('online', function () {
@@ -6769,6 +6959,8 @@
       if (radarAbort) radarAbort.abort();
       if (weatherAbort) weatherAbort.abort();
       if (summaryWildfireAbort) summaryWildfireAbort.abort();
+      if (savedLocationAlertAbort) savedLocationAlertAbort.abort();
+      clearTimeout(savedLocationAlertTimer);
       resetPlaceSearch();
       if (cameraStore) cameraStore.cancel();
       if (monitorRegistry) monitorRegistry.destroyAll();
@@ -6976,6 +7168,7 @@
     fetchNwsAlerts();
     registerServiceWorker();
     initLifecycle();
+    scheduleSavedLocationAlertPoll(0);
   } catch (bootError) {
     diagnostics.capture(bootError, 'boot');
     showFatalRecovery();
@@ -7001,6 +7194,8 @@
     getRadarFrameTime: function () { return radarFrames[radarIndex] ? radarFrames[radarIndex].time : null; },
     getAlertLayerGroup: function () { return alertLayerGroup; },
     refreshAlerts: fetchNwsAlerts,
+    refreshSavedLocationAlerts: refreshSavedLocationAlerts,
+    getSavedLocationAlertState: getSavedLocationAlertState,
     getLowDataState: function () {
       return {
         preference: dataModePreference, enabled: lowDataMode, source: lowDataSource,

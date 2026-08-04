@@ -538,44 +538,66 @@ async function addNetworkFixtures(page, metrics, options) {
     }
     if (url.startsWith('https://api.weather.gov/alerts/active')) {
       const now = Date.now();
+      const savedAlertFixture = options.savedAlertFixture;
+      if (savedAlertFixture) metrics.savedAlertRequests = (metrics.savedAlertRequests || 0) + 1;
+      const fixtureVersion = savedAlertFixture ? Number(savedAlertFixture.version || 0) : 0;
+      const fixtureBase = savedAlertFixture
+        ? (savedAlertFixture.base || (savedAlertFixture.base = now - 60000))
+        : now - 60000;
+      const fixtureSent = new Date(fixtureBase + fixtureVersion * 60000).toISOString();
+      const fixtureFeature = {
+        id: 'https://api.weather.gov/alerts/fixture',
+        type: 'Feature',
+        geometry: {
+          type: 'Polygon',
+          coordinates: [[[-101, 38], [-96, 38], [-96, 42], [-101, 42], [-101, 38]]]
+        },
+        properties: {
+          id: 'https://api.weather.gov/alerts/fixture',
+          '@id': 'https://api.weather.gov/alerts/fixture',
+          web: 'https://www.weather.gov/',
+          event: 'Severe Thunderstorm Warning',
+          headline: 'Severe Thunderstorm Warning issued for the test area',
+          description: 'Seek shelter indoors.',
+          instruction: 'Move away from windows.',
+          areaDesc: 'Test County',
+          severity: 'Severe',
+          urgency: 'Immediate',
+          certainty: 'Observed',
+          status: 'Actual',
+          messageType: 'Alert',
+          sent: fixtureSent,
+          effective: fixtureSent,
+          expires: new Date(now + 3600000).toISOString(),
+          parameters: {
+            NWSheadline: ['SEVERE THUNDERSTORM WARNING REMAINS IN EFFECT FOR TEST COUNTY'],
+            thunderstormDamageThreat: ['DESTRUCTIVE'],
+            maxHailSize: ['2.75'],
+            maxWindGust: ['80 MPH'],
+            eventMotionDescription: ['2026-07-14T12:00:00-05:00...storm...240DEG...35KT...39.0,-99.0'],
+            hailThreat: ['RADAR INDICATED'],
+            windThreat: ['OBSERVED'],
+            WEAHandling: ['Imminent Threat']
+          }
+        }
+      };
+      const fixtureFeatures = [fixtureFeature];
+      if (savedAlertFixture && fixtureVersion > 0) {
+        fixtureFeatures.push({
+          ...fixtureFeature,
+          id: 'https://api.weather.gov/alerts/fixture-new',
+          properties: {
+            ...fixtureFeature.properties,
+            id: 'https://api.weather.gov/alerts/fixture-new',
+            '@id': 'https://api.weather.gov/alerts/fixture-new',
+            event: 'Tornado Warning',
+            headline: 'Tornado Warning issued for the test area'
+          }
+        });
+      }
       await route.fulfill({
         contentType: 'application/geo+json',
-        body: JSON.stringify({ type: 'FeatureCollection', features: [{
-          id: 'https://api.weather.gov/alerts/fixture',
-          type: 'Feature',
-          geometry: {
-            type: 'Polygon',
-            coordinates: [[[-101, 38], [-96, 38], [-96, 42], [-101, 42], [-101, 38]]]
-          },
-          properties: {
-            id: 'https://api.weather.gov/alerts/fixture',
-            '@id': 'https://api.weather.gov/alerts/fixture',
-            web: 'https://www.weather.gov/',
-            event: 'Severe Thunderstorm Warning',
-            headline: 'Severe Thunderstorm Warning issued for the test area',
-            description: 'Seek shelter indoors.',
-            instruction: 'Move away from windows.',
-            areaDesc: 'Test County',
-            severity: 'Severe',
-            urgency: 'Immediate',
-            certainty: 'Observed',
-            status: 'Actual',
-            messageType: 'Alert',
-            sent: new Date(now - 60000).toISOString(),
-            effective: new Date(now - 60000).toISOString(),
-            expires: new Date(now + 3600000).toISOString(),
-            parameters: {
-              NWSheadline: ['SEVERE THUNDERSTORM WARNING REMAINS IN EFFECT FOR TEST COUNTY'],
-              thunderstormDamageThreat: ['DESTRUCTIVE'],
-              maxHailSize: ['2.75'],
-              maxWindGust: ['80 MPH'],
-              eventMotionDescription: ['2026-07-14T12:00:00-05:00...storm...240DEG...35KT...39.0,-99.0'],
-              hailThreat: ['RADAR INDICATED'],
-              windThreat: ['OBSERVED'],
-              WEAHandling: ['Imminent Threat']
-            }
-          }
-        }] })
+        body: JSON.stringify({ type: 'FeatureCollection', features: fixtureFeatures })
       });
       return;
     }
@@ -762,6 +784,49 @@ async function main() {
     assert.equal((await permalinkPage.evaluate(() => window._stormscope.getTerminatorState())).enabled, true,
       'invalid live scene links must preserve the current state');
     await permalinkPage.close();
+
+    const savedAlertFixture = { version: 0 };
+    const savedLocationPage = await context.newPage();
+    savedLocationPage.baseURL = baseURL;
+    const savedAlertMetrics = { rainViewerRequests: 0, savedAlertRequests: 0 };
+    await addNetworkFixtures(savedLocationPage, savedAlertMetrics, { savedAlertFixture });
+    await waitForApp(savedLocationPage);
+    await savedLocationPage.locator('#btn-layers').click();
+    await savedLocationPage.locator('#view-name').fill('Saved Plains');
+    await savedLocationPage.locator('#save-view').click();
+    await savedLocationPage.locator('#saved-state-status').filter({ hasText: 'View saved locally.' })
+      .waitFor({ state: 'visible' });
+    await savedLocationPage.evaluate(() => window._stormscope.refreshSavedLocationAlerts());
+    await savedLocationPage.waitForFunction(() => {
+      const state = window._stormscope.getSavedLocationAlertState();
+      return state.targetCount === 1 && state.noticeCount === 0 && !state.inFlight;
+    });
+    const baselineSavedAlertRequests = savedAlertMetrics.savedAlertRequests;
+    savedAlertFixture.version = 1;
+    await savedLocationPage.evaluate(() => window._stormscope.refreshSavedLocationAlerts());
+    await savedLocationPage.locator('#saved-location-alert-banner').waitFor({ state: 'visible' });
+    assert.match(await savedLocationPage.locator('#saved-location-alert-banner').textContent(), /Tornado Warning/);
+    assert.equal((await savedLocationPage.evaluate(() => window._stormscope.getSavedLocationAlertState())).noticeCount, 2);
+    await savedLocationPage.locator('#saved-location-alert-dismiss').click();
+    await savedLocationPage.locator('#saved-location-alert-banner').waitFor({ state: 'hidden' });
+
+    await savedLocationPage.evaluate(() => {
+      Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await savedLocationPage.waitForFunction(() => !window._stormscope.getSavedLocationAlertState().polling);
+    savedAlertFixture.version = 2;
+    await savedLocationPage.evaluate(() => window._stormscope.refreshSavedLocationAlerts());
+    assert.equal(savedAlertMetrics.savedAlertRequests, baselineSavedAlertRequests + 1,
+      'hidden tabs must not issue saved-location alert requests');
+    await savedLocationPage.evaluate(() => {
+      Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await savedLocationPage.waitForFunction(() => window._stormscope.getSavedLocationAlertState().polling);
+    await savedLocationPage.close();
 
     await page.locator('#alerts-status').filter({ hasText: /1 alert/ }).waitFor({ state: 'visible' });
     await assertSurfaceWithinViewport(page, '#primary-nav', 'desktop primary navigation');

@@ -171,6 +171,27 @@ test('PWA update and page lifecycle work are explicit and recoverable', () => {
   assert.match(i18n.catalogs.en['camera.paused'], /Feed paused/);
 });
 
+test('saved views provide foreground NWS alert polling with bounded notices', () => {
+  assert.match(html, /id="saved-location-alert-banner"[^>]*role="status"/);
+  assert.match(html, /id="saved-location-alert-review"/);
+  assert.match(html, /id="saved-location-alert-dismiss"/);
+  assert.match(html, /data-i18n="alerts\.savedLocationHelp"/);
+  assert.match(app, /function savedLocationAlertTargets\(\)/);
+  assert.match(app, /SAVED_LOCATION_ALERT_CAP = 12/);
+  assert.match(app, /savedStore\.listViews\(\)/);
+  assert.match(app, /StormScopeNwsAlerts\.buildPointQuery\(target\.center\.lat, target\.center\.lon\)/);
+  assert.match(app, /document\.hidden/);
+  assert.match(app, /StormScopeNwsAlerts\.nextRetryMetadata/);
+  assert.match(app, /function renderSavedLocationAlertBanner\(\)/);
+  assert.match(css, /\.saved-location-alert-banner/);
+  for (const locale of ['en', 'es']) {
+    for (const key of ['alerts.savedLocationHelp', 'alerts.savedLocationOne', 'alerts.savedLocationMany',
+      'alerts.savedLocationNotice', 'alerts.savedLocationReview', 'alerts.savedLocationDismiss']) {
+      assert.ok(i18n.catalogs[locale][key], `${locale} catalog should define ${key}`);
+    }
+  }
+});
+
 test('install discovery is capability-gated with iOS guidance', () => {
   assert.match(html, /id="install-status"[^>]*role="status"/);
   assert.match(html, /id="install-app"/);
