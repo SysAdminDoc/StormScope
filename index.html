@@ -195,6 +195,23 @@
         <option value="3">Day 3</option>
       </select>
     </div>
+    <label class="toggle-row" data-layer-id="fireWeather">
+      <input type="checkbox" id="toggle-fire-weather">
+      <span data-i18n="layers.fireWeather">SPC Fire Weather Outlooks</span>
+    </label>
+    <div class="select-row context-layer-option" data-layer-id="fireWeather">
+      <label for="fire-weather-day" data-i18n="layers.fireWeatherDay">Fire-weather outlook day</label>
+      <select id="fire-weather-day">
+        <option value="1">Day 1</option>
+        <option value="2">Day 2</option>
+        <option value="3">Day 3</option>
+        <option value="4">Day 4</option>
+        <option value="5">Day 5</option>
+        <option value="6">Day 6</option>
+        <option value="7">Day 7</option>
+        <option value="8">Day 8</option>
+      </select>
+    </div>
     <label class="toggle-row" data-layer-id="wpcOutlooks">
       <input type="checkbox" id="toggle-wpc-outlooks">
       <span>WPC Rainfall &amp; Flood Outlooks</span>
@@ -364,6 +381,7 @@
       <div><i class="wildfire-swatch" aria-hidden="true"></i><span id="wildfire-status" role="status" aria-live="polite">Wildfires off</span><a href="https://www.arcgis.com/home/item.html?id=d1c32af3212341869b3c810f1a215824" target="_blank" rel="noopener noreferrer">NIFC</a></div>
       <div><i class="earthquake-swatch" aria-hidden="true"></i><span id="earthquake-status" role="status" aria-live="polite">Earthquakes off</span><a href="https://earthquake.usgs.gov/earthquakes/map/" target="_blank" rel="noopener noreferrer">USGS</a></div>
       <div><i class="convective-swatch" aria-hidden="true"></i><span id="convective-status" role="status" aria-live="polite">Convective outlooks off</span><a href="https://www.spc.noaa.gov/products/outlook/" target="_blank" rel="noopener noreferrer">SPC</a><p class="context-limitation">Severe-storm risk guidance—not a warning.</p></div>
+      <div><i class="fire-weather-swatch" aria-hidden="true"></i><span id="fire-weather-status" role="status" aria-live="polite" data-i18n="context.fireWeatherOff">Fire-weather outlooks off</span><a href="https://www.spc.noaa.gov/products/fire_wx/overview.html" target="_blank" rel="noopener noreferrer">SPC</a><p class="context-limitation" data-i18n="context.fireWeatherForecast">Forecast fire-weather risk—not an observed wildfire perimeter or warning.</p></div>
       <div><i class="watch-swatch" aria-hidden="true"></i><span id="watch-status" role="status" aria-live="polite">Watches off</span><a href="https://www.spc.noaa.gov/products/watch/" target="_blank" rel="noopener noreferrer">SPC</a></div>
       <div><i class="mesoscale-swatch" aria-hidden="true"></i><span id="mesoscale-status" role="status" aria-live="polite">Mesoscale discussions off</span><a href="https://www.spc.noaa.gov/products/md/" target="_blank" rel="noopener noreferrer">SPC</a><p class="context-limitation">Short-fuse guidance—not a warning.</p></div>
       <div><i class="storm-report-swatch" aria-hidden="true"></i><span id="storm-report-status" role="status" aria-live="polite">Local storm reports off</span><a href="https://www.weather.gov/gis/" target="_blank" rel="noopener noreferrer">NWS</a><p class="context-limitation">Reports are observational and may be unverified.</p></div>
@@ -706,6 +724,7 @@
   <script src="js/flood-outlooks.js"></script>
   <script src="js/river-gauges.js"></script>
   <script src="js/convective-outlooks.js"></script>
+  <script src="js/fire-weather.js"></script>
   <script src="js/severe-watches.js"></script>
   <script src="js/spc-reports.js"></script>
   <script src="js/geocode.js"></script>

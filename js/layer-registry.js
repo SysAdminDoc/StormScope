@@ -92,6 +92,15 @@
       }]
     },
     {
+      id: 'fireWeather', toggleId: 'toggle-fire-weather', defaultEnabled: false, lifecycleId: 'fire-weather',
+      labelKey: 'layers.fireWeather', groupId: 'outlooks', groupLabelKey: 'layers.groupOutlooks',
+      searchKeys: ['context.fireWeatherForecast', 'context.fireWeatherOfficial'],
+      controls: [{
+        key: 'fireWeatherDay', controlId: 'fire-weather-day', type: 'integer', minimum: 1, maximum: 8,
+        scenePath: 'fireWeatherDay', profilePath: 'fireWeatherDay', defaultValue: 1, labelKey: 'layers.fireWeatherDay'
+      }]
+    },
+    {
       id: 'watches', toggleId: 'toggle-watches', defaultEnabled: false, lifecycleId: 'watches',
       labelKey: 'layers.watches', groupId: 'warnings', groupLabelKey: 'layers.groupWarnings'
     },

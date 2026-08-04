@@ -19,6 +19,7 @@ const cameraFeedSource = fs.readFileSync(path.join(root, 'js', 'camera-feed.js')
 const serviceWorker = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const radarControllerSource = fs.readFileSync(path.join(root, 'js', 'radar-controller.js'), 'utf8');
 const riverGaugesSource = fs.readFileSync(path.join(root, 'js', 'river-gauges.js'), 'utf8');
+const fireWeatherSource = fs.readFileSync(path.join(root, 'js', 'fire-weather.js'), 'utf8');
 const spatialQuery = fs.readFileSync(path.join(root, 'js', 'spatial-query.js'), 'utf8');
 const spatialQuerySource = spatialQuery;
 const privateAnnotationSource = fs.readFileSync(path.join(root, 'js', 'private-annotations.js'), 'utf8');
@@ -120,7 +121,7 @@ test('NWPS river gauges are bounded, forecast-aware, and lifecycle-owned', () =>
   const gaugePosition = html.indexOf('js/river-gauges.js');
   const appPosition = html.indexOf('js/app.js');
   assert.ok(floodPosition >= 0 && gaugePosition > floodPosition && appPosition > gaugePosition);
-  assert.match(serviceWorker, /var VERSION = 'v110'/);
+  assert.match(serviceWorker, /var VERSION = 'v111'/);
   assert.match(serviceWorker, /\.\/js\/river-gauges\.js/);
   assert.match(riverGaugesSource, /resultRecordCount: String\(MAX_RECORDS\)/);
   assert.match(riverGaugesSource, /function buildQueries\(bounds, zoom\)/);
@@ -637,6 +638,32 @@ test('SPC convective outlooks are an optional, attributed, keyless layer wired e
   // Host already CSP-allowed; no new connect-src origin required.
   const csp = html.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)"/)[1];
   assert.match(csp, /https:\/\/mapservices\.weather\.noaa\.gov/);
+});
+
+test('SPC fire-weather outlooks are bounded Day 1–8 forecast guidance with safe lifecycle wiring', () => {
+  const convectivePosition = html.indexOf('js/convective-outlooks.js');
+  const fireWeatherPosition = html.indexOf('js/fire-weather.js');
+  const appPosition = html.indexOf('js/app.js');
+  assert.ok(convectivePosition >= 0 && fireWeatherPosition > convectivePosition && appPosition > fireWeatherPosition);
+  assert.match(serviceWorker, /\.\/js\/fire-weather\.js/);
+  assert.match(fireWeatherSource, /SPC_firewx\/MapServer/);
+  assert.match(fireWeatherSource, /DAY_LAYERS/);
+  assert.match(fireWeatherSource, /function buildQueries\(day, bounds\)/);
+  assert.match(fireWeatherSource, /geometryType/);
+  assert.match(fireWeatherSource, /function fetchAllPages/);
+  assert.match(fireWeatherSource, /function mergeCollections/);
+  assert.match(html, /id="toggle-fire-weather"/);
+  assert.match(html, /id="fire-weather-day"/);
+  assert.match(html, /id="fire-weather-status"[^>]*role="status"/);
+  assert.match(app, /function refreshFireWeather/);
+  assert.match(app, /function disableFireWeather/);
+  assert.match(app, /StormScopeFireWeather\.buildQueries/);
+  assert.match(app, /StormScopeFireWeather\.mergeCollections/);
+  assert.match(app, /fireWeatherForecast/);
+  assert.match(layerRegistrySource, /id: 'fireWeather', toggleId: 'toggle-fire-weather'/);
+  assert.match(css, /\.fire-weather-swatch/);
+  assert.equal(i18n.catalogs.en['context.fireWeatherForecast'].includes('observed wildfire perimeter'), true);
+  assert.ok(i18n.catalogs.es['context.fireWeatherForecast']);
 });
 
 test('USGS earthquakes are an optional, attributed, keyless layer wired end to end', () => {

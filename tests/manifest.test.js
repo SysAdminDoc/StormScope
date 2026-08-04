@@ -34,7 +34,7 @@ test('manifest shortcuts are bounded valid public scenes with existing icons', (
   });
   assert.deepEqual(scenes[0].layers, {
     radar: true, cameras: true, coverage: false, terminator: false, snow: false, alerts: true, lightning: false, wildfires: false, satellite: false, tropical: false,
-    wpcOutlooks: false, usgsGauges: false, earthquakes: false, convective: false, watches: false, mesoscale: false, stormReports: false, surfaceObservations: false
+    wpcOutlooks: false, usgsGauges: false, earthquakes: false, convective: false, fireWeather: false, watches: false, mesoscale: false, stormReports: false, surfaceObservations: false
   });
   assert.equal(scenes[0].alertSeverity, 'severe');
   assert.equal(scenes[0].cameraFilters.healthy, true);

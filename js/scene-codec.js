@@ -36,7 +36,8 @@
     { id: 'stormReports', bit: 14, legacyRequired: false },
     { id: 'terminator', bit: 15, legacyRequired: false },
     { id: 'snow', bit: 16, legacyRequired: false },
-    { id: 'surfaceObservations', bit: 17, legacyRequired: false }
+    { id: 'surfaceObservations', bit: 17, legacyRequired: false },
+    { id: 'fireWeather', bit: 18, legacyRequired: false }
   ];
   (function assertLayerBitCoverage() {
     var keys = registry.sceneKeys();
@@ -117,6 +118,8 @@
     if (!Number.isInteger(outlookDay)) throw new TypeError('outlook day is invalid');
     var convectiveDay = source.convectiveDay == null ? 1 : finite(source.convectiveDay, 'convective day', 1, 3);
     if (!Number.isInteger(convectiveDay)) throw new TypeError('convective day is invalid');
+    var fireWeatherDay = source.fireWeatherDay == null ? 1 : finite(source.fireWeatherDay, 'fire-weather day', 1, 8);
+    if (!Number.isInteger(fireWeatherDay)) throw new TypeError('fire-weather day is invalid');
     var earthquake = source.earthquake == null ? { magnitude: '2.5', period: 'day' }
       : objectValue(source.earthquake, 'scene earthquake');
     var stormReportWindow = source.stormReportWindow == null ? 24 : Number(source.stormReportWindow);
@@ -148,6 +151,7 @@
       activeCameraId: activeCameraId,
       outlookDay: outlookDay,
       convectiveDay: convectiveDay,
+      fireWeatherDay: fireWeatherDay,
       stormReportWindow: stormReportWindow,
       earthquake: {
         magnitude: choice(earthquake.magnitude, EARTHQUAKE_MAGNITUDES, 'earthquake magnitude'),
@@ -171,6 +175,7 @@
       c: scene.activeCameraId,
       o: scene.outlookDay,
       d: scene.convectiveDay,
+      w: scene.fireWeatherDay,
       s: STORM_REPORT_WINDOWS.indexOf(scene.stormReportWindow),
       e: [EARTHQUAKE_MAGNITUDES.indexOf(scene.earthquake.magnitude), EARTHQUAKE_PERIODS.indexOf(scene.earthquake.period)]
     };
@@ -207,6 +212,7 @@
       activeCameraId: source.c,
       outlookDay: source.o == null ? 1 : source.o,
       convectiveDay: source.d == null ? 1 : source.d,
+      fireWeatherDay: source.w == null ? 1 : source.w,
       stormReportWindow: source.s == null ? 24 : STORM_REPORT_WINDOWS[source.s],
       earthquake: source.e == null ? { magnitude: '2.5', period: 'day' } : {
         magnitude: EARTHQUAKE_MAGNITUDES[source.e[0]], period: EARTHQUAKE_PERIODS[source.e[1]]

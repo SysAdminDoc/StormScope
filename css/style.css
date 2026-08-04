@@ -783,9 +783,10 @@ button:focus-visible {
 .satellite-scrubber-row input { width: 100%; min-width: 0; accent-color: var(--accent); grid-column: 1 / -1; }
 .satellite-range-label { color: var(--text-dim); font-size: 9px; }
 .satellite-range-label-latest { justify-self: end; }
-.satellite-swatch, .terminator-swatch, .snow-swatch, .tropical-swatch, .wpc-outlook-swatch, .usgs-gauge-swatch, .lightning-swatch, .wildfire-swatch, .earthquake-swatch, .surface-observation-swatch { width: 9px; height: 9px; border-radius: 2px; }
+.satellite-swatch, .terminator-swatch, .snow-swatch, .tropical-swatch, .wpc-outlook-swatch, .usgs-gauge-swatch, .lightning-swatch, .wildfire-swatch, .earthquake-swatch, .surface-observation-swatch, .fire-weather-swatch { width: 9px; height: 9px; border-radius: 2px; }
 .earthquake-swatch { border-radius: 50%; border: 2px solid #f76707; background: rgba(247, 103, 7, 0.25); }
 .convective-swatch { border: 2px solid #c9a400; background: rgba(246, 246, 127, 0.4); }
+.fire-weather-swatch { border: 2px dashed #e69800; background: linear-gradient(135deg, rgba(230, 152, 0, 0.45), rgba(230, 0, 169, 0.45)); }
 .watch-swatch { border: 2px dashed #d6006e; background: rgba(214, 0, 110, 0.12); }
 .satellite-swatch { background: linear-gradient(135deg, #2a9d8f, #e9c46a); }
 .terminator-swatch { border: 1px solid #91a7c2; background: rgba(7, 21, 41, 0.8); }

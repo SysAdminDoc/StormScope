@@ -178,6 +178,16 @@
   var convectiveCount = 0;
   var convectiveStatusState = 'off';
   var convectiveAttributionAdded = false;
+  var fireWeatherLayer = null;
+  var fireWeatherAbort = null;
+  var fireWeatherGeneration = 0;
+  var fireWeatherRefreshTimer = null;
+  var fireWeatherMoveTimer = null;
+  var fireWeatherDay = 1;
+  var fireWeatherUpdatedAt = null;
+  var fireWeatherCount = 0;
+  var fireWeatherStatusState = 'off';
+  var fireWeatherAttributionAdded = false;
   var watchLayer = null;
   var watchAbort = null;
   var watchGeneration = 0;
@@ -2848,6 +2858,161 @@
     renderConvectiveStatus();
   }
 
+  // ── SPC fire-weather outlooks ──
+
+  function renderFireWeatherStatus() {
+    if (fireWeatherStatusState === 'off') {
+      setContextStatusElement('fire-weather-status', tr('context.fireWeatherOff'), 'off');
+      return;
+    }
+    if (fireWeatherStatusState === 'loading') {
+      setContextStatusElement('fire-weather-status', tr('context.loading'), 'loading');
+      return;
+    }
+    if (fireWeatherStatusState === 'error') {
+      setContextStatusElement('fire-weather-status', tr(fireWeatherLayer ? 'context.refreshFailed' : 'context.unavailable'), 'error');
+      return;
+    }
+    var provider = StormScopeFireWeather.provider;
+    var fresh = StormScopeFireWeather.freshness(fireWeatherUpdatedAt, provider.staleMs);
+    var statusKey = fireWeatherStatusState === 'partial' ? 'context.fireWeatherPartial' : 'context.fireWeatherStatus';
+    setContextStatusElement('fire-weather-status', tr(statusKey, {
+      count: localNumber(fireWeatherCount), day: localNumber(fireWeatherDay),
+      freshness: tr(fresh.state === 'stale' ? 'context.stale' : 'context.fresh'),
+      time: fireWeatherUpdatedAt ? localTime(fireWeatherUpdatedAt) : tr('weather.unknown')
+    }), fireWeatherStatusState === 'partial' ? 'error' : fresh.state);
+  }
+
+  function fireWeatherPopup(feature) {
+    var properties = feature.properties || {};
+    var categoryKey = properties.fireWeatherCategory || 'marginal';
+    var kindKey = properties.fireWeatherKind || 'windRh';
+    var container = document.createElement('div');
+    container.className = 'context-popup';
+    var title = document.createElement('strong');
+    title.textContent = tr('context.fireWeatherFeature', {
+      day: localNumber(properties.outlookDay || fireWeatherDay),
+      category: tr('context.fireWeatherCategory.' + categoryKey)
+    });
+    container.appendChild(title);
+    var kind = document.createElement('span');
+    kind.textContent = tr('context.fireWeatherKind.' + kindKey);
+    container.appendChild(kind);
+    if (properties.issuedAt) {
+      var issued = document.createElement('span');
+      issued.textContent = tr('context.fireWeatherIssued', { time: contextTimestamp(properties.issuedAt) });
+      container.appendChild(issued);
+    }
+    if (properties.startsAt && properties.endsAt) {
+      var valid = document.createElement('span');
+      valid.textContent = tr('context.fireWeatherValid', {
+        start: contextTimestamp(properties.startsAt), end: contextTimestamp(properties.endsAt)
+      });
+      container.appendChild(valid);
+    }
+    var source = document.createElement('span');
+    source.textContent = tr('context.fireWeatherSource', { source: properties.sourceLabel });
+    container.appendChild(source);
+    var limitation = document.createElement('span');
+    limitation.textContent = tr('context.fireWeatherForecast');
+    container.appendChild(limitation);
+    var link = document.createElement('a');
+    link.href = safeExternalUrl(properties.officialUrl || StormScopeFireWeather.OFFICIAL_URL);
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = tr('context.fireWeatherOfficial');
+    container.appendChild(link);
+    return container;
+  }
+
+  function scheduleFireWeatherRefresh() {
+    clearTimeout(fireWeatherRefreshTimer);
+    fireWeatherRefreshTimer = null;
+    if (!document.getElementById('toggle-fire-weather').checked) return;
+    fireWeatherRefreshTimer = setTimeout(refreshFireWeather, StormScopeFireWeather.provider.refreshMs);
+  }
+
+  async function refreshFireWeather() {
+    if (!document.getElementById('toggle-fire-weather').checked || document.hidden) return;
+    if (fireWeatherAbort) fireWeatherAbort.abort();
+    fireWeatherAbort = new AbortController();
+    var generation = ++fireWeatherGeneration;
+    var signal = fireWeatherAbort.signal;
+    fireWeatherStatusState = 'loading';
+    renderFireWeatherStatus();
+    try {
+      var day = fireWeatherDay;
+      var requests = StormScopeFireWeather.buildQueries(day, contextQueryBounds());
+      var results = await Promise.allSettled(requests.map(function (request) {
+        return StormScopeFireWeather.fetchAllPages(function (url, options) {
+          return fetch(url, options);
+        }, request, signal);
+      }));
+      if (generation !== fireWeatherGeneration) return;
+      if (results.every(function (result) { return result.status === 'rejected'; })) {
+        if (results.some(function (result) { return result.reason && result.reason.name === 'AbortError'; })) return;
+        fireWeatherStatusState = 'error';
+        renderFireWeatherStatus();
+        return;
+      }
+      var collections = results.filter(function (result) { return result.status === 'fulfilled'; })
+        .map(function (result) { return result.value; });
+      var collection = StormScopeFireWeather.mergeCollections(collections);
+      if (!fireWeatherLayer || results.every(function (result) { return result.status === 'fulfilled'; })) {
+        var nextLayer = L.geoJSON(collection, {
+          pane: 'contextVectorPane',
+          style: function (feature) {
+            return StormScopeFireWeather.style(feature.properties.fireWeatherCategory, feature.properties);
+          },
+          onEachFeature: function (feature, layer) {
+            layer.bindPopup(function () { return fireWeatherPopup(feature); }, { autoPan: false, maxWidth: 390, maxHeight: 420 });
+          }
+        }).addTo(map);
+        if (fireWeatherLayer) map.removeLayer(fireWeatherLayer);
+        fireWeatherLayer = nextLayer;
+        fireWeatherCount = collection.features.length;
+      }
+      if (!fireWeatherAttributionAdded) {
+        var provider = StormScopeFireWeather.provider;
+        map.attributionControl.addAttribution('<a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>');
+        fireWeatherAttributionAdded = true;
+      }
+      fireWeatherUpdatedAt = Date.now();
+      fireWeatherStatusState = results.some(function (result) { return result.status === 'rejected'; }) ? 'partial' : 'ready';
+      if (!fireWeatherLayer) fireWeatherCount = collection.features.length;
+      renderFireWeatherStatus();
+      renderRouteCorridorPanel();
+    } catch (error) {
+      if (error.name === 'AbortError') return;
+      if (generation !== fireWeatherGeneration) return;
+      fireWeatherStatusState = fireWeatherLayer ? 'partial' : 'error';
+      renderFireWeatherStatus();
+    } finally {
+      if (generation === fireWeatherGeneration) scheduleFireWeatherRefresh();
+    }
+  }
+
+  function disableFireWeather() {
+    fireWeatherGeneration += 1;
+    if (fireWeatherAbort) fireWeatherAbort.abort();
+    clearTimeout(fireWeatherRefreshTimer);
+    clearTimeout(fireWeatherMoveTimer);
+    fireWeatherRefreshTimer = null;
+    fireWeatherMoveTimer = null;
+    if (fireWeatherLayer) map.removeLayer(fireWeatherLayer);
+    fireWeatherLayer = null;
+    if (fireWeatherAttributionAdded) {
+      var provider = StormScopeFireWeather.provider;
+      map.attributionControl.removeAttribution('<a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>');
+      fireWeatherAttributionAdded = false;
+    }
+    fireWeatherCount = 0;
+    fireWeatherUpdatedAt = null;
+    fireWeatherStatusState = 'off';
+    renderFireWeatherStatus();
+    renderRouteCorridorPanel();
+  }
+
   // ── SPC severe & tornado watches ──
 
   function renderWatchStatus() {
@@ -3921,6 +4086,7 @@
       opacity: { radar: scene.radar.opacity },
       outlookDay: scene.outlookDay,
       convectiveDay: scene.convectiveDay,
+      fireWeatherDay: scene.fireWeatherDay,
       stormReportWindow: scene.stormReportWindow,
       earthquake: scene.earthquake
     });
@@ -4034,6 +4200,7 @@
     StormScopeLayerRegistry.applyControlState(document, snapshot, 'profile');
     wpcOutlookDay = Number(document.getElementById('wpc-outlook-day').value);
     convectiveDay = Number(document.getElementById('convective-day').value);
+    fireWeatherDay = Number(document.getElementById('fire-weather-day').value);
     stormReportWindow = Number(document.getElementById('storm-report-window').value);
     map.setView([snapshot.center.lat, snapshot.center.lon], snapshot.zoom, { animate: false });
     var layers = snapshot.layers || {};
@@ -5835,6 +6002,11 @@
     addLayerHazards(convectiveLayer, 'SPC outlook', function (properties) {
       return properties.outlookCategory ? tr('context.spc.' + properties.outlookCategory) : tr('context.convectiveFeature', { category: tr('weather.unknown') });
     });
+    addLayerHazards(fireWeatherLayer, 'SPC fire-weather forecast', function (properties) {
+      return properties.fireWeatherCategory
+        ? tr('context.fireWeatherCategory.' + properties.fireWeatherCategory)
+        : tr('weather.unknown');
+    });
     addLayerHazards(mesoscaleLayer, 'SPC discussion', function (properties) {
       return properties.discussionTitle || properties.discussionInfo || 'SPC discussion';
     });
@@ -6200,6 +6372,10 @@
       add('spc-convective', 'NOAA/NWS SPC convective outlooks', convectiveUpdatedAt,
         snapshotFreshness(convectiveUpdatedAt, StormScopeConvectiveOutlooks.provider.staleMs, convectiveStatusState));
     }
+    if (snapshotToggleEnabled('toggle-fire-weather')) {
+      add('spc-fire-weather', 'NOAA/NWS SPC fire-weather outlooks', fireWeatherUpdatedAt,
+        snapshotFreshness(fireWeatherUpdatedAt, StormScopeFireWeather.provider.staleMs, fireWeatherStatusState));
+    }
     if (snapshotToggleEnabled('toggle-watches')) {
       add('spc-watches', 'NOAA/NWS SPC watches', watchFetchedAt,
         snapshotFreshness(watchFetchedAt, StormScopeSevereWatches.provider.staleMs, watchStatusState));
@@ -6237,6 +6413,7 @@
     var outlooksEnabled = snapshotToggleEnabled('toggle-wpc-outlooks');
     var gaugesEnabled = snapshotToggleEnabled('toggle-usgs-gauges');
     var convectiveEnabled = snapshotToggleEnabled('toggle-convective');
+    var fireWeatherEnabled = snapshotToggleEnabled('toggle-fire-weather');
     var mesoscaleEnabled = snapshotToggleEnabled('toggle-mesoscale');
     var warnings = activeAlerts.filter(function (alert) { return alert.kind === 'warning'; }).length;
     return {
@@ -6252,6 +6429,7 @@
       wpcOutlooks: snapshotHazard(outlooksEnabled, wpcOutlookCount, 'snapshot.hazardOutlooks', 'noaa-wpc'),
       gauges: snapshotHazard(gaugesEnabled, riverGaugeState().count, 'snapshot.hazardGauges', 'usgs-nwps-gauges'),
       convective: snapshotHazard(convectiveEnabled, convectiveCount, 'snapshot.hazardConvective', 'spc-convective'),
+      fireWeather: snapshotHazard(fireWeatherEnabled, fireWeatherCount, 'snapshot.hazardFireWeather', 'spc-fire-weather'),
       mesoscale: snapshotHazard(mesoscaleEnabled, mesoscaleCount, 'snapshot.hazardMesoscale', 'spc-mesoscale')
     };
   }
@@ -6725,6 +6903,11 @@
         aborts: function () { return convectiveAbort; }, timers: function () { return convectiveRefreshTimer; },
         onControl: function (_control, value) { convectiveDay = Number(value); }
       },
+      fireWeather: {
+        refresh: refreshFireWeather, disable: disableFireWeather,
+        aborts: function () { return fireWeatherAbort; }, timers: function () { return [fireWeatherRefreshTimer, fireWeatherMoveTimer]; },
+        onControl: function (_control, value) { fireWeatherDay = Number(value); }
+      },
       watches: {
         refresh: refreshSevereWatches, disable: disableSevereWatches,
         aborts: function () { return watchAbort; }, timers: function () { return watchRefreshTimer; }
@@ -6938,6 +7121,7 @@
       renderTropicalStatus();
       renderWpcStatus();
       renderGaugeStatus();
+      renderFireWeatherStatus();
       renderMesoscaleStatus();
       renderStormReportStatus();
       renderSurfaceObservationStatus();
@@ -7224,6 +7408,10 @@
       }
       if (document.getElementById('toggle-usgs-gauges').checked) {
         riverGaugesController.scheduleMoveRefresh();
+      }
+      if (document.getElementById('toggle-fire-weather').checked) {
+        clearTimeout(fireWeatherMoveTimer);
+        fireWeatherMoveTimer = setTimeout(refreshFireWeather, 900);
       }
       if (document.getElementById('toggle-storm-reports').checked) {
         clearTimeout(stormReportMoveTimer);
@@ -7630,6 +7818,7 @@
         tropical: { status: tropicalStatusState, count: tropicalStorms.length },
         wpcOutlooks: { status: wpcStatusState, count: wpcOutlookCount, day: wpcOutlookDay },
         usgsGauges: { status: riverGaugeState().status, count: riverGaugeState().count },
+        fireWeather: { status: fireWeatherStatusState, count: fireWeatherCount, day: fireWeatherDay },
         comparison: mapComparison ? mapComparison.metrics() : { active: false }
       },
       localOverlays: {
@@ -7789,6 +7978,7 @@
         tropical: Boolean(tropicalLayer), wpcOutlooks: Boolean(wpcEroLayer || wpcFloodLayer),
         usgsGauges: Boolean(riverGaugeState().layer), earthquakes: Boolean(earthquakeLayer),
         convective: Boolean(convectiveLayer),
+        fireWeather: Boolean(fireWeatherLayer),
         satelliteStatus: satelliteStatusState,
         lightningStatus: lightningStatusState, wildfireStatus: wildfireStatusState,
         tropicalStatus: tropicalStatusState, tropicalCount: tropicalStorms.length,
@@ -7796,6 +7986,7 @@
         gaugeStatus: riverGaugeState().status, gaugeCount: riverGaugeState().count,
         earthquakeStatus: earthquakeStatusState, earthquakeCount: earthquakeCount,
         convectiveStatus: convectiveStatusState, convectiveCount: convectiveCount, convectiveDay: convectiveDay,
+        fireWeatherStatus: fireWeatherStatusState, fireWeatherCount: fireWeatherCount, fireWeatherDay: fireWeatherDay,
         watches: Boolean(watchLayer), watchStatus: watchStatusState, watchCount: watchCount,
         localOverlays: localOverlayRecords.length,
         rasterZ: map.getPane('contextRasterPane').style.zIndex,
@@ -7825,6 +8016,12 @@
     },
     getTerminatorState: function () {
       return { enabled: Boolean(terminatorLayer), status: terminatorStatusState, updatedAt: terminatorUpdatedAt };
+    },
+    getFireWeatherState: function () {
+      return {
+        enabled: Boolean(fireWeatherLayer), status: fireWeatherStatusState, count: fireWeatherCount,
+        day: fireWeatherDay, updatedAt: fireWeatherUpdatedAt
+      };
     },
     getSnowState: function () {
       return { enabled: Boolean(snowLayer), status: snowStatusState, updatedAt: snowFetchedAt };
