@@ -18,6 +18,8 @@ const cameraRecordSource = fs.readFileSync(path.join(root, 'js', 'camera-record.
 const cameraFeedSource = fs.readFileSync(path.join(root, 'js', 'camera-feed.js'), 'utf8');
 const serviceWorker = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const radarControllerSource = fs.readFileSync(path.join(root, 'js', 'radar-controller.js'), 'utf8');
+const radarMotionSource = fs.readFileSync(path.join(root, 'js', 'radar-motion.js'), 'utf8');
+const radarMotionWorkerSource = fs.readFileSync(path.join(root, 'js', 'radar-motion-worker.js'), 'utf8');
 const riverGaugesSource = fs.readFileSync(path.join(root, 'js', 'river-gauges.js'), 'utf8');
 const winterOutlooksSource = fs.readFileSync(path.join(root, 'js', 'winter-outlooks.js'), 'utf8');
 const fireWeatherSource = fs.readFileSync(path.join(root, 'js', 'fire-weather.js'), 'utf8');
@@ -53,6 +55,28 @@ test('RainViewer uses the 2026 past-radar contract', () => {
   assert.doesNotMatch(app, /function initRadar\(/);
   assert.match(html, /href="https:\/\/www\.rainviewer\.com\/"/);
   assert.match(html, /id="radar-retry"/);
+});
+
+test('motion playback remains an opt-in bounded worker preview with crossfade fallback', () => {
+  assert.match(html, /js\/radar-motion\.js[\s\S]*js\/radar-controller\.js[\s\S]*js\/app\.js/);
+  assert.match(html, /id="radar-motion-prototype"[^>]*type="checkbox"/);
+  assert.match(html, /id="radar-motion-preview"[^>]*width="128"[^>]*height="72"/);
+  assert.match(serviceWorker, /\.\/js\/radar-motion\.js/);
+  assert.match(serviceWorker, /\.\/js\/radar-motion-worker\.js/);
+  assert.match(radarMotionSource, /MAX_PIXELS = 128 \* 72/);
+  assert.match(radarMotionSource, /reason: 'reduced-motion'/);
+  assert.match(radarMotionSource, /reason: 'low-data'/);
+  assert.match(radarMotionSource, /reason: 'comparison'/);
+  assert.match(radarMotionSource, /reason: 'memory'/);
+  assert.match(radarMotionSource, /mode: 'crossfade'/);
+  assert.match(radarMotionSource, /worker\.terminate/);
+  assert.match(radarMotionWorkerSource, /bounded block-matching/);
+  assert.match(radarMotionWorkerSource, /data\.width \* data\.height > 128 \* 72/);
+  assert.match(radarControllerSource, /setMotionPrototypeEnabled/);
+  assert.match(radarControllerSource, /supportsFuture === false/);
+  assert.match(radarControllerSource, /refreshMotionPrototype/);
+  assert.match(app, /radar-motion-prototype/);
+  assert.match(app, /radar\.motionFallback/);
 });
 
 test('embed trust uses exact host-or-subdomain matching', () => {
@@ -123,7 +147,7 @@ test('NWPS river gauges are bounded, forecast-aware, and lifecycle-owned', () =>
   const gaugePosition = html.indexOf('js/river-gauges.js');
   const appPosition = html.indexOf('js/app.js');
   assert.ok(floodPosition >= 0 && gaugePosition > floodPosition && appPosition > gaugePosition);
-  assert.match(serviceWorker, /var VERSION = 'v115'/);
+  assert.match(serviceWorker, /var VERSION = 'v116'/);
   assert.match(serviceWorker, /\.\/js\/river-gauges\.js/);
   assert.match(riverGaugesSource, /resultRecordCount: String\(MAX_RECORDS\)/);
   assert.match(riverGaugesSource, /function buildQueries\(bounds, zoom\)/);

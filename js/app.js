@@ -351,6 +351,49 @@
     }, 1000);
   }
 
+  function motionReasonLabel(reason) {
+    var key = 'radar.motionReason.' + String(reason || 'worker');
+    var translated = tr(key);
+    return translated === key ? tr('radar.motionReason.worker') : translated;
+  }
+
+  function renderMotionPreview(result) {
+    result = result || { status: 'off', reason: 'disabled' };
+    var status = document.getElementById('radar-motion-status');
+    var canvas = document.getElementById('radar-motion-preview');
+    if (!status || !canvas) return;
+    status.dataset.status = result.status || 'fallback';
+    if (result.status === 'ready') {
+      status.textContent = tr('radar.motionReady', {
+        milliseconds: localNumber(Math.round(Number(result.durationMs) || 0)),
+        width: localNumber(result.width), height: localNumber(result.height)
+      });
+      try {
+        var context = canvas.getContext('2d', { willReadFrequently: true });
+        var pixels = new Uint8ClampedArray(result.pixels);
+        var imageData = typeof ImageData === 'function'
+          ? new ImageData(pixels, result.width, result.height) : context.createImageData(result.width, result.height);
+        if (!(imageData.data instanceof Uint8ClampedArray) || imageData.data !== pixels) imageData.data.set(pixels);
+        canvas.width = result.width;
+        canvas.height = result.height;
+        context.putImageData(imageData, 0, 0);
+        canvas.classList.remove('hidden');
+      } catch (error) {
+        canvas.classList.add('hidden');
+        status.textContent = tr('radar.motionFallback', { reason: motionReasonLabel('worker') });
+      }
+      return;
+    }
+    canvas.classList.add('hidden');
+    if (result.status === 'busy') {
+      status.textContent = tr('radar.motionBusy', { width: localNumber(result.width), height: localNumber(result.height) });
+    } else if (result.status === 'off') {
+      status.textContent = tr('radar.motionOff');
+    } else {
+      status.textContent = tr('radar.motionFallback', { reason: motionReasonLabel(result.reason) });
+    }
+  }
+
   radarController = StormScopeRadarController.create({
     document: document,
     L: L,
@@ -365,6 +408,16 @@
     isOnline: function () { return navigator.onLine; },
     isDocumentHidden: function () { return document.hidden; },
     isComparisonOpen: function () { return mapComparison && mapComparison.isOpen(); },
+    isReducedMotion: prefersReducedMotion,
+    motion: StormScopeRadarMotion,
+    motionWorkerUrl: 'js/radar-motion-worker.js',
+    getMotionMemoryBytes: function () {
+      return mapComparison ? Number(mapComparison.metrics().estimatedDecodedBytes) || 0 : 0;
+    },
+    getMotionMemoryBudgetBytes: function () {
+      return mapComparison ? Number(mapComparison.metrics().maxEstimatedMemoryBytes) || 0 : 64 * 1024 * 1024;
+    },
+    onMotionPreview: renderMotionPreview,
     onPlayingChange: function () { syncWakeLockMonitoring(); },
     onSceneFrameExpired: function (message) { setSavedStateStatus(message, true); }
   });
@@ -5129,6 +5182,7 @@
     comparisonRadarWasPlaying = radarController.getState().playing;
     satelliteWasPlaying = satellitePlaying;
     radarController.setPlaying(false);
+    radarController.refreshMotionPrototype();
     setSatellitePlaying(false);
     radarController.stopRefreshTimer();
     operationalControllers.suspend();
@@ -5139,6 +5193,7 @@
     startRadarRefreshTimer();
     radarController.refresh().then(function () {
       var radar = radarController.getState();
+      radarController.refreshMotionPrototype();
       if (comparisonRadarWasPlaying && radar.visible && radar.frames.length) radarController.setPlaying(true);
       if (satelliteWasPlaying && satelliteFrames.length && !lowDataMode) setSatellitePlaying(true);
       comparisonRadarWasPlaying = false;
@@ -7625,6 +7680,9 @@
       radarController.setSpeed(Number(this.value));
       scheduleSceneHashWrite();
     });
+    document.getElementById('radar-motion-prototype').addEventListener('change', function () {
+      radarController.setMotionPrototypeEnabled(this.checked);
+    });
     document.getElementById('satellite-prev').addEventListener('click', function () {
       setSatellitePlaying(false);
       clearTimeout(satelliteFrameRequestTimer);
@@ -8151,6 +8209,7 @@
         radarWasPlaying = radarController.getState().playing;
         satelliteWasPlaying = satellitePlaying;
         radarController.setPlaying(false);
+        radarController.refreshMotionPrototype();
         setSatellitePlaying(false);
         if (activeCamera) {
           destroyActiveFeed(container);
@@ -8172,6 +8231,7 @@
       startRadarRefreshTimer();
       radarController.refresh().then(function () {
         var radar = radarController.getState();
+        radarController.refreshMotionPrototype();
         if ((radarWasPlaying || comparisonRadarWasPlaying) && radar.visible && radar.frames.length) radarController.setPlaying(true);
         if (satelliteWasPlaying && satelliteFrames.length && !lowDataMode) setSatellitePlaying(true);
         radarWasPlaying = false;
@@ -8427,6 +8487,7 @@
     },
     getActiveCameraId: function () { return activeCamera ? String(activeCamera.id) : null; },
     getRadarFrameTime: function () { return radarController.getFrameTime(); },
+    getRadarMotionState: function () { return radarController.getMotionState(); },
     getAlertLayerGroup: function () { return alertLayerGroup; },
     refreshAlerts: fetchNwsAlerts,
     refreshSavedLocationAlerts: refreshSavedLocationAlerts,

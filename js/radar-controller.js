@@ -36,9 +36,18 @@
     var getMap = options.getMap || function () { return options.map; };
     var isComparisonOpen = options.isComparisonOpen || function () { return false; };
     var onPlayingChange = options.onPlayingChange || function () {};
+    var onMotionPreview = options.onMotionPreview || function () {};
     var onSceneFrameExpired = options.onSceneFrameExpired || function () {};
     var isOnline = options.isOnline || function () { return navigatorObject ? navigatorObject.onLine : true; };
     var isDocumentHidden = options.isDocumentHidden || function () { return documentObject ? documentObject.hidden : false; };
+    var isReducedMotion = options.isReducedMotion || function () {
+      return Boolean(root && root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    };
+    var getMotionMemoryBytes = options.getMotionMemoryBytes || function () { return 0; };
+    var getMotionMemoryBudgetBytes = options.getMotionMemoryBudgetBytes || function () { return 64 * 1024 * 1024; };
+    var motionApi = options.motion || root && root.StormScopeRadarMotion;
+    var motionWorkerSupported = options.motionWorkerSupported == null
+      ? Boolean(root && typeof root.Worker === 'function') : Boolean(options.motionWorkerSupported);
     var timers = {
       setTimeout: options.setTimeout || function (callback, delay) { return root.setTimeout(callback, delay); },
       clearTimeout: options.clearTimeout || function (timer) { return root.clearTimeout(timer); },
@@ -73,9 +82,22 @@
       budgetFallbackPending: false,
       lowDataMode: Boolean(options.lowDataMode),
       pendingFrameTime: null,
+      motionEnabled: false,
+      motionGeneration: 0,
+      motionStatus: 'off',
+      motionLastProfile: null,
       generation: 0,
       destroyed: false
     };
+
+    var motionController = motionApi && typeof motionApi.create === 'function'
+      ? motionApi.create({
+        workerUrl: options.motionWorkerUrl,
+        workerSupported: motionWorkerSupported,
+        setTimeout: timers && timers.setTimeout,
+        clearTimeout: timers && timers.clearTimeout,
+        now: timers && timers.now
+      }) : null;
 
     function map() {
       var value = getMap();
@@ -85,6 +107,149 @@
 
     function tr(key, variables) {
       return translate(key, variables);
+    }
+
+    function reportMotion(result) {
+      result = result || { status: 'fallback', mode: 'crossfade', reason: 'worker' };
+      state.motionStatus = result.status || 'fallback';
+      state.motionLastProfile = result.status === 'ready' ? {
+        mode: result.mode, algorithm: result.algorithm, width: result.width, height: result.height,
+        durationMs: result.durationMs, searchRadius: result.searchRadius, maxJobMs: result.maxJobMs
+      } : null;
+      onMotionPreview(Object.assign({ enabled: state.motionEnabled }, result));
+    }
+
+    function motionFramePair() {
+      if (!state.frames.length) return null;
+      if (state.index + 1 < state.frames.length) {
+        return { previous: state.frames[state.index], next: state.frames[state.index + 1] };
+      }
+      if (state.index > 0) {
+        return { previous: state.frames[state.index - 1], next: state.frames[state.index] };
+      }
+      return null;
+    }
+
+    function motionEligibility(pair) {
+      var provider = providers.providers[state.providerId];
+      var previous = pair && pair.previous;
+      var next = pair && pair.next;
+      return motionController ? motionController.eligibility({
+        optIn: state.motionEnabled,
+        reducedMotion: Boolean(isReducedMotion()),
+        lowData: state.lowDataMode,
+        hidden: Boolean(isDocumentHidden()),
+        comparisonOpen: Boolean(isComparisonOpen()),
+        workerSupported: motionController.isSupported(),
+        providerKind: provider && provider.tile.kind,
+        observedFrames: Boolean(provider && provider.history && provider.history.supportsFuture === false),
+        isForecast: Boolean(previous && (previous.isForecast || previous.forecast) ||
+          next && (next.isForecast || next.forecast)),
+        previousFrameTime: previous && Number(previous.time),
+        nextFrameTime: next && Number(next.time),
+        now: timers.now(),
+        estimatedMemoryBytes: Number(getMotionMemoryBytes()) || 0,
+        memoryBudgetBytes: Number(getMotionMemoryBudgetBytes())
+      }) : { enabled: false, reason: 'worker' };
+    }
+
+    function loadMotionFrame(frame, width, height) {
+      return new Promise(function (resolve) {
+        var provider = providers.providers[state.providerId];
+        if (!frame || !provider || provider.tile.kind !== 'xyz' || !imageConstructor || !documentObject) {
+          resolve(null);
+          return;
+        }
+        var tileZoom;
+        var coordinate;
+        var image;
+        var timer;
+        var settled = false;
+        try {
+          tileZoom = Math.min(Number(provider.tile.maxNativeZoom) || 0, Math.max(0, Math.min(5, map().getZoom())));
+          coordinate = centerTileCoordinate(tileZoom);
+          image = new imageConstructor();
+          timer = timers.setTimeout(function () {
+            if (settled) return;
+            settled = true;
+            resolve(null);
+          }, 3500);
+          image.crossOrigin = 'anonymous';
+          image.referrerPolicy = 'no-referrer';
+          image.onload = function () {
+            if (settled) return;
+            settled = true;
+            timers.clearTimeout(timer);
+            try {
+              var canvas = documentObject.createElement('canvas');
+              canvas.width = width;
+              canvas.height = height;
+              var context = canvas.getContext('2d', { willReadFrequently: true });
+              context.drawImage(image, 0, 0, width, height);
+              resolve(new Uint8ClampedArray(context.getImageData(0, 0, width, height).data));
+            } catch (error) { resolve(null); }
+          };
+          image.onerror = function () {
+            if (settled) return;
+            settled = true;
+            timers.clearTimeout(timer);
+            resolve(null);
+          };
+          image.src = providers.buildXyzRadarTileUrl(frame, tileZoom, coordinate.x, coordinate.y, { size: 256 });
+        } catch (error) {
+          if (timer) timers.clearTimeout(timer);
+          resolve(null);
+        }
+      });
+    }
+
+    async function refreshMotionPrototype() {
+      if (!state.motionEnabled) {
+        reportMotion({ status: 'off', mode: 'crossfade', reason: 'disabled' });
+        return;
+      }
+      var pair = motionFramePair();
+      var check = motionEligibility(pair);
+      state.motionGeneration += 1;
+      var generation = state.motionGeneration;
+      if (!check.enabled || !pair) {
+        if (motionController) motionController.cancel(check.reason || 'adjacent-frames');
+        reportMotion({ status: 'fallback', mode: 'crossfade', reason: check.reason || 'adjacent-frames' });
+        return;
+      }
+      reportMotion({ status: 'busy', mode: 'crossfade', reason: 'processing', width: check.width, height: check.height });
+      var previous = await loadMotionFrame(pair.previous, check.width, check.height);
+      if (generation !== state.motionGeneration || !state.motionEnabled) return;
+      var next = await loadMotionFrame(pair.next, check.width, check.height);
+      if (generation !== state.motionGeneration || !state.motionEnabled) return;
+      if (!previous || !next) {
+        reportMotion({ status: 'fallback', mode: 'crossfade', reason: 'input', width: check.width, height: check.height });
+        return;
+      }
+      var result = await motionController.run({
+        optIn: true, reducedMotion: Boolean(isReducedMotion()), lowData: state.lowDataMode,
+        hidden: Boolean(isDocumentHidden()), comparisonOpen: Boolean(isComparisonOpen()),
+        workerSupported: motionController.isSupported(), providerKind: 'xyz', observedFrames: true,
+        isForecast: Boolean(pair.previous.isForecast || pair.previous.forecast ||
+          pair.next.isForecast || pair.next.forecast),
+        previousFrameTime: pair.previous.time, nextFrameTime: pair.next.time,
+        now: timers.now(), estimatedMemoryBytes: Number(getMotionMemoryBytes()) || 0,
+        memoryBudgetBytes: Number(getMotionMemoryBudgetBytes()), width: check.width, height: check.height,
+        previous: previous, next: next
+      });
+      if (generation !== state.motionGeneration || !state.motionEnabled) return;
+      reportMotion(result);
+    }
+
+    function setMotionPrototypeEnabled(value) {
+      state.motionEnabled = Boolean(value);
+      state.motionGeneration += 1;
+      if (!state.motionEnabled) {
+        if (motionController) motionController.cancel('disabled');
+        reportMotion({ status: 'off', mode: 'crossfade', reason: 'disabled' });
+        return;
+      }
+      refreshMotionPrototype();
     }
 
     function fetchJson(url, signal) {
@@ -254,6 +419,7 @@
       preloadFrame(state.index > 0 ? state.index - 1 : state.frames.length - 1);
       updateTimeDisplay();
       sampleCenter(state.frames[state.index]);
+      if (state.motionEnabled) refreshMotionPrototype();
     }
 
     function clearDisplay() {
@@ -285,6 +451,7 @@
       updateScrubber();
       sampleCenter(state.frames[state.index]);
       preloadFrame((state.index + 1) % state.frames.length);
+      if (state.motionEnabled) refreshMotionPrototype();
     }
 
     function createTileLayer(index) {
@@ -679,7 +846,12 @@
         if (state.visible) state.layer.addTo(map());
         else map().removeLayer(state.layer);
       }
-      if (!state.visible) setPlaying(false);
+      if (!state.visible) {
+        setPlaying(false);
+        state.motionGeneration += 1;
+        if (motionController) motionController.cancel('disabled');
+        if (state.motionEnabled) reportMotion({ status: 'fallback', mode: 'crossfade', reason: 'disabled' });
+      } else if (state.motionEnabled) refreshMotionPrototype();
     }
 
     function setLowDataMode(value) {
@@ -696,6 +868,7 @@
       state.lowDataMode = lowData;
       if (documentObject) documentObject.getElementById('radar-speed').value = String(state.animationSpeed);
       if (state.frames.length) updateTimeDisplay();
+      if (state.motionEnabled) refreshMotionPrototype();
     }
 
     function loadPreferences(lowData) {
@@ -780,6 +953,8 @@
     function destroy(destroyOptions) {
       if (state.destroyed) return;
       destroyOptions = destroyOptions || {};
+      state.motionGeneration += 1;
+      if (motionController) motionController.destroy();
       stopRefreshTimer();
       if (state.abort) state.abort.abort();
       timers.clearTimeout(state.preloadTimer);
@@ -817,6 +992,14 @@
       loadPreferences: loadPreferences,
       refresh: init,
       selectFrame: selectFrame,
+      getMotionState: function () {
+        return {
+          enabled: state.motionEnabled, status: state.motionStatus,
+          lastProfile: state.motionLastProfile ? Object.assign({}, state.motionLastProfile) : null
+        };
+      },
+      refreshMotionPrototype: refreshMotionPrototype,
+      setMotionPrototypeEnabled: setMotionPrototypeEnabled,
       setLowDataMode: setLowDataMode,
       setOpacity: setOpacity,
       setPalette: setPalette,

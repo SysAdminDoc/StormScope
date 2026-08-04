@@ -1091,6 +1091,18 @@ async function main() {
       return cluster ? cluster.getAttribute('aria-label') : false;
     });
     assert.match(await cameraClusterLabelHandle.jsonValue(), /cameras in this cluster/);
+    if (await page.locator('#layers-panel').isHidden()) await page.locator('#btn-layers').click();
+    await page.locator('#layers-panel').waitFor({ state: 'visible' });
+    await page.locator('#radar-motion-prototype').check();
+    await page.waitForFunction(() => ['ready', 'fallback'].includes(
+      document.getElementById('radar-motion-status').dataset.status));
+    const motionState = await page.evaluate(() => window._stormscope.getRadarMotionState());
+    assert.equal(motionState.enabled, true);
+    assert.ok(['ready', 'fallback'].includes(motionState.status));
+    await page.locator('#radar-motion-prototype').uncheck();
+    await page.waitForFunction(() => document.getElementById('radar-motion-status').dataset.status === 'off');
+    await page.locator('#btn-layers').click();
+    await page.locator('#layers-panel').waitFor({ state: 'hidden' });
 
     // Geolocation "locate me": grant + mock a position, then verify the map
     // recenters and the polite announcer confirms it. Coordinates are session-only.

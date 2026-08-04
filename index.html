@@ -357,6 +357,15 @@
         <option value="contrast">High contrast</option>
       </select>
     </div>
+    <div class="radar-motion-controls" data-layer-id="radar">
+      <label class="radar-motion-toggle" for="radar-motion-prototype">
+        <input id="radar-motion-prototype" type="checkbox">
+        <span data-i18n="radar.motionLabel">Experimental motion-compensated preview</span>
+      </label>
+      <div id="radar-motion-status" class="context-status" role="status" aria-live="polite" data-i18n="radar.motionOff">Off; radar playback uses crossfade.</div>
+      <canvas id="radar-motion-preview" class="radar-motion-preview hidden" width="128" height="72" role="img" aria-label="Motion-compensated radar preview" data-i18n-aria-label-key="radar.motionPreviewLabel"></canvas>
+      <p class="context-limitation" data-i18n="radar.motionLimitation">Prototype preview only; it never replaces observed radar or creates forecast frames.</p>
+    </div>
     <div class="select-row" data-layer-id="alerts">
       <label for="alert-severity">Minimum alert severity</label>
       <select id="alert-severity">
@@ -755,6 +764,7 @@
   <script src="js/spatial-query.js"></script>
   <script src="js/wake-lock.js"></script>
   <script src="js/situation-snapshot.js"></script>
+  <script src="js/radar-motion.js"></script>
   <script src="js/radar-controller.js"></script>
   <script src="js/app.js"></script>
 </body>

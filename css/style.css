@@ -777,6 +777,37 @@ button:focus-visible {
   line-height: 1.4;
 }
 
+.radar-motion-controls {
+  display: grid;
+  gap: 5px;
+  margin-top: 12px;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.radar-motion-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.radar-motion-toggle input {
+  margin-top: 2px;
+  accent-color: var(--accent);
+}
+
+.radar-motion-preview {
+  width: 128px;
+  height: 72px;
+  image-rendering: auto;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #07111f;
+}
+
 .radar-legend {
   margin-top: 8px;
   color: var(--text-dim);
