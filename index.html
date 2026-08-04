@@ -82,6 +82,17 @@
     </div>
     <div id="situation-content"></div>
     <p id="situation-announcer" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></p>
+    <label class="situation-snapshot-option" for="snapshot-include-scene">
+      <input id="snapshot-include-scene" type="checkbox">
+      <span data-i18n="snapshot.includeScene">Include a public scene link</span>
+    </label>
+    <div class="situation-export-actions">
+      <button id="copy-situation-snapshot" type="button" data-i18n="snapshot.copy">Copy snapshot</button>
+      <button id="download-situation-snapshot" type="button" data-i18n="snapshot.download">Download JSON</button>
+    </div>
+    <label id="situation-snapshot-output-label" class="visually-hidden" for="situation-snapshot-output" data-i18n="snapshot.outputLabel">Situation snapshot text</label>
+    <textarea id="situation-snapshot-output" class="situation-snapshot-output hidden" rows="8" readonly></textarea>
+    <p id="situation-export-status" class="situation-export-status" role="status" aria-live="polite"></p>
     <button id="refresh-summary" type="button">Refresh summary</button>
   </aside>
 
@@ -631,6 +642,7 @@
   <script src="js/diagnostics.js"></script>
   <script src="js/spatial-query.js"></script>
   <script src="js/wake-lock.js"></script>
+  <script src="js/situation-snapshot.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

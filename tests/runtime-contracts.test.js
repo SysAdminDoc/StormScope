@@ -20,10 +20,12 @@ const serviceWorker = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const spatialQuery = fs.readFileSync(path.join(root, 'js', 'spatial-query.js'), 'utf8');
 const wakeLockSource = fs.readFileSync(path.join(root, 'js', 'wake-lock.js'), 'utf8');
 const layerRegistrySource = fs.readFileSync(path.join(root, 'js', 'layer-registry.js'), 'utf8');
+const situationSnapshotSource = fs.readFileSync(path.join(root, 'js', 'situation-snapshot.js'), 'utf8');
 const cameraData = JSON.parse(fs.readFileSync(path.join(root, 'data', 'cameras.json'), 'utf8'));
 const i18n = require('../js/i18n.js');
 const cameraRecord = require('../js/camera-record.js');
 const cameraFeed = require('../js/camera-feed.js');
+const situationSnapshot = require('../js/situation-snapshot.js');
 
 test('RainViewer uses the 2026 past-radar contract', () => {
   assert.match(app, /RAINVIEWER_COLOR_SCHEME = 2/);
@@ -331,6 +333,26 @@ test('accessible situation summary is user-triggered and exposes non-map navigat
   assert.match(app, /function renderSituationSummary/);
   assert.match(app, /StormScopeCameraStore\.nearestVerifiedCameras/);
   assert.match(app, /showAlertDetail\(alert, true, document\.getElementById\('btn-summary'\), false\)/);
+  const snapshotPosition = html.indexOf('js/situation-snapshot.js');
+  const appPosition = html.indexOf('js/app.js');
+  assert.ok(snapshotPosition >= 0 && appPosition > snapshotPosition);
+  assert.match(serviceWorker, /\.\/js\/situation-snapshot\.js/);
+  assert.match(html, /id="snapshot-include-scene"/);
+  assert.match(html, /id="copy-situation-snapshot"/);
+  assert.match(html, /id="download-situation-snapshot"/);
+  assert.match(app, /function buildSituationSnapshot\(includeSceneUrl\)/);
+  assert.match(app, /function copySituationSnapshot\(\)/);
+  assert.match(app, /function downloadSituationSnapshot\(\)/);
+  assert.equal(situationSnapshot.VERSION, 1);
+  assert.equal(situationSnapshot.COORDINATE_DECIMALS, 2);
+  assert.match(situationSnapshotSource, /private_state_included: false/);
+  for (const locale of ['en', 'es']) {
+    for (const key of ['snapshot.includeScene', 'snapshot.copy', 'snapshot.download', 'snapshot.title',
+      'snapshot.sourcesHeading', 'snapshot.hazardsHeading', 'snapshot.selectedCameraHeading',
+      'snapshot.publicScene']) {
+      assert.ok(i18n.catalogs[locale][key], `${locale} catalog should define ${key}`);
+    }
+  }
 });
 
 test('fatal recovery keeps shell cache and exports redacted diagnostics', () => {

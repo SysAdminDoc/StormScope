@@ -152,6 +152,7 @@
   var tropicalRefreshTimer = null;
   var tropicalStatusState = 'off';
   var tropicalStorms = [];
+  var tropicalUpdatedAt = null;
   var tropicalAttributionAdded = false;
   var wpcEroLayer = null;
   var wpcFloodLayer = null;
@@ -160,6 +161,7 @@
   var wpcRefreshTimer = null;
   var wpcStatusState = 'off';
   var wpcOutlookCount = 0;
+  var wpcUpdatedAt = null;
   var wpcOutlookDay = 1;
   var wpcAttributionAdded = false;
   var usgsGaugeLayer = null;
@@ -168,6 +170,7 @@
   var usgsGaugeMoveTimer = null;
   var usgsGaugeStatusState = 'off';
   var usgsGaugeCount = 0;
+  var usgsGaugeUpdatedAt = null;
   var usgsGaugeAttributionAdded = false;
   var localOverlayRecords = [];
   var localOverlayDatabase = null;
@@ -1775,6 +1778,7 @@
         if (tropicalLayer) map.removeLayer(tropicalLayer);
         tropicalLayer = null;
         tropicalStorms = [];
+        tropicalUpdatedAt = null;
         tropicalStatusState = 'no-active';
         renderTropicalStatus();
         return;
@@ -1785,6 +1789,10 @@
         return;
       }
       tropicalStorms = snapshot.storms;
+      tropicalUpdatedAt = tropicalStorms.reduce(function (latest, storm) {
+        var time = Date.parse(storm.issuedAt || '');
+        return Number.isFinite(time) && (latest == null || time > latest) ? time : latest;
+      }, null);
       var features = [];
       tropicalStorms.forEach(function (storm) {
         var nearbyFeature = storm.features.find(function (feature) { return feature.properties.kind === 'cone'; }) ||
@@ -1830,6 +1838,7 @@
     if (tropicalLayer) map.removeLayer(tropicalLayer);
     tropicalLayer = null;
     tropicalStorms = [];
+    tropicalUpdatedAt = null;
     if (tropicalAttributionAdded) {
       map.attributionControl.removeAttribution('<a href="https://www.nhc.noaa.gov/gis/" target="_blank" rel="noopener noreferrer">NOAA NHC</a>');
       tropicalAttributionAdded = false;
@@ -1921,6 +1930,15 @@
       var eroCount = results[0].status === 'fulfilled' ? results[0].value.features.length : 0;
       var floodCount = results[1].status === 'fulfilled' ? results[1].value.features.length : 0;
       wpcOutlookCount = eroCount + floodCount;
+      var wpcTimes = [];
+      results.forEach(function (result) {
+        if (result.status !== 'fulfilled') return;
+        result.value.features.forEach(function (feature) {
+          var time = Date.parse(feature.properties && feature.properties.issuedAt || '');
+          if (Number.isFinite(time)) wpcTimes.push(time);
+        });
+      });
+      wpcUpdatedAt = wpcTimes.length ? Math.max.apply(Math, wpcTimes) : null;
       wpcStatusState = results.some(function (result) { return result.status === 'rejected'; })
         ? 'partial' : (wpcOutlookCount ? 'ready' : 'none');
       if (!wpcAttributionAdded) {
@@ -1943,6 +1961,7 @@
     wpcEroLayer = null;
     wpcFloodLayer = null;
     wpcOutlookCount = 0;
+    wpcUpdatedAt = null;
     if (wpcAttributionAdded) {
       map.attributionControl.removeAttribution('<a href="https://www.wpc.ncep.noaa.gov/" target="_blank" rel="noopener noreferrer">NOAA WPC</a>');
       wpcAttributionAdded = false;
@@ -2043,6 +2062,9 @@
       if (usgsGaugeLayer) map.removeLayer(usgsGaugeLayer);
       usgsGaugeLayer = next;
       usgsGaugeCount = features.length;
+      var gaugeTimes = features.map(function (feature) { return Date.parse(feature.properties.observedAt || ''); })
+        .filter(Number.isFinite);
+      usgsGaugeUpdatedAt = gaugeTimes.length ? Math.max.apply(Math, gaugeTimes) : null;
       usgsGaugeStatusState = details.some(function (result) { return result.status === 'rejected'; }) ? 'partial'
         : (features.length ? 'ready' : 'none');
       if (!usgsGaugeAttributionAdded) {
@@ -2068,6 +2090,7 @@
     if (usgsGaugeLayer) map.removeLayer(usgsGaugeLayer);
     usgsGaugeLayer = null;
     usgsGaugeCount = 0;
+    usgsGaugeUpdatedAt = null;
     if (usgsGaugeAttributionAdded) {
       map.attributionControl.removeAttribution('<a href="https://waterdata.usgs.gov/" target="_blank" rel="noopener noreferrer">USGS</a> / <a href="https://water.noaa.gov/" target="_blank" rel="noopener noreferrer">NOAA NWPS</a>');
       usgsGaugeAttributionAdded = false;
@@ -6035,6 +6058,235 @@
     document.getElementById('situation-heading').focus({ preventScroll: true });
   }
 
+  function snapshotToggleEnabled(id) {
+    var toggle = document.getElementById(id);
+    return Boolean(toggle && toggle.checked);
+  }
+
+  function snapshotTimeMs(value) {
+    if (value == null || value === '') return null;
+    var number = Number(value);
+    if (Number.isFinite(number)) {
+      if (number > 0 && number < 100000000000) number *= 1000;
+      return number > 0 ? number : null;
+    }
+    var parsed = Date.parse(String(value));
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  function snapshotFreshness(value, staleMs, status) {
+    if (status === 'off') return 'not-visible';
+    if (status === 'error' || status === 'incomplete' || status === 'partial') return 'unavailable';
+    var time = snapshotTimeMs(value);
+    if (time == null) return 'unknown';
+    return Date.now() - time > Number(staleMs || 0) ? 'stale' : 'fresh';
+  }
+
+  function snapshotLatestAlertIssue() {
+    var latest = null;
+    activeAlerts.forEach(function (alert) {
+      var time = snapshotTimeMs(alert.sentMs != null ? alert.sentMs : alert.effectiveMs);
+      if (time != null && (latest == null || time > latest)) latest = time;
+    });
+    return latest == null ? (alertNationalFetchedAt || null) : latest;
+  }
+
+  function snapshotSources() {
+    var sources = [];
+    function add(id, source, issueAt, freshness) {
+      sources.push({ id: id, source: source, issueAt: issueAt, freshness: freshness });
+    }
+
+    if (snapshotToggleEnabled('toggle-radar') && radarVisible) {
+      var radarFrame = radarFrames[radarIndex] || null;
+      var radarProvider = (radarProviderSelection && radarProviderSelection.provider) ||
+        StormScopeRadarProviders.providers[radarProviderId];
+      var radarAge = radarFrame ? StormScopeRadarProviders.getFrameAge(radarFrame, radarProviderId) : null;
+      var radarState = radarSemanticState && radarSemanticState.state;
+      var radarFresh = radarState === 'failure' || radarState === 'no-coverage' ? 'unavailable'
+        : !radarAge || !radarAge.known ? 'unknown'
+          : radarAge.failed ? 'unavailable' : radarAge.stale ? 'stale' : 'fresh';
+      add('radar', radarProvider && radarProvider.label || tr('weather.unknown'),
+        radarFrame && radarFrame.time, radarFresh);
+    }
+
+    var alertsEnabled = alertsVisible && snapshotToggleEnabled('toggle-alerts');
+    if (alertsEnabled) {
+      var alertIssue = snapshotLatestAlertIssue();
+      add('nws-alerts', 'NOAA/NWS active alerts', alertIssue,
+        snapshotFreshness(alertNationalFetchedAt || alertIssue, StormScopeNwsAlerts.MIN_REFRESH_MS, alertIssue ? 'ready' : 'loading'));
+    }
+    if (snapshotToggleEnabled('toggle-snow')) {
+      add('noaa-snow', StormScopeContextLayers.providers.snow.label, snowFetchedAt,
+        snapshotFreshness(snowFetchedAt, StormScopeContextLayers.providers.snow.staleMs, snowStatusState));
+    }
+    if (snapshotToggleEnabled('toggle-satellite')) {
+      add('noaa-goes', StormScopeContextLayers.providers.satellite.label, satelliteLatestTime,
+        snapshotFreshness(satelliteLatestTime, StormScopeContextLayers.providers.satellite.staleMs, satelliteStatusState));
+    }
+    if (snapshotToggleEnabled('toggle-lightning')) {
+      add('noaa-lightning', StormScopeContextLayers.providers.lightning.label, lightningLatestTime,
+        snapshotFreshness(lightningLatestTime, StormScopeContextLayers.providers.lightning.staleMs, lightningStatusState));
+    }
+    if (snapshotToggleEnabled('toggle-wildfires')) {
+      add('nifc-wildfires', StormScopeContextLayers.providers.wildfires.label, wildfireUpdatedAt,
+        snapshotFreshness(wildfireUpdatedAt, StormScopeContextLayers.providers.wildfires.staleMs, wildfireStatusState));
+    }
+    if (snapshotToggleEnabled('toggle-tropical')) {
+      add('noaa-nhc', 'NOAA NHC tropical cyclone advisories', tropicalUpdatedAt, snapshotFreshness(
+        tropicalUpdatedAt, 10 * 60 * 1000, tropicalStatusState));
+    }
+    if (snapshotToggleEnabled('toggle-wpc-outlooks')) {
+      add('noaa-wpc', 'NOAA WPC outlooks', wpcUpdatedAt, snapshotFreshness(
+        wpcUpdatedAt, 6 * 60 * 60 * 1000, wpcStatusState));
+    }
+    if (snapshotToggleEnabled('toggle-usgs-gauges')) {
+      add('usgs-nwps-gauges', 'USGS / NOAA NWPS river gauges', usgsGaugeUpdatedAt, snapshotFreshness(
+        usgsGaugeUpdatedAt, 2 * 60 * 60 * 1000, usgsGaugeStatusState));
+    }
+    if (snapshotToggleEnabled('toggle-earthquakes')) {
+      add('usgs-earthquakes', 'USGS earthquakes', earthquakeGeneratedAt,
+        snapshotFreshness(earthquakeGeneratedAt, StormScopeEarthquakes.provider.staleMs, earthquakeStatusState));
+    }
+    if (snapshotToggleEnabled('toggle-convective')) {
+      add('spc-convective', 'NOAA/NWS SPC convective outlooks', convectiveUpdatedAt,
+        snapshotFreshness(convectiveUpdatedAt, StormScopeConvectiveOutlooks.provider.staleMs, convectiveStatusState));
+    }
+    if (snapshotToggleEnabled('toggle-watches')) {
+      add('spc-watches', 'NOAA/NWS SPC watches', watchFetchedAt,
+        snapshotFreshness(watchFetchedAt, StormScopeSevereWatches.provider.staleMs, watchStatusState));
+    }
+    if (snapshotToggleEnabled('toggle-mesoscale')) {
+      add('spc-mesoscale', 'NOAA/NWS SPC mesoscale discussions', mesoscaleLatestAt,
+        snapshotFreshness(mesoscaleLatestAt, StormScopeSpcReports.providers.mesoscale.staleMs, mesoscaleStatusState));
+    }
+    if (snapshotToggleEnabled('toggle-storm-reports')) {
+      add('nws-storm-reports', 'NOAA/NWS local storm reports', stormReportLatestAt,
+        snapshotFreshness(stormReportLatestAt, StormScopeSpcReports.providers.reports.staleMs, stormReportStatusState));
+    }
+    if (snapshotToggleEnabled('toggle-surface-observations')) {
+      add('noaa-metar', StormScopeSurfaceObservations.provider.label, surfaceObservationLatestAt,
+        snapshotFreshness(surfaceObservationLatestAt, StormScopeSurfaceObservations.provider.staleMs, surfaceObservationStatusState));
+    }
+    return sources;
+  }
+
+  function snapshotHazard(visible, count, labelKey, sourceId) {
+    return {
+      label: tr(labelKey), visible: visible, count: visible ? count : 0, sourceId: sourceId
+    };
+  }
+
+  function snapshotHazards() {
+    var alertsEnabled = alertsVisible && snapshotToggleEnabled('toggle-alerts');
+    var wildfiresEnabled = snapshotToggleEnabled('toggle-wildfires');
+    var watchesEnabled = snapshotToggleEnabled('toggle-watches');
+    var earthquakesEnabled = snapshotToggleEnabled('toggle-earthquakes');
+    var reportsEnabled = snapshotToggleEnabled('toggle-storm-reports');
+    var surfaceEnabled = snapshotToggleEnabled('toggle-surface-observations');
+    var lightningEnabled = snapshotToggleEnabled('toggle-lightning');
+    var tropicalEnabled = snapshotToggleEnabled('toggle-tropical');
+    var outlooksEnabled = snapshotToggleEnabled('toggle-wpc-outlooks');
+    var gaugesEnabled = snapshotToggleEnabled('toggle-usgs-gauges');
+    var convectiveEnabled = snapshotToggleEnabled('toggle-convective');
+    var mesoscaleEnabled = snapshotToggleEnabled('toggle-mesoscale');
+    var warnings = activeAlerts.filter(function (alert) { return alert.kind === 'warning'; }).length;
+    return {
+      alerts: snapshotHazard(alertsEnabled, activeAlerts.length, 'snapshot.hazardAlerts', 'nws-alerts'),
+      warnings: snapshotHazard(alertsEnabled, warnings, 'snapshot.hazardWarnings', 'nws-alerts'),
+      wildfires: snapshotHazard(wildfiresEnabled, wildfireCount, 'snapshot.hazardWildfires', 'nifc-wildfires'),
+      watches: snapshotHazard(watchesEnabled, watchCount, 'snapshot.hazardWatches', 'spc-watches'),
+      earthquakes: snapshotHazard(earthquakesEnabled, earthquakeCount, 'snapshot.hazardEarthquakes', 'usgs-earthquakes'),
+      stormReports: snapshotHazard(reportsEnabled, stormReportCount, 'snapshot.hazardStormReports', 'nws-storm-reports'),
+      surfaceObservations: snapshotHazard(surfaceEnabled, surfaceObservationCount, 'snapshot.hazardSurfaceObservations', 'noaa-metar'),
+      lightning: snapshotHazard(lightningEnabled, lightningLayer ? 1 : 0, 'snapshot.hazardLightning', 'noaa-lightning'),
+      tropical: snapshotHazard(tropicalEnabled, tropicalStorms.length, 'snapshot.hazardTropical', 'noaa-nhc'),
+      wpcOutlooks: snapshotHazard(outlooksEnabled, wpcOutlookCount, 'snapshot.hazardOutlooks', 'noaa-wpc'),
+      gauges: snapshotHazard(gaugesEnabled, usgsGaugeCount, 'snapshot.hazardGauges', 'usgs-nwps-gauges'),
+      convective: snapshotHazard(convectiveEnabled, convectiveCount, 'snapshot.hazardConvective', 'spc-convective'),
+      mesoscale: snapshotHazard(mesoscaleEnabled, mesoscaleCount, 'snapshot.hazardMesoscale', 'spc-mesoscale')
+    };
+  }
+
+  function boundedPublicSceneUrl() {
+    var scene = captureSharedScene();
+    scene.map.lat = Number(scene.map.lat.toFixed(2));
+    scene.map.lon = Number(scene.map.lon.toFixed(2));
+    var url = new URL(location.href);
+    url.search = '';
+    url.hash = StormScopeSceneCodec.toHash(scene);
+    return url.toString();
+  }
+
+  function buildSituationSnapshot(includeSceneUrl) {
+    var center = map.getCenter();
+    return StormScopeSituationSnapshot.build({
+      exportedAt: new Date().toISOString(),
+      appVersion: APP_VERSION,
+      locale: appLocale,
+      map: { center: { latitude: center.lat, longitude: center.lng }, zoom: map.getZoom() },
+      sources: snapshotSources(),
+      hazards: snapshotHazards(),
+      selectedCamera: activeCamera ? {
+        name: activeCamera.name,
+        source: sourceLabel(activeCamera.source || activeCamera.type),
+        type: activeCamera.type,
+        health: activeCamera.health,
+        lastVerified: activeCamera.last_verified,
+        sourceUrl: activeCamera.source_url
+      } : null,
+      publicSceneUrl: includeSceneUrl ? boundedPublicSceneUrl() : null
+    }, {
+      includeSceneUrl: Boolean(includeSceneUrl),
+      translate: tr,
+      formatNumber: localNumber,
+      formatTime: function (value) { return value ? contextTimestamp(value) : tr('snapshot.unknown'); },
+      formatCoordinate: function (latitude, longitude) {
+        return situationCoordinate(latitude, 'summary.north', 'summary.south') + ', ' +
+          situationCoordinate(longitude, 'summary.east', 'summary.west');
+      },
+      freshnessLabel: function (value) { return tr('snapshot.' + value); }
+    });
+  }
+
+  async function copySituationSnapshot() {
+    var output = document.getElementById('situation-snapshot-output');
+    var status = document.getElementById('situation-export-status');
+    try {
+      var includeScene = document.getElementById('snapshot-include-scene').checked;
+      var result = buildSituationSnapshot(includeScene);
+      output.value = result.text;
+      output.classList.remove('hidden');
+      var copied = false;
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        try {
+          await navigator.clipboard.writeText(result.text);
+          copied = true;
+        } catch (error) { /* use the visible manual-copy fallback */ }
+      }
+      if (!copied && typeof document.execCommand === 'function') {
+        output.focus();
+        output.select();
+        try { copied = document.execCommand('copy'); } catch (error) { /* manual copy remains available */ }
+      }
+      status.textContent = tr(copied ? 'snapshot.copied' : 'snapshot.manual');
+    } catch (error) {
+      status.textContent = tr('snapshot.failed');
+    }
+  }
+
+  function downloadSituationSnapshot() {
+    var status = document.getElementById('situation-export-status');
+    try {
+      var includeScene = document.getElementById('snapshot-include-scene').checked;
+      var result = buildSituationSnapshot(includeScene);
+      downloadLocalOverlay('stormscope-situation-snapshot.json', JSON.stringify(result.json, null, 2), 'application/json');
+      status.textContent = tr('snapshot.downloaded');
+    } catch (error) {
+      status.textContent = tr('snapshot.failed');
+    }
+  }
+
   // ── UI Bindings ──
 
   function normalizeLayerFilterText(value) {
@@ -6522,6 +6774,8 @@
       if (summaryWildfireStatus === 'error') summaryWildfireStatus = 'idle';
       renderSituationSummary(true);
     });
+    document.getElementById('copy-situation-snapshot').addEventListener('click', copySituationSnapshot);
+    document.getElementById('download-situation-snapshot').addEventListener('click', downloadSituationSnapshot);
     document.getElementById('btn-search').addEventListener('click', function () {
       if (toggleTopLevelPanel('search-panel', 'btn-search')) {
         scheduleSearchRender();
@@ -7460,6 +7714,10 @@
     },
     captureSharedScene: captureSharedScene,
     getSharedSceneUrl: sharedSceneUrl,
+    buildSituationSnapshot: function (includeSceneUrl) {
+      var result = buildSituationSnapshot(Boolean(includeSceneUrl));
+      return { json: result.json, text: result.text };
+    },
     getActiveCameraId: function () { return activeCamera ? String(activeCamera.id) : null; },
     getRadarFrameTime: function () { return radarFrames[radarIndex] ? radarFrames[radarIndex].time : null; },
     getAlertLayerGroup: function () { return alertLayerGroup; },

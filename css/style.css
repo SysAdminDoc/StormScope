@@ -337,6 +337,33 @@ button:focus-visible {
 .situation-section li { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .situation-section li span { min-width: 0; font-size: 12px; }
 
+.situation-snapshot-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 12px 0 7px;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.situation-snapshot-option input { margin-top: 1px; }
+
+.situation-export-actions { display: flex; gap: 6px; }
+.situation-export-actions button { flex: 1; }
+.situation-snapshot-output {
+  width: 100%;
+  margin-top: 7px;
+  min-height: 130px;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-dark);
+  color: var(--text);
+  font: 11px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+.situation-export-status { min-height: 1.35em; margin: 6px 0 0; color: var(--text-dim); font-size: 11px; }
+
 .situation-section button,
 #refresh-summary {
   min-height: 32px;

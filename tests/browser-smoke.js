@@ -985,6 +985,24 @@ async function main() {
     assert.match(summaryText, /Radar at map center.*coverage|Radar at map center.*no coverage/s);
     assert.match(summaryText, /1 active alerts, including 1 warnings/);
     assert.match(summaryText, /Nearest verified cameras.*5 nearest verified cameras/s);
+    const snapshot = await page.evaluate(() => window._stormscope.buildSituationSnapshot(false));
+    assert.equal(snapshot.json.schema, 1);
+    assert.deepEqual(snapshot.json.map.center, { latitude: 39.5, longitude: -98.5 });
+    assert.equal(Object.hasOwn(snapshot.json, 'public_scene_url'), false);
+    assert.equal(Object.hasOwn(snapshot.json, 'favorites'), false);
+    assert.equal(Object.hasOwn(snapshot.json, 'savedViews'), false);
+    assert.equal(Object.hasOwn(snapshot.json, 'local_overlays'), false);
+    assert.ok(snapshot.json.sources.some((source) => source.id === 'radar'));
+    await page.locator('#snapshot-include-scene').check();
+    const linkedSnapshot = await page.evaluate(() => window._stormscope.buildSituationSnapshot(true));
+    assert.match(linkedSnapshot.json.public_scene_url, /#scene=1\./);
+    const snapshotDownloadPromise = page.waitForEvent('download');
+    await page.locator('#download-situation-snapshot').click();
+    const snapshotDownload = await snapshotDownloadPromise;
+    assert.equal(snapshotDownload.suggestedFilename(), 'stormscope-situation-snapshot.json');
+    const downloadedSnapshot = JSON.parse(fs.readFileSync(await snapshotDownload.path(), 'utf8'));
+    assert.equal(downloadedSnapshot.schema, 1);
+    assert.equal(Object.hasOwn(downloadedSnapshot, 'public_scene_url'), true);
     const summaryMapState = await page.evaluate(() => {
       const map = window._stormscope.getMap();
       return { center: map.getCenter(), zoom: map.getZoom() };

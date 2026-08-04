@@ -16,7 +16,7 @@
  */
 'use strict';
 
-var VERSION = 'v104';
+var VERSION = 'v105';
 var RUNTIME_CACHE_VERSION = 'v2';
 var SHELL_CACHE = 'stormscope-shell-' + VERSION;
 var TILE_CACHE = 'stormscope-tiles-' + RUNTIME_CACHE_VERSION;
@@ -70,6 +70,7 @@ var SHELL_ASSETS = [
   './js/diagnostics.js',
   './js/spatial-query.js',
   './js/wake-lock.js',
+  './js/situation-snapshot.js',
   './js/app.js',
   './vendor/leaflet/leaflet.css',
   './vendor/leaflet/leaflet.js',
