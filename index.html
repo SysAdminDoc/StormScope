@@ -579,6 +579,7 @@
     <div class="search-checks">
       <label><input id="camera-healthy" type="checkbox"> Healthy only</label>
       <label><input id="camera-favorites" type="checkbox"> Favorites only</label>
+      <label><input id="camera-outage-check" type="checkbox"> <span data-i18n="camera.outageCheck">Check still frames for likely outages (device only)</span></label>
     </div>
     <div id="camera-source-health" class="camera-source-health" data-status="loading" data-i18n="camera.sourceHealthLoading">Loading refresh health…</div>
     <div id="camera-results-status" class="camera-results-status" role="status" aria-live="polite"></div>
@@ -646,6 +647,7 @@
           <span id="modal-cam-location" class="modal-subtitle"></span>
           <div class="modal-meta">
             <span id="modal-cam-health" class="health-badge"></span>
+            <span id="modal-camera-outage" class="camera-outage-badge hidden"></span>
             <a id="modal-cam-source" target="_blank" rel="noopener noreferrer">Source</a>
             <button id="favorite-camera" class="favorite-camera" type="button" aria-pressed="false">☆ Favorite</button>
           </div>

@@ -13,6 +13,12 @@
   var OBSERVATION_UNSUPPORTED = 'unsupported';
   var REASON_BROWSER_HLS = 'browser_hls';
   var REASON_UNTRUSTED_EMBED = 'untrusted_embed';
+  var OUTAGE_OUTCOME = 'likely_outage';
+  var REASON_FLAT_FRAME = 'flat_frame';
+  var REASON_COLOR_DEPTH_COLLAPSE = 'color_depth_collapse';
+  var REASON_STALLED_FRAME = 'stalled_frame';
+  var MAX_FRAME_SAMPLES = 4096;
+  var STALLED_FRAME_THRESHOLD = 3;
   var TRUSTED_EMBED_HOST_SUFFIXES = cameraRecord.TRUSTED_EMBED_HOST_SUFFIXES;
 
   function requireFunction(value, label) {
@@ -28,6 +34,142 @@
     if (extraParams) params += '&' + extraParams;
     if (origin && origin !== 'null') params += '&origin=' + encodeURIComponent(origin);
     return 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(videoId) + '?' + params;
+  }
+
+  function unavailableFrame(reason) {
+    return { state: 'unavailable', likelyOutage: false, reason: reason || 'unavailable', signature: null };
+  }
+
+  // Analyze quantized pixels only. Keeping this pure makes the heuristic easy to
+  // bound and test without a browser canvas, while the browser adapter below
+  // remains best-effort for cross-origin images that cannot expose pixels.
+  function analyzeFramePixels(pixels, width, height, options) {
+    options = options || {};
+    var maxSamples = Number.isSafeInteger(options.maxSamples) && options.maxSamples > 0
+      ? Math.min(options.maxSamples, MAX_FRAME_SAMPLES) : MAX_FRAME_SAMPLES;
+    if (!pixels || !Number.isSafeInteger(width) || !Number.isSafeInteger(height) ||
+        width < 1 || height < 1 || width * height > 16 * 1024 * 1024 ||
+        pixels.length < width * height * 4) return unavailableFrame('invalid_pixels');
+
+    var stride = Math.max(1, Math.ceil(Math.sqrt((width * height) / maxSamples)));
+    var colors = Object.create(null);
+    var sampleCount = 0;
+    var dominantCount = 0;
+    var uniqueColors = 0;
+    var minLuma = 255;
+    var maxLuma = 0;
+    var sumLuma = 0;
+    var sumChannelSpread = 0;
+    var hash = 2166136261;
+
+    for (var y = 0; y < height; y += stride) {
+      for (var x = 0; x < width; x += stride) {
+        var offset = (y * width + x) * 4;
+        var red = pixels[offset];
+        var green = pixels[offset + 1];
+        var blue = pixels[offset + 2];
+        var alpha = pixels[offset + 3];
+        var color = ((red >> 4) << 8) | ((green >> 4) << 4) | (blue >> 4);
+        if (!colors[color]) {
+          colors[color] = 0;
+          uniqueColors += 1;
+        }
+        colors[color] += 1;
+        if (colors[color] > dominantCount) dominantCount = colors[color];
+        var luma = Math.round((299 * red + 587 * green + 114 * blue) / 1000);
+        minLuma = Math.min(minLuma, luma);
+        maxLuma = Math.max(maxLuma, luma);
+        sumLuma += luma;
+        sumChannelSpread += Math.max(red, green, blue) - Math.min(red, green, blue);
+        hash ^= color;
+        hash = Math.imul(hash, 16777619);
+        hash ^= alpha >> 4;
+        hash = Math.imul(hash, 16777619);
+        sampleCount += 1;
+      }
+    }
+
+    if (!sampleCount) return unavailableFrame('empty_pixels');
+    var dominantRatio = dominantCount / sampleCount;
+    var lumaRange = maxLuma - minLuma;
+    var meanLuma = sumLuma / sampleCount;
+    var meanChannelSpread = sumChannelSpread / sampleCount;
+    var flat = uniqueColors <= 2 && dominantRatio >= 0.985 && lumaRange <= 6 && meanChannelSpread <= 12;
+    var colorDepthCollapse = uniqueColors <= 4 && dominantRatio >= 0.98 && lumaRange <= 14;
+    var likelyOutage = flat || colorDepthCollapse;
+    return {
+      state: 'ready',
+      likelyOutage: likelyOutage,
+      reason: flat ? REASON_FLAT_FRAME : (colorDepthCollapse ? REASON_COLOR_DEPTH_COLLAPSE : null),
+      signature: width + 'x' + height + ':' + (hash >>> 0).toString(16),
+      samples: sampleCount,
+      uniqueColors: uniqueColors,
+      dominantRatio: dominantRatio,
+      lumaRange: lumaRange,
+      meanLuma: meanLuma,
+      stalledFrames: 1
+    };
+  }
+
+  function analyzeImageFrame(image, documentRef, options) {
+    if (!image || !documentRef || typeof documentRef.createElement !== 'function') {
+      return unavailableFrame('canvas_unavailable');
+    }
+    var width = Number(image.naturalWidth || image.videoWidth || image.width);
+    var height = Number(image.naturalHeight || image.videoHeight || image.height);
+    if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1) {
+      return unavailableFrame('image_dimensions_unavailable');
+    }
+    var maxSamples = Number.isSafeInteger(options && options.maxSamples) && options.maxSamples > 0
+      ? Math.min(options.maxSamples, MAX_FRAME_SAMPLES) : MAX_FRAME_SAMPLES;
+    var scale = Math.min(1, Math.sqrt(maxSamples / (width * height)));
+    var sampleWidth = Math.max(1, Math.round(width * scale));
+    var sampleHeight = Math.max(1, Math.round(height * scale));
+    try {
+      var canvas = documentRef.createElement('canvas');
+      canvas.width = sampleWidth;
+      canvas.height = sampleHeight;
+      var context = canvas.getContext('2d', { willReadFrequently: true });
+      if (!context || typeof context.drawImage !== 'function' || typeof context.getImageData !== 'function') {
+        return unavailableFrame('canvas_unavailable');
+      }
+      context.drawImage(image, 0, 0, sampleWidth, sampleHeight);
+      var imageData = context.getImageData(0, 0, sampleWidth, sampleHeight);
+      return analyzeFramePixels(imageData.data, sampleWidth, sampleHeight, options);
+    } catch (error) {
+      return unavailableFrame('pixel_access_blocked');
+    }
+  }
+
+  function createFrameDetector(options) {
+    options = options || {};
+    var threshold = Number.isSafeInteger(options.stalledFrameThreshold) && options.stalledFrameThreshold >= 2
+      ? Math.min(options.stalledFrameThreshold, 6) : STALLED_FRAME_THRESHOLD;
+    var previousSignature = null;
+    var consecutiveFrames = 0;
+
+    function reset() {
+      previousSignature = null;
+      consecutiveFrames = 0;
+    }
+
+    function observe(analysis) {
+      if (!analysis || analysis.state !== 'ready' || !analysis.signature) {
+        reset();
+        return analysis || null;
+      }
+      if (analysis.signature === previousSignature) consecutiveFrames += 1;
+      else consecutiveFrames = 1;
+      previousSignature = analysis.signature;
+      var stalled = consecutiveFrames >= threshold;
+      return Object.assign({}, analysis, {
+        likelyOutage: Boolean(analysis.likelyOutage || stalled),
+        reason: analysis.likelyOutage ? analysis.reason : (stalled ? REASON_STALLED_FRAME : null),
+        stalledFrames: consecutiveFrames
+      });
+    }
+
+    return Object.freeze({ observe: observe, reset: reset });
   }
 
   function create(options) {
@@ -47,6 +189,8 @@
     var HlsConstructor = options.Hls;
     var origin = String(options.origin || '');
     var trustedSuffixes = options.trustedEmbedHostSuffixes || TRUSTED_EMBED_HOST_SUFFIXES;
+    var analyzeImage = typeof options.analyzeImage === 'function' ? options.analyzeImage : null;
+    var frameDetector = createFrameDetector(options);
     var cleanup = null;
     var imageRefreshTimer = null;
     var currentContainer = null;
@@ -69,6 +213,7 @@
       if (release) release();
 
       var target = container || currentContainer;
+      frameDetector.reset();
       if (!target) return;
       var orphanedVideos = target.querySelectorAll('video');
       for (var i = 0; i < orphanedVideos.length; i++) {
@@ -214,7 +359,7 @@
         if (isActive(cam)) renderError(cam, container, translate('feed.cameraUnavailable'));
       };
       image.onload = function () {
-        if (isActive(cam)) observe(cam, 'playable', 'mjpeg_rendered');
+        if (isActive(cam)) observeStillFrame(cam, image, 1, 'mjpeg_rendered');
       };
       cleanup = function () {
         image.onload = null;
@@ -288,10 +433,8 @@
       };
       image.onload = function () {
         successfulLoads += 1;
-        if (isActive(cam)) {
-          observe(cam, successfulLoads >= 2 ? 'playable' : 'loaded',
-            successfulLoads >= 2 ? 'refresh_advanced' : 'initial_image');
-        }
+        if (isActive(cam)) observeStillFrame(cam, image, successfulLoads,
+          successfulLoads >= 2 ? 'refresh_advanced' : 'initial_image');
         var loading = container.querySelector('.feed-loading');
         if (loading) loading.remove();
       };
@@ -317,6 +460,19 @@
       scheduleImageRefresh();
     }
 
+    function observeStillFrame(cam, image, loadCount, normalReason) {
+      var analysis = null;
+      if (analyzeImage) {
+        try { analysis = frameDetector.observe(analyzeImage(image, cam)); } catch (error) { analysis = null; }
+      } else {
+        frameDetector.reset();
+      }
+      if (isActive(cam)) {
+        if (analysis && analysis.likelyOutage) observe(cam, OUTAGE_OUTCOME, analysis.reason);
+        else observe(cam, loadCount >= 2 ? 'playable' : 'loaded', normalReason);
+      }
+    }
+
     function load(cam, container) {
       if (!cam || !container || typeof container.replaceChildren !== 'function') {
         throw new TypeError('camera and feed container are required');
@@ -337,6 +493,13 @@
     OBSERVATION_UNSUPPORTED: OBSERVATION_UNSUPPORTED,
     REASON_BROWSER_HLS: REASON_BROWSER_HLS,
     REASON_UNTRUSTED_EMBED: REASON_UNTRUSTED_EMBED,
+    OUTAGE_OUTCOME: OUTAGE_OUTCOME,
+    REASON_FLAT_FRAME: REASON_FLAT_FRAME,
+    REASON_COLOR_DEPTH_COLLAPSE: REASON_COLOR_DEPTH_COLLAPSE,
+    REASON_STALLED_FRAME: REASON_STALLED_FRAME,
+    analyzeFramePixels: analyzeFramePixels,
+    analyzeImageFrame: analyzeImageFrame,
+    createFrameDetector: createFrameDetector,
     TRUSTED_EMBED_HOST_SUFFIXES: TRUSTED_EMBED_HOST_SUFFIXES,
     hostMatchesSuffix: hostMatchesSuffix,
     isAllowedEmbedUrl: isAllowedEmbedUrl,

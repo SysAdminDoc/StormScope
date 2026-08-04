@@ -39,6 +39,8 @@
   var priorFocusEl = null;
   var weatherAbort = null;
   var allCameras = [];
+  var cameraOutageCheckEnabled = false;
+  var CAMERA_OUTAGE_CHECK_STORAGE_KEY = 'stormscope-camera-outage-check-v1';
   var cameraIconCache = Object.create(null);
   var cameraObservations = Object.create(null);
   var cameraStore = null;
@@ -524,6 +526,10 @@
     imageRefreshInterval: imageRefreshInterval,
     isActive: function (camera) { return activeCamera === camera; },
     recordObservation: recordCameraObservation,
+    analyzeImage: function (image) {
+      if (!cameraOutageCheckEnabled) return null;
+      return StormScopeCameraFeed.analyzeImageFrame(image, document);
+    },
     setTimeout: setTimeout,
     clearTimeout: clearTimeout,
     now: Date.now
@@ -535,6 +541,17 @@
     document.getElementById('low-data-status').textContent = tr(lowDataMode
       ? (lowDataSource === 'save-data' ? 'lowData.onSaveData' : 'lowData.on')
       : 'lowData.off');
+  }
+
+  function initCameraOutageCheck() {
+    var checkbox = document.getElementById('camera-outage-check');
+    if (!checkbox) return;
+    try { cameraOutageCheckEnabled = localStorage.getItem(CAMERA_OUTAGE_CHECK_STORAGE_KEY) === '1'; } catch (error) { /* optional */ }
+    checkbox.checked = cameraOutageCheckEnabled;
+    checkbox.addEventListener('change', function () {
+      cameraOutageCheckEnabled = checkbox.checked;
+      try { localStorage.setItem(CAMERA_OUTAGE_CHECK_STORAGE_KEY, cameraOutageCheckEnabled ? '1' : '0'); } catch (error) { /* optional */ }
+    });
   }
 
   function applyDataMode(preference, persist) {
@@ -4147,6 +4164,7 @@
     cam.local_observation = observation;
     persistCameraObservations();
     if (activeCamera === cam) updateModalCameraHealth(cam);
+    if (currentCameraResults.indexOf(cam) !== -1) renderCameraResultWindow();
   }
 
   function handleCameraLoadProgress(progress) {
@@ -4530,6 +4548,13 @@
       summary.textContent = cameraResultSummary(camera);
       openButton.appendChild(name);
       openButton.appendChild(summary);
+      if (camera.local_observation && camera.local_observation.outcome === 'likely_outage') {
+        var outageBadge = document.createElement('span');
+        outageBadge.className = 'camera-outage-badge';
+        outageBadge.textContent = tr('camera.outageBadge');
+        outageBadge.setAttribute('aria-label', tr('camera.outageDescription'));
+        openButton.appendChild(outageBadge);
+      }
       openButton.addEventListener('click', function () { selectCameraResult(camera); });
       openButton.addEventListener('focus', function () { cameraResultFocusIndex = resultIndex; });
       var favorite = document.createElement('button');
@@ -5200,10 +5225,18 @@
 
   function updateModalCameraHealth(cam) {
     var healthEl = document.getElementById('modal-cam-health');
+    var outageEl = document.getElementById('modal-camera-outage');
     var health = cam.health || 'unknown';
     healthEl.className = 'health-badge health-' + health;
     healthEl.textContent = tr('camera.health.' + health);
     healthEl.removeAttribute('title');
+    var likelyOutage = cam.local_observation && cam.local_observation.outcome === 'likely_outage';
+    if (outageEl) {
+      outageEl.classList.toggle('hidden', !likelyOutage);
+      outageEl.textContent = likelyOutage ? tr('camera.outageBadge') : '';
+      if (likelyOutage) outageEl.setAttribute('title', tr('camera.outageDescription'));
+      else outageEl.removeAttribute('title');
+    }
 
     var providerFrameTime = cam.provider_timestamp || cam.provider_image_timestamp || cam.provider_record_time || cam.provider_updated;
     var observation = cam.local_observation;
@@ -8885,6 +8918,7 @@
     initMap();
     initWeatherUnits();
     initLowDataMode();
+    initCameraOutageCheck();
     initLayerDisplayMode();
     initWakeLock();
     initRadarPreferences();

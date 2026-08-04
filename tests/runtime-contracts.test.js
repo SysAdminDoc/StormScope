@@ -123,6 +123,29 @@ test('feed failures tear down resources before replacing the DOM and are retryab
   assert.equal(i18n.catalogs.en['camera.openSource'], 'Open source');
 });
 
+test('still-frame outage detection is opt-in, bounded, visible, and local-only', () => {
+  assert.match(cameraFeedSource, /function analyzeFramePixels/);
+  assert.match(cameraFeedSource, /MAX_FRAME_SAMPLES = 4096/);
+  assert.match(cameraFeedSource, /STALLED_FRAME_THRESHOLD = 3/);
+  assert.match(cameraFeedSource, /function createFrameDetector/);
+  assert.match(cameraFeedSource, /OUTAGE_OUTCOME = 'likely_outage'/);
+  assert.match(html, /id="camera-outage-check"/);
+  assert.match(html, /id="modal-camera-outage"[^>]*class="camera-outage-badge hidden"/);
+  assert.match(app, /stormscope-camera-outage-check-v1/);
+  assert.match(app, /StormScopeCameraFeed\.analyzeImageFrame/);
+  assert.match(app, /camera\.local_observation\.outcome === 'likely_outage'/);
+  assert.match(app, /cam\.local_observation = observation/);
+  assert.doesNotMatch(app, /cam\.health\s*=/);
+  assert.match(css, /\.camera-outage-badge/);
+  for (const locale of ['en', 'es']) {
+    for (const key of ['camera.outageCheck', 'camera.outageBadge', 'camera.outageDescription',
+      'camera.observation.outcome.likely_outage', 'camera.observation.reason.flat_frame',
+      'camera.observation.reason.color_depth_collapse', 'camera.observation.reason.stalled_frame']) {
+      assert.ok(i18n.catalogs[locale][key], `${locale} catalog should define ${key}`);
+    }
+  }
+});
+
 test('extracted lifecycle modules load before app, remain offline, and own one teardown loop', () => {
   const recordPosition = html.indexOf('js/camera-record.js');
   const storePosition = html.indexOf('js/camera-store.js');
