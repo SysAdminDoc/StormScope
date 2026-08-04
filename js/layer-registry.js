@@ -62,6 +62,10 @@
       }]
     },
     {
+      id: 'wssi', toggleId: 'toggle-wssi', defaultEnabled: false, lifecycleId: 'wssi',
+      labelKey: 'layers.wssi', groupId: 'outlooks', groupLabelKey: 'layers.groupOutlooks'
+    },
+    {
       id: 'usgsGauges', toggleId: 'toggle-usgs-gauges', defaultEnabled: false, lifecycleId: 'usgs-gauges',
       labelKey: 'layers.usgsGauges', groupId: 'hazards', groupLabelKey: 'layers.groupHazards',
       searchKeys: ['context.gaugeObserved', 'context.gaugeForecast', 'context.gaugesLimitation']

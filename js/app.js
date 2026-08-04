@@ -138,6 +138,13 @@
   var wpcUpdatedAt = null;
   var wpcOutlookDay = 1;
   var wpcAttributionAdded = false;
+  var wssiLayer = null;
+  var wssiAbort = null;
+  var wssiRefreshTimer = null;
+  var wssiStatusState = 'off';
+  var wssiCount = 0;
+  var wssiUpdatedAt = null;
+  var wssiAttributionAdded = false;
   var localOverlayRecords = [];
   var localOverlayDatabase = null;
   var localOverlayReady = Promise.resolve();
@@ -243,19 +250,19 @@
   var WORKFLOW_PRESETS = Object.freeze({
     severe: {
       center: { lat: 39.5, lon: -98.5 }, zoom: 5,
-      layers: { radar: true, cameras: true, coverage: true, alerts: true, satellite: false, lightning: true, wildfires: false, tropical: true, wpcOutlooks: true, usgsGauges: false, earthquakes: false, convective: false, watches: false, mesoscale: false, stormReports: false },
+      layers: { radar: true, cameras: true, coverage: true, alerts: true, satellite: false, lightning: true, wildfires: false, tropical: true, wpcOutlooks: true, wssi: false, usgsGauges: false, earthquakes: false, convective: false, watches: false, mesoscale: false, stormReports: false },
       opacity: { radar: 0.7 }, radar: { palette: 'colorblind', speed: 800 }, alertSeverity: 'severe',
       cameraFilters: { query: '', state: '', source: '', type: '', sort: 'distance', healthy: true, favorites: false }, dataMode: 'auto', outlookDay: 1
     },
     wildfire: {
       center: { lat: 39, lon: -112 }, zoom: 5,
-      layers: { radar: false, cameras: true, coverage: false, alerts: true, satellite: true, lightning: false, wildfires: true, tropical: false, wpcOutlooks: false, usgsGauges: false, earthquakes: false, convective: false, watches: false, mesoscale: false, stormReports: false },
+      layers: { radar: false, cameras: true, coverage: false, alerts: true, satellite: true, lightning: false, wildfires: true, tropical: false, wpcOutlooks: false, wssi: false, usgsGauges: false, earthquakes: false, convective: false, watches: false, mesoscale: false, stormReports: false },
       opacity: { radar: 0.55 }, radar: { palette: 'standard', speed: 0 }, alertSeverity: 'moderate',
       cameraFilters: { query: '', state: '', source: '', type: '', sort: 'distance', healthy: true, favorites: false }, dataMode: 'auto', outlookDay: 1
     },
     travel: {
       center: { lat: 38.5, lon: -96 }, zoom: 5,
-      layers: { radar: true, cameras: true, coverage: false, alerts: true, satellite: false, lightning: false, wildfires: false, tropical: false, wpcOutlooks: false, usgsGauges: false, earthquakes: false, convective: false, watches: false, mesoscale: false, stormReports: false },
+      layers: { radar: true, cameras: true, coverage: false, alerts: true, satellite: false, lightning: false, wildfires: false, tropical: false, wpcOutlooks: false, wssi: false, usgsGauges: false, earthquakes: false, convective: false, watches: false, mesoscale: false, stormReports: false },
       opacity: { radar: 0.55 }, radar: { palette: 'colorblind', speed: 0 }, alertSeverity: 'moderate',
       cameraFilters: { query: '', state: '', source: '', type: '', sort: 'distance', healthy: true, favorites: false }, dataMode: 'auto', outlookDay: 1
     }
@@ -1551,6 +1558,110 @@
     }
     wpcStatusState = 'off';
     renderWpcStatus();
+  }
+
+  function renderWssiStatus() {
+    var key = wssiStatusState === 'off' ? 'context.wssiOff'
+      : wssiStatusState === 'loading' ? 'context.wssiLoading'
+        : wssiStatusState === 'none' ? 'context.wssiNone'
+          : wssiStatusState === 'partial' || wssiStatusState === 'error' ? 'context.wssiPartial' : 'context.wssiActive';
+    setContextStatusElement('wssi-status', tr(key, { count: localNumber(wssiCount) }),
+      wssiStatusState === 'partial' || wssiStatusState === 'error' ? 'error' : wssiStatusState);
+  }
+
+  function wssiPopup(feature) {
+    var properties = feature.properties || {};
+    var container = document.createElement('div');
+    container.className = 'context-popup';
+    var title = document.createElement('strong');
+    title.textContent = tr('context.wssiFeature', { category: tr('context.wssi.' + properties.wssiCategory) });
+    container.appendChild(title);
+    var issued = document.createElement('span');
+    issued.textContent = tr('context.wssiIssued', { time: contextTimestamp(properties.issuedAt) });
+    container.appendChild(issued);
+    var valid = document.createElement('span');
+    valid.textContent = tr('context.wssiValid', {
+      start: contextTimestamp(properties.startsAt), end: contextTimestamp(properties.endsAt)
+    });
+    container.appendChild(valid);
+    var source = document.createElement('span');
+    source.textContent = tr('context.wssiSource', { source: properties.sourceLabel });
+    container.appendChild(source);
+    var limitation = document.createElement('span');
+    limitation.textContent = tr('context.wssiLimitation');
+    container.appendChild(limitation);
+    var link = document.createElement('a');
+    link.href = StormScopeWinterOutlooks.OFFICIAL_URL;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = tr('context.wssiOfficial');
+    container.appendChild(link);
+    appendNearbyCameraSection(container, feature.geometry, tr('incident.camerasNearOutlook'));
+    return container;
+  }
+
+  function replaceWssiLayer(current, collection) {
+    var next = L.geoJSON(collection, {
+      pane: 'contextVectorPane',
+      style: function (feature) { return StormScopeWinterOutlooks.style(feature.properties.wssiCategory); },
+      onEachFeature: function (feature, layer) {
+        layer.bindPopup(function () { return wssiPopup(feature); }, { autoPan: false, maxWidth: 390, maxHeight: 420 });
+      }
+    }).addTo(map);
+    if (current) map.removeLayer(current);
+    return next;
+  }
+
+  async function refreshWssi() {
+    if (!document.getElementById('toggle-wssi').checked || document.hidden) return;
+    if (wssiAbort) wssiAbort.abort();
+    var abort = wssiAbort = new AbortController();
+    wssiStatusState = 'loading';
+    renderWssiStatus();
+    try {
+      var collection = await StormScopeWinterOutlooks.fetchAllPages(fetch, abort.signal);
+      if (!document.getElementById('toggle-wssi').checked || abort.signal.aborted) return;
+      if (collection.features.length) {
+        wssiLayer = replaceWssiLayer(wssiLayer, collection);
+        wssiCount = collection.features.length;
+      } else {
+        if (wssiLayer) map.removeLayer(wssiLayer);
+        wssiLayer = null;
+        wssiCount = 0;
+      }
+      var times = collection.features.map(function (feature) {
+        return Date.parse(feature.properties && feature.properties.issuedAt || '');
+      }).filter(Number.isFinite);
+      wssiUpdatedAt = times.length ? new Date(Math.max.apply(Math, times)).toISOString() : null;
+      if (!wssiAttributionAdded) {
+        map.attributionControl.addAttribution('<a href="https://www.wpc.ncep.noaa.gov/wwd/wssi/wssi.php" target="_blank" rel="noopener noreferrer">NOAA WPC WSSI</a>');
+        wssiAttributionAdded = true;
+      }
+      wssiStatusState = wssiCount ? 'ready' : 'none';
+      renderWssiStatus();
+    } catch (error) {
+      if (error.name === 'AbortError' || abort.signal.aborted) return;
+      wssiStatusState = 'error';
+      renderWssiStatus();
+    } finally {
+      clearTimeout(wssiRefreshTimer);
+      if (document.getElementById('toggle-wssi').checked) wssiRefreshTimer = setTimeout(refreshWssi, 15 * 60 * 1000);
+    }
+  }
+
+  function disableWssi() {
+    if (wssiAbort) wssiAbort.abort();
+    clearTimeout(wssiRefreshTimer);
+    if (wssiLayer) map.removeLayer(wssiLayer);
+    wssiLayer = null;
+    wssiCount = 0;
+    wssiUpdatedAt = null;
+    if (wssiAttributionAdded) {
+      map.attributionControl.removeAttribution('<a href="https://www.wpc.ncep.noaa.gov/wwd/wssi/wssi.php" target="_blank" rel="noopener noreferrer">NOAA WPC WSSI</a>');
+      wssiAttributionAdded = false;
+    }
+    wssiStatusState = 'off';
+    renderWssiStatus();
   }
 
   function riverGaugeState() {
@@ -6582,6 +6693,10 @@
       add('noaa-wpc', 'NOAA WPC outlooks', wpcUpdatedAt, snapshotFreshness(
         wpcUpdatedAt, 6 * 60 * 60 * 1000, wpcStatusState));
     }
+    if (snapshotToggleEnabled('toggle-wssi')) {
+      add('noaa-wpc-wssi', 'NOAA WPC Winter Storm Severity Index', wssiUpdatedAt, snapshotFreshness(
+        wssiUpdatedAt, 6 * 60 * 60 * 1000, wssiStatusState));
+    }
     if (snapshotToggleEnabled('toggle-usgs-gauges')) {
       var gauges = riverGaugeState();
       add('usgs-nwps-gauges', 'NOAA NWPS river gauges', gauges.updatedAt, snapshotFreshness(
@@ -6634,6 +6749,7 @@
     var lightningEnabled = snapshotToggleEnabled('toggle-lightning');
     var tropicalEnabled = snapshotToggleEnabled('toggle-tropical');
     var outlooksEnabled = snapshotToggleEnabled('toggle-wpc-outlooks');
+    var wssiEnabled = snapshotToggleEnabled('toggle-wssi');
     var gaugesEnabled = snapshotToggleEnabled('toggle-usgs-gauges');
     var convectiveEnabled = snapshotToggleEnabled('toggle-convective');
     var fireWeatherEnabled = snapshotToggleEnabled('toggle-fire-weather');
@@ -6650,6 +6766,7 @@
       lightning: snapshotHazard(lightningEnabled, lightningLayer ? 1 : 0, 'snapshot.hazardLightning', 'noaa-lightning'),
       tropical: snapshotHazard(tropicalEnabled, tropicalStorms.length, 'snapshot.hazardTropical', 'noaa-nhc'),
       wpcOutlooks: snapshotHazard(outlooksEnabled, wpcOutlookCount, 'snapshot.hazardOutlooks', 'noaa-wpc'),
+      wssi: snapshotHazard(wssiEnabled, wssiCount, 'snapshot.hazardWssi', 'noaa-wpc-wssi'),
       gauges: snapshotHazard(gaugesEnabled, riverGaugeState().count, 'snapshot.hazardGauges', 'usgs-nwps-gauges'),
       convective: snapshotHazard(convectiveEnabled, convectiveCount, 'snapshot.hazardConvective', 'spc-convective'),
       fireWeather: snapshotHazard(fireWeatherEnabled, fireWeatherCount, 'snapshot.hazardFireWeather', 'spc-fire-weather'),
@@ -7164,6 +7281,10 @@
         aborts: function () { return [wpcEroAbort, wpcFloodAbort]; }, timers: function () { return wpcRefreshTimer; },
         onControl: function (_control, value) { wpcOutlookDay = Number(value); }
       },
+      wssi: {
+        refresh: refreshWssi, disable: disableWssi,
+        aborts: function () { return wssiAbort; }, timers: function () { return wssiRefreshTimer; }
+      },
       usgsGauges: {
         refresh: refreshUsgsGauges, disable: riverGaugesController.disable,
         aborts: riverGaugesController.getAbort, timers: riverGaugesController.getTimers
@@ -7397,6 +7518,7 @@
       renderWildfireStatus();
       renderTropicalStatus();
       renderWpcStatus();
+      renderWssiStatus();
       renderGaugeStatus();
       renderFireWeatherStatus();
       renderMesoscaleStatus();
@@ -8094,6 +8216,7 @@
         wildfires: wildfireStatusState,
         tropical: { status: tropicalStatusState, count: tropicalStorms.length },
         wpcOutlooks: { status: wpcStatusState, count: wpcOutlookCount, day: wpcOutlookDay },
+        wssi: { status: wssiStatusState, count: wssiCount },
         usgsGauges: { status: riverGaugeState().status, count: riverGaugeState().count },
         fireWeather: { status: fireWeatherStatusState, count: fireWeatherCount, day: fireWeatherDay },
         comparison: mapComparison ? mapComparison.metrics() : { active: false }
@@ -8255,7 +8378,7 @@
     getContextState: function () {
       return {
         satellite: Boolean(satelliteLayer), lightning: Boolean(lightningLayer), wildfires: Boolean(wildfireLayer),
-        tropical: Boolean(tropicalLayer), wpcOutlooks: Boolean(wpcEroLayer || wpcFloodLayer),
+        tropical: Boolean(tropicalLayer), wpcOutlooks: Boolean(wpcEroLayer || wpcFloodLayer), wssi: Boolean(wssiLayer && wssiCount),
         usgsGauges: Boolean(riverGaugeState().layer), earthquakes: Boolean(earthquakeLayer),
         convective: Boolean(convectiveLayer),
         fireWeather: Boolean(fireWeatherLayer),
@@ -8263,6 +8386,7 @@
         lightningStatus: lightningStatusState, wildfireStatus: wildfireStatusState,
         tropicalStatus: tropicalStatusState, tropicalCount: tropicalStorms.length,
         wpcStatus: wpcStatusState, wpcCount: wpcOutlookCount, wpcDay: wpcOutlookDay,
+        wssiStatus: wssiStatusState, wssiCount: wssiCount,
         gaugeStatus: riverGaugeState().status, gaugeCount: riverGaugeState().count,
         earthquakeStatus: earthquakeStatusState, earthquakeCount: earthquakeCount,
         convectiveStatus: convectiveStatusState, convectiveCount: convectiveCount, convectiveDay: convectiveDay,
@@ -8318,6 +8442,7 @@
     refreshStormReports: refreshStormReports,
     refreshTropical: refreshTropical,
     refreshWpcOutlooks: refreshWpcOutlooks,
+    refreshWssi: refreshWssi,
     refreshUsgsGauges: refreshUsgsGauges,
     refreshSurfaceObservations: refreshSurfaceObservations
   };

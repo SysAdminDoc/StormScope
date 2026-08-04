@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added an optional, default-off NOAA/NWS WPC Winter Storm Severity Index layer using the bounded aggregate Days 1–3 impact polygons, official severity colors, issue/valid/source metadata, planning-only DOM popups, independent lifecycle recovery, English/Spanish labels, and unit/headless coverage. SW v115.
 - Added keyless NOAA/NWS RIDGE WMS as a bounded CONUS third radar fallback after RainViewer and MRMS, with capabilities-derived recent frames, explicit WMS timestamps, source/age metadata, and truthful outside-envelope coverage states. SW v114.
 - Added a persisted Simple/Pro layer-detail mode: Simple keeps radar, cameras, NWS alerts, watches, and wildfire controls visible while retaining authoritative status text; Pro reveals the complete catalog, and the preference stays local and outside shared scenes. SW v113.
 - Added an on-demand semantic hazard and camera data table to the Situation Summary, providing keyboard-readable active alerts, visible loaded-hazard counts, and nearest verified camera actions without additional network requests.
@@ -31,7 +32,7 @@
 - A single-camera lookup during the initial catalog load no longer inflates the generation count or forces an unnecessary full-dataset fallback.
 - NWS alert polling backs off geometrically over empty or unchanged viewports instead of re-requesting the national feed every 30 seconds.
 - Hazard and provider map popups stay within the map pane on narrow and short-height screens.
-- The camera weather panel now shows the NWS chance of precipitation and a next-12-hour high/low range, clearly labeled as forecast guidance. SW v114.
+- The camera weather panel now shows the NWS chance of precipitation and a next-12-hour high/low range, clearly labeled as forecast guidance. SW v115.
 
 ## v0.122.0 - 2026-07-14
 

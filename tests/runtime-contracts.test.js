@@ -19,6 +19,7 @@ const cameraFeedSource = fs.readFileSync(path.join(root, 'js', 'camera-feed.js')
 const serviceWorker = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const radarControllerSource = fs.readFileSync(path.join(root, 'js', 'radar-controller.js'), 'utf8');
 const riverGaugesSource = fs.readFileSync(path.join(root, 'js', 'river-gauges.js'), 'utf8');
+const winterOutlooksSource = fs.readFileSync(path.join(root, 'js', 'winter-outlooks.js'), 'utf8');
 const fireWeatherSource = fs.readFileSync(path.join(root, 'js', 'fire-weather.js'), 'utf8');
 const spatialQuery = fs.readFileSync(path.join(root, 'js', 'spatial-query.js'), 'utf8');
 const spatialQuerySource = spatialQuery;
@@ -122,7 +123,7 @@ test('NWPS river gauges are bounded, forecast-aware, and lifecycle-owned', () =>
   const gaugePosition = html.indexOf('js/river-gauges.js');
   const appPosition = html.indexOf('js/app.js');
   assert.ok(floodPosition >= 0 && gaugePosition > floodPosition && appPosition > gaugePosition);
-  assert.match(serviceWorker, /var VERSION = 'v114'/);
+  assert.match(serviceWorker, /var VERSION = 'v115'/);
   assert.match(serviceWorker, /\.\/js\/river-gauges\.js/);
   assert.match(riverGaugesSource, /resultRecordCount: String\(MAX_RECORDS\)/);
   assert.match(riverGaugesSource, /function buildQueries\(bounds, zoom\)/);
@@ -138,6 +139,28 @@ test('NWPS river gauges are bounded, forecast-aware, and lifecycle-owned', () =>
   assert.match(html, /data-i18n="layers\.usgsGauges"[^>]*>NOAA NWPS River Gauges/);
   assert.match(i18n.catalogs.en['layers.usgsGauges'], /NOAA NWPS/);
   assert.match(i18n.catalogs.es['layers.usgsGauges'], /NOAA NWPS/);
+});
+
+test('WPC Winter Storm Severity Index is an optional bounded attributed layer', () => {
+  const floodPosition = html.indexOf('js/flood-outlooks.js');
+  const wssiPosition = html.indexOf('js/winter-outlooks.js');
+  const appPosition = html.indexOf('js/app.js');
+  assert.ok(floodPosition >= 0 && wssiPosition > floodPosition && appPosition > wssiPosition);
+  assert.match(serviceWorker, /\.\/js\/winter-outlooks\.js/);
+  assert.match(winterOutlooksSource, /MapServer';/);
+  assert.match(winterOutlooksSource, /var LAYER_ID = 4/);
+  assert.match(winterOutlooksSource, /resultRecordCount: String\(PAGE_SIZE\)/);
+  assert.match(winterOutlooksSource, /function normalizeCollection/);
+  assert.match(winterOutlooksSource, /function fetchAllPages/);
+  assert.match(html, /id="toggle-wssi"/);
+  assert.match(html, /id="wssi-status"[^>]*role="status"/);
+  assert.match(html, /data-i18n="layers\.wssi"/);
+  assert.match(app, /function refreshWssi/);
+  assert.match(app, /function disableWssi/);
+  assert.match(app, /StormScopeWinterOutlooks\.fetchAllPages/);
+  assert.match(layerRegistrySource, /id: 'wssi', toggleId: 'toggle-wssi'/);
+  assert.equal(i18n.catalogs.en['layers.wssi'], 'WPC Winter Storm Severity Index');
+  assert.ok(i18n.catalogs.es['layers.wssi']);
 });
 
 test('static CSP removes inline script execution and mirrors trusted frame hosts', () => {

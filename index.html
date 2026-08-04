@@ -237,6 +237,10 @@
         <option value="3">Day 3</option>
       </select>
     </div>
+    <label class="toggle-row" data-layer-id="wssi">
+      <input type="checkbox" id="toggle-wssi">
+      <span data-i18n="layers.wssi">WPC Winter Storm Severity Index</span>
+    </label>
     <h4 class="panel-subhead" data-layer-section="hazards">Hazard context</h4>
     <label class="toggle-row" data-layer-id="lightning">
       <input type="checkbox" id="toggle-lightning">
@@ -371,6 +375,7 @@
     </div>
     <div class="context-statuses">
       <div class="wpc-status-row"><i class="wpc-outlook-swatch" aria-hidden="true"></i><span id="wpc-outlook-status" role="status" aria-live="polite">WPC outlooks off</span><span class="context-source-links"><a href="https://www.wpc.ncep.noaa.gov/qpf/excessive_rainfall_outlook_ero.php" target="_blank" rel="noopener noreferrer">WPC ERO</a><a href="https://www.wpc.ncep.noaa.gov/nationalfloodoutlook/" target="_blank" rel="noopener noreferrer">Flood</a></span><p class="context-limitation">Planning guidance only—not a warning or an all-clear.</p></div>
+      <div class="wssi-status-row"><i class="wssi-swatch" aria-hidden="true"></i><span id="wssi-status" role="status" aria-live="polite" data-i18n="context.wssiOff">WPC WSSI off</span><a href="https://www.wpc.ncep.noaa.gov/wwd/wssi/wssi.php" target="_blank" rel="noopener noreferrer" data-i18n="context.wssiOfficial">WPC WSSI</a><p class="context-limitation" data-i18n="context.wssiLimitation">Planning guidance only—not a warning or an all-clear.</p></div>
       <div class="gauge-status-row"><i class="usgs-gauge-swatch" aria-hidden="true"></i><span id="usgs-gauge-status" role="status" aria-live="polite" data-i18n="context.gaugesOff">NOAA NWPS gauges off</span><a href="https://water.noaa.gov/" target="_blank" rel="noopener noreferrer" data-i18n="context.gaugeAttribution">NOAA NWPS</a><p class="context-limitation" data-i18n="context.gaugesLimitation">Observed stage and forecast category from NOAA NWPS river gauges.</p></div>
       <div class="terminator-status-row"><i class="terminator-swatch" aria-hidden="true"></i><span id="terminator-status" role="status" aria-live="polite" data-i18n="context.terminatorOff">Day/night terminator off</span><span class="context-source-links" data-i18n="context.terminatorLocal">Local solar calculation</span></div>
       <div class="satellite-status-row"><i class="satellite-swatch" aria-hidden="true"></i><span id="satellite-status" role="status" aria-live="polite">Satellite off</span><a href="https://www.nesdis.noaa.gov/imagery/interactive-maps" target="_blank" rel="noopener noreferrer">NOAA</a></div>
@@ -735,6 +740,7 @@
   <script src="js/surface-observations.js"></script>
   <script src="js/tropical-cyclones.js"></script>
   <script src="js/flood-outlooks.js"></script>
+  <script src="js/winter-outlooks.js"></script>
   <script src="js/river-gauges.js"></script>
   <script src="js/convective-outlooks.js"></script>
   <script src="js/fire-weather.js"></script>

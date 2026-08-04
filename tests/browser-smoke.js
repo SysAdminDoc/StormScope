@@ -650,6 +650,22 @@ async function addNetworkFixtures(page, metrics, options) {
         }] }) });
       return;
     }
+    if (url.includes('/outlooks/wpc_wssi/MapServer/4/query')) {
+      await route.fulfill({ contentType: 'application/geo+json', headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ type: 'FeatureCollection', exceededTransferLimit: false, features: [
+          { type: 'Feature', geometry: { type: 'Polygon', coordinates: [[[-102, 35], [-98, 35], [-98, 39], [-102, 35]]] },
+            properties: { objectid: 1, product: 'Winter Storm Severity Index', component: 'Overall Impact', impact: 'MODERATE',
+              issue_time: '2026-07-12T20:00:00Z', valid_time: 'Days 1-3', start_time: '2026-07-13T00:00:00Z',
+              end_time: '2026-07-16T00:00:00Z', idp_source: 'fixture-wssi', idp_filedate: Date.now() - 300000 }
+          },
+          { type: 'Feature', geometry: { type: 'Polygon', coordinates: [[[-96, 36], [-93, 36], [-93, 39], [-96, 36]]] },
+            properties: { objectid: 2, product: 'Winter Storm Severity Index', component: 'Overall Impact', impact: 'MINOR',
+              issue_time: '2026-07-12T20:00:00Z', valid_time: 'Days 1-3', start_time: '2026-07-13T00:00:00Z',
+              end_time: '2026-07-16T00:00:00Z', idp_source: 'fixture-wssi', idp_filedate: Date.now() - 300000 }
+          }
+        ] }) });
+      return;
+    }
     if (url.startsWith('https://mapservices.weather.noaa.gov/eventdriven/rest/services/water/riv_gauges/MapServer/0/query')) {
       const now = Date.now();
       metrics.riverGaugeRequests = (metrics.riverGaugeRequests || 0) + 1;
@@ -1232,9 +1248,9 @@ async function main() {
     const scrubber = page.locator('#radar-scrubber');
     assert.ok(Number(await scrubber.getAttribute('max')) > 0, 'radar timeline should expose multiple frames');
     assert.deepEqual(await page.evaluate(() => window._stormscope.getContextState()), {
-      satellite: false, lightning: false, wildfires: false, tropical: false, wpcOutlooks: false, usgsGauges: false, earthquakes: false, convective: false, fireWeather: false, satelliteStatus: 'off',
+      satellite: false, lightning: false, wildfires: false, tropical: false, wpcOutlooks: false, wssi: false, usgsGauges: false, earthquakes: false, convective: false, fireWeather: false, satelliteStatus: 'off',
       lightningStatus: 'off', wildfireStatus: 'off', tropicalStatus: 'off', tropicalCount: 0,
-      wpcStatus: 'off', wpcCount: 0, wpcDay: 1, gaugeStatus: 'off', gaugeCount: 0,
+      wpcStatus: 'off', wpcCount: 0, wpcDay: 1, wssiStatus: 'off', wssiCount: 0, gaugeStatus: 'off', gaugeCount: 0,
       earthquakeStatus: 'off', earthquakeCount: 0, convectiveStatus: 'off', convectiveCount: 0, convectiveDay: 1, fireWeatherStatus: 'off', fireWeatherCount: 0, fireWeatherDay: 1, watches: false, watchStatus: 'off', watchCount: 0, satelliteZ: '315',
       localOverlays: 0, rasterZ: '325', vectorZ: '390', localOverlayZ: '380', tropicalZ: '395', warningZ: '400', cameraZ: '600'
     });
@@ -1508,6 +1524,7 @@ async function main() {
     await page.locator('#toggle-wildfires').check();
     await page.locator('#toggle-tropical').check();
     await page.locator('#toggle-wpc-outlooks').check();
+    await page.locator('#toggle-wssi').check();
     await page.locator('#toggle-usgs-gauges').check();
     await page.locator('#satellite-status').filter({ hasText: 'GOES GeoColor' }).waitFor({ state: 'visible' });
     const satelliteLoopState = await page.evaluate(() => window._stormscope.getSatelliteState());
@@ -1542,6 +1559,7 @@ async function main() {
     await page.locator('#wildfire-status').filter({ hasText: '2 wildfire perimeters' }).waitFor({ state: 'visible' });
     await page.locator('#tropical-status').filter({ hasText: '1 active tropical cyclones' }).waitFor({ state: 'visible' });
     await page.locator('#wpc-outlook-status').filter({ hasText: '2 official outlook areas' }).waitFor({ state: 'visible' });
+    await page.locator('#wssi-status').filter({ hasText: '2 official WSSI impact areas' }).waitFor({ state: 'visible' });
     await page.locator('#usgs-gauge-status').filter({ hasText: '1 NOAA NWPS river gauges' }).waitFor({ state: 'visible' });
     assert.ok(networkMetrics.riverGaugeRequests >= 2);
     assert.ok(networkMetrics.riverGaugeMaxRecordCount <= 200);
@@ -1569,9 +1587,9 @@ async function main() {
     assert.match(await hostilePopup.locator('.incident-camera-status').textContent(), /nearby camera/);
     assert.ok(await hostilePopup.locator('.incident-camera-map').count() > 0);
     assert.deepEqual(await page.evaluate(() => window._stormscope.getContextState()), {
-      satellite: true, lightning: true, wildfires: true, tropical: true, wpcOutlooks: true, usgsGauges: true, earthquakes: false, convective: false, fireWeather: false, satelliteStatus: 'ready',
+      satellite: true, lightning: true, wildfires: true, tropical: true, wpcOutlooks: true, wssi: true, usgsGauges: true, earthquakes: false, convective: false, fireWeather: false, satelliteStatus: 'ready',
       lightningStatus: 'ready', wildfireStatus: 'ready', tropicalStatus: 'ready', tropicalCount: 1,
-      wpcStatus: 'ready', wpcCount: 2, wpcDay: 1, gaugeStatus: 'ready', gaugeCount: 1,
+      wpcStatus: 'ready', wpcCount: 2, wpcDay: 1, wssiStatus: 'ready', wssiCount: 2, gaugeStatus: 'ready', gaugeCount: 1,
       earthquakeStatus: 'off', earthquakeCount: 0, convectiveStatus: 'off', convectiveCount: 0, convectiveDay: 1, fireWeatherStatus: 'off', fireWeatherCount: 0, fireWeatherDay: 1, watches: false, watchStatus: 'off', watchCount: 0, satelliteZ: '315',
       localOverlays: 0, rasterZ: '325', vectorZ: '390', localOverlayZ: '380', tropicalZ: '395', warningZ: '400', cameraZ: '600'
     });
@@ -1781,6 +1799,22 @@ async function main() {
     await outlookPopup.getByRole('link', { name: 'Open official WPC outlook' }).waitFor({ state: 'visible' });
     assert.match(await outlookPopup.textContent(), /Planning guidance only/);
 
+    const wssiPopupOpened = await page.evaluate(() => {
+      let opened = false;
+      window._stormscope.getMap().eachLayer(layer => {
+        if (opened || typeof layer.getLayers !== 'function') return;
+        const child = layer.getLayers().find(item => item.feature && item.feature.properties && item.feature.properties.wssiCategory === 'moderate');
+        if (child) { child.openPopup(); opened = true; }
+      });
+      return opened;
+    });
+    assert.equal(wssiPopupOpened, true);
+    const wssiPopup = page.locator('.leaflet-popup-content').filter({ hasText: 'Winter Storm Severity Index' });
+    await wssiPopup.getByRole('link', { name: 'Open official WPC WSSI' }).waitFor({ state: 'visible' });
+    assert.match(await wssiPopup.textContent(), /Issued/);
+    assert.match(await wssiPopup.textContent(), /Valid/);
+    assert.match(await wssiPopup.textContent(), /Planning guidance only/);
+
     const gaugePopupOpened = await page.evaluate(() => {
       let opened = false;
       window._stormscope.getMap().eachLayer(layer => {
@@ -1825,6 +1859,7 @@ async function main() {
     await page.locator('#toggle-wildfires').uncheck();
     await page.locator('#toggle-tropical').uncheck();
     await page.locator('#toggle-wpc-outlooks').uncheck();
+    await page.locator('#toggle-wssi').uncheck();
     await page.locator('#toggle-usgs-gauges').uncheck();
     await page.locator('#radar-speed').selectOption('0');
     await page.locator('#radar-palette').selectOption('colorblind');
@@ -1859,9 +1894,9 @@ async function main() {
     await page.locator('#lightning-status').filter({ hasText: 'Official data unavailable' }).waitFor({ state: 'visible' });
     await page.locator('#wildfire-status').filter({ hasText: '2 wildfire perimeters' }).waitFor({ state: 'visible' });
     assert.deepEqual(await page.evaluate(() => window._stormscope.getContextState()), {
-      satellite: false, lightning: false, wildfires: true, tropical: false, wpcOutlooks: false, usgsGauges: false, earthquakes: false, convective: false, fireWeather: false, satelliteStatus: 'off',
+      satellite: false, lightning: false, wildfires: true, tropical: false, wpcOutlooks: false, wssi: false, usgsGauges: false, earthquakes: false, convective: false, fireWeather: false, satelliteStatus: 'off',
       lightningStatus: 'error', wildfireStatus: 'ready', tropicalStatus: 'off', tropicalCount: 0,
-      wpcStatus: 'off', wpcCount: 0, wpcDay: 2, gaugeStatus: 'off', gaugeCount: 0,
+      wpcStatus: 'off', wpcCount: 0, wpcDay: 2, wssiStatus: 'off', wssiCount: 0, gaugeStatus: 'off', gaugeCount: 0,
       earthquakeStatus: 'off', earthquakeCount: 0, convectiveStatus: 'off', convectiveCount: 0, convectiveDay: 1, fireWeatherStatus: 'off', fireWeatherCount: 0, fireWeatherDay: 1, watches: false, watchStatus: 'off', watchCount: 0, satelliteZ: '315',
       localOverlays: 0, rasterZ: '325', vectorZ: '390', localOverlayZ: '380', tropicalZ: '395', warningZ: '400', cameraZ: '600'
     });
@@ -2222,7 +2257,7 @@ async function main() {
     await page.locator('#earthquake-period').selectOption('week');
     assert.deepEqual(await page.evaluate(() => window._stormscope.getLayerRegistryState().ids), [
       'radar', 'cameras', 'coverage', 'terminator', 'snow', 'alerts', 'lightning', 'surfaceObservations', 'wildfires', 'satellite', 'tropical',
-      'wpcOutlooks', 'usgsGauges', 'earthquakes', 'convective', 'fireWeather', 'watches', 'mesoscale', 'stormReports'
+      'wpcOutlooks', 'wssi', 'usgsGauges', 'earthquakes', 'convective', 'fireWeather', 'watches', 'mesoscale', 'stormReports'
     ]);
     await page.locator('#camera-favorites').evaluate(element => {
       element.checked = true;
@@ -2375,7 +2410,7 @@ async function main() {
     const sharedScene = {
       map: { lat: 39.75, lon: -98.25, zoom: 6 },
       layers: { radar: true, cameras: true, coverage: false, terminator: false, snow: false, surfaceObservations: false, alerts: true, lightning: false, wildfires: false, satellite: false, tropical: false,
-        wpcOutlooks: false, usgsGauges: false, earthquakes: false, convective: false, fireWeather: false, watches: false, mesoscale: false, stormReports: false },
+        wpcOutlooks: false, wssi: false, usgsGauges: false, earthquakes: false, convective: false, fireWeather: false, watches: false, mesoscale: false, stormReports: false },
       radar: { opacity: 0.48, palette: 'contrast', speed: 400, frameTime: sceneFixture.frameTime },
       alertSeverity: 'severe',
       cameraFilters: {

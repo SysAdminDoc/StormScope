@@ -37,7 +37,8 @@
     { id: 'terminator', bit: 15, legacyRequired: false },
     { id: 'snow', bit: 16, legacyRequired: false },
     { id: 'surfaceObservations', bit: 17, legacyRequired: false },
-    { id: 'fireWeather', bit: 18, legacyRequired: false }
+    { id: 'fireWeather', bit: 18, legacyRequired: false },
+    { id: 'wssi', bit: 19, legacyRequired: false }
   ];
   (function assertLayerBitCoverage() {
     var keys = registry.sceneKeys();
