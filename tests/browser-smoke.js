@@ -84,7 +84,54 @@ async function assertOnlyTopLevelSurface(page, expected, label) {
   await assertEveryControlReachable(page, expected, label);
 }
 
+async function ensureProLayerMode(page) {
+  const modeButton = page.locator('#toggle-layer-mode');
+  if (await modeButton.getAttribute('aria-pressed') !== 'true') {
+    await modeButton.click();
+    await page.waitForFunction(() => window._stormscope.getLayerDisplayMode() === 'pro');
+  }
+}
+
+async function exerciseLayerDisplayMode(page) {
+  const modeButton = page.locator('#toggle-layer-mode');
+  assert.equal(await page.evaluate(() => window._stormscope.getLayerDisplayMode()), 'simple');
+  assert.equal(await modeButton.getAttribute('aria-pressed'), 'false');
+  assert.equal(await page.locator('#toggle-radar').isVisible(), true);
+  assert.equal(await page.locator('#toggle-alerts').isVisible(), true);
+  assert.equal(await page.locator('#toggle-watches').isVisible(), true);
+  assert.equal(await page.locator('#toggle-earthquakes').isVisible(), false);
+  assert.equal(await page.locator('#surface-observations-status').isVisible(), true);
+  assert.equal(await page.locator('#earthquake-status').isVisible(), true);
+  assert.equal(await page.locator('#toggle-alerts').isDisabled(), true);
+  assert.equal(await page.locator('#toggle-alerts').isChecked(), true);
+  const sceneBefore = await page.evaluate(() => window._stormscope.getSharedSceneUrl());
+
+  await modeButton.click();
+  await page.waitForFunction(() => window._stormscope.getLayerDisplayMode() === 'pro');
+  assert.equal(await modeButton.getAttribute('aria-pressed'), 'true');
+  assert.equal(await page.locator('#toggle-earthquakes').isVisible(), true);
+  assert.equal(await page.locator('#toggle-alerts').isDisabled(), false);
+  assert.equal(await page.evaluate(() => window._stormscope.getSharedSceneUrl()), sceneBefore,
+    'layer detail mode must stay outside shared scenes');
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await waitForApp(page);
+  await page.locator('#btn-layers').click();
+  await page.locator('#layers-panel').waitFor({ state: 'visible' });
+  assert.equal(await page.evaluate(() => window._stormscope.getLayerDisplayMode()), 'pro',
+    'layer detail mode must persist locally');
+  assert.equal(await page.locator('#toggle-earthquakes').isVisible(), true);
+
+  await modeButton.click();
+  await page.waitForFunction(() => window._stormscope.getLayerDisplayMode() === 'simple');
+  assert.equal(await page.locator('#toggle-alerts').isDisabled(), true);
+  assert.equal(await page.locator('#toggle-alerts').isChecked(), true);
+  await modeButton.click();
+  await page.waitForFunction(() => window._stormscope.getLayerDisplayMode() === 'pro');
+}
+
 async function exerciseLayerNavigation(page, options) {
+  await ensureProLayerMode(page);
   const before = await page.evaluate(() => window._stormscope.getLayerRegistryState().enabled);
   const query = page.locator('#layer-filter-query');
   const clear = page.locator('#layer-filter-clear');
@@ -883,6 +930,7 @@ async function main() {
     await waitForApp(permalinkPage);
     await permalinkPage.locator('#btn-layers').click();
     await permalinkPage.locator('#layers-panel').waitFor({ state: 'visible' });
+    await ensureProLayerMode(permalinkPage);
     await permalinkPage.locator('#toggle-terminator').check();
     await permalinkPage.waitForFunction(() => location.hash.startsWith('#scene=1.'));
     const terminatorOnHash = await permalinkPage.evaluate(() => location.hash);
@@ -969,9 +1017,10 @@ async function main() {
     await page.locator('#btn-layers').click();
     await page.locator('#layers-panel').waitFor({ state: 'visible' });
     assert.equal(await page.evaluate(() => document.activeElement && document.activeElement.id), 'layer-filter-query');
+    await exerciseLayerDisplayMode(page);
     await page.locator('#btn-layers').click();
     await page.locator('#layers-panel').waitFor({ state: 'hidden' });
-    await page.locator('#btn-alerts').click();
+    if (await page.locator('#alerts-panel').isHidden()) await page.locator('#btn-alerts').click();
     await page.locator('#alerts-panel').waitFor({ state: 'visible' });
     await page.locator('#btn-place-search').click();
     await page.locator('#search-panel').waitFor({ state: 'visible' });
@@ -1728,6 +1777,7 @@ async function main() {
     await page.route('**/riv_gauges/MapServer/1/query?**', failRiverForecast);
     await page.evaluate(() => window._stormscope.refreshUsgsGauges());
     await page.locator('#usgs-gauge-status').filter({ hasText: 'some official products unavailable' }).waitFor({ state: 'visible' });
+    await page.waitForFunction(() => window._stormscope.getContextState().gaugeStatus === 'partial');
     assert.deepEqual(await page.evaluate(() => {
       const state = window._stormscope.getContextState();
       return { enabled: state.usgsGauges, status: state.gaugeStatus, count: state.gaugeCount };

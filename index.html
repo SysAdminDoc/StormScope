@@ -151,8 +151,13 @@
           <input id="layer-filter-active" type="checkbox">
           <span>Active only</span>
         </label>
-        <span id="layer-filter-count" role="status" aria-live="polite" aria-atomic="true">Showing 13 of 13 layers</span>
+        <span id="layer-filter-count" role="status" aria-live="polite" aria-atomic="true">Showing 5 of 5 layers</span>
         <button id="layer-filter-clear" type="button" disabled>Clear filters</button>
+      </div>
+      <div class="layer-mode-control" role="group" aria-labelledby="layer-mode-heading">
+        <span id="layer-mode-heading" class="layer-mode-heading" data-i18n="layers.modeHeading">Layer detail</span>
+        <button id="toggle-layer-mode" type="button" aria-pressed="false" aria-describedby="layer-mode-description">Switch to Pro</button>
+        <p id="layer-mode-description" class="layer-mode-description" role="status" aria-live="polite">Simple mode shows core layers; safety alerts stay enabled.</p>
       </div>
     </div>
     <p id="layer-filter-empty" class="layer-filter-empty" role="status" hidden>No layers match. Clear filters to show all layers.</p>
@@ -385,7 +390,7 @@
       </div>
       <div class="tropical-status-row"><i class="tropical-swatch" aria-hidden="true"></i><span id="tropical-status" role="status" aria-live="polite">Tropical cyclones off</span><a href="https://www.nhc.noaa.gov/" target="_blank" rel="noopener noreferrer">NOAA NHC</a><ul id="tropical-storm-list" class="tropical-storm-list" aria-label="Active NHC tropical cyclones"></ul></div>
       <div><i class="lightning-swatch" aria-hidden="true"></i><span id="lightning-status" role="status" aria-live="polite">Lightning off</span><a href="https://nowcoast.noaa.gov/" target="_blank" rel="noopener noreferrer">NOAA</a></div>
-      <div class="surface-observations-status-row" data-layer-id="surfaceObservations"><i class="surface-observation-swatch" aria-hidden="true"></i><span id="surface-observations-status" role="status" aria-live="polite" data-i18n="context.surfaceObservationsOff">METAR surface observations off</span><a href="https://aviationweather.gov/" target="_blank" rel="noopener noreferrer">NOAA AWC</a></div>
+      <div class="surface-observations-status-row"><i class="surface-observation-swatch" aria-hidden="true"></i><span id="surface-observations-status" role="status" aria-live="polite" data-i18n="context.surfaceObservationsOff">METAR surface observations off</span><a href="https://aviationweather.gov/" target="_blank" rel="noopener noreferrer">NOAA AWC</a></div>
       <div><i class="wildfire-swatch" aria-hidden="true"></i><span id="wildfire-status" role="status" aria-live="polite">Wildfires off</span><a href="https://www.arcgis.com/home/item.html?id=d1c32af3212341869b3c810f1a215824" target="_blank" rel="noopener noreferrer">NIFC</a></div>
       <div><i class="earthquake-swatch" aria-hidden="true"></i><span id="earthquake-status" role="status" aria-live="polite">Earthquakes off</span><a href="https://earthquake.usgs.gov/earthquakes/map/" target="_blank" rel="noopener noreferrer">USGS</a></div>
       <div><i class="convective-swatch" aria-hidden="true"></i><span id="convective-status" role="status" aria-live="polite">Convective outlooks off</span><a href="https://www.spc.noaa.gov/products/outlook/" target="_blank" rel="noopener noreferrer">SPC</a><p class="context-limitation">Severe-storm risk guidance—not a warning.</p></div>

@@ -236,6 +236,7 @@
   var incidentCameraSections = [];
   var activeRouteCorridor = null;
   var dataModePreference = 'auto';
+  var layerDisplayMode = 'simple';
   var dataPolicy = StormScopeDataMode.resolve('auto', navigator.connection);
   var lowDataMode = dataPolicy.lowData;
   var lowDataSource = dataPolicy.source;
@@ -259,6 +260,8 @@
       cameraFilters: { query: '', state: '', source: '', type: '', sort: 'distance', healthy: true, favorites: false }, dataMode: 'auto', outlookDay: 1
     }
   });
+  var LAYER_DISPLAY_MODE_STORAGE_KEY = 'stormscope-layer-display-mode';
+  var SIMPLE_LAYER_IDS = Object.freeze(['radar', 'cameras', 'alerts', 'watches', 'wildfires']);
 
   function tr(key, variables) {
     return StormScopeI18n.t(key, variables, appLocale);
@@ -4284,6 +4287,7 @@
       var enabled = layers[descriptor.sceneKey];
       if (typeof enabled === 'boolean') applyLayerEnabled(descriptor, enabled, layerBindings);
     });
+    enforceSimpleAlertSafety();
     if (snapshot.opacity && typeof snapshot.opacity.radar === 'number') {
       radarController.setOpacity(snapshot.opacity.radar);
       document.getElementById('radar-opacity').value = String(Math.round(radarController.getState().opacity * 100));
@@ -6734,6 +6738,51 @@
 
   // ── UI Bindings ──
 
+  function normalizeLayerDisplayMode(value) {
+    return value === 'pro' ? 'pro' : 'simple';
+  }
+
+  function initLayerDisplayMode() {
+    var saved = null;
+    try { saved = localStorage.getItem(LAYER_DISPLAY_MODE_STORAGE_KEY); } catch (error) { /* optional */ }
+    layerDisplayMode = normalizeLayerDisplayMode(saved);
+  }
+
+  function isSimpleLayer(descriptor) {
+    return SIMPLE_LAYER_IDS.indexOf(descriptor.id) !== -1;
+  }
+
+  function enforceSimpleAlertSafety() {
+    var toggle = document.getElementById('toggle-alerts');
+    if (!toggle) return;
+    var simple = layerDisplayMode === 'simple';
+    toggle.disabled = simple;
+    if (!simple || toggle.checked) return;
+    toggle.checked = true;
+    alertsVisible = true;
+    alertsPanelDismissed = false;
+    if (alertLayerGroup) alertLayerGroup.addTo(map);
+    fetchNwsAlerts();
+  }
+
+  function renderLayerDisplayMode() {
+    var button = document.getElementById('toggle-layer-mode');
+    var description = document.getElementById('layer-mode-description');
+    if (!button || !description) return;
+    var simple = layerDisplayMode === 'simple';
+    button.setAttribute('aria-pressed', String(!simple));
+    button.textContent = tr(simple ? 'layers.switchToPro' : 'layers.switchToSimple');
+    description.textContent = tr(simple ? 'layers.modeSimpleDescription' : 'layers.modeProDescription');
+    enforceSimpleAlertSafety();
+  }
+
+  function toggleLayerDisplayMode() {
+    layerDisplayMode = layerDisplayMode === 'simple' ? 'pro' : 'simple';
+    try { localStorage.setItem(LAYER_DISPLAY_MODE_STORAGE_KEY, layerDisplayMode); } catch (error) { /* optional */ }
+    renderLayerDisplayMode();
+    renderLayerNavigation();
+  }
+
   function normalizeLayerFilterText(value) {
     return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase(appLocale).trim();
   }
@@ -6753,10 +6802,14 @@
     var activeOnly = activeInput.checked;
     var visibleCount = 0;
     var visibleGroups = Object.create(null);
+    var modeTotal = layerDisplayMode === 'pro'
+      ? StormScopeLayerRegistry.descriptors.length
+      : SIMPLE_LAYER_IDS.length;
 
     StormScopeLayerRegistry.descriptors.forEach(function (descriptor) {
       var toggle = document.getElementById(descriptor.toggleId);
-      var visible = (!query || layerFilterText(descriptor).indexOf(query) !== -1) &&
+      var visible = (layerDisplayMode === 'pro' || isSimpleLayer(descriptor)) &&
+        (!query || layerFilterText(descriptor).indexOf(query) !== -1) &&
         (!activeOnly || Boolean(toggle && toggle.checked));
       document.querySelectorAll('[data-layer-id="' + descriptor.id + '"]').forEach(function (element) {
         element.hidden = !visible;
@@ -6771,7 +6824,7 @@
       heading.hidden = !visibleGroups[heading.dataset.layerSection];
     });
     document.getElementById('layer-filter-count').textContent = tr('layers.filterCount', {
-      count: localNumber(visibleCount), total: localNumber(StormScopeLayerRegistry.descriptors.length)
+      count: localNumber(visibleCount), total: localNumber(modeTotal)
     });
     document.getElementById('layer-filter-clear').disabled = !query && !activeOnly;
     document.getElementById('layer-filter-empty').hidden = visibleCount !== 0;
@@ -6788,6 +6841,7 @@
     var queryInput = document.getElementById('layer-filter-query');
     var activeInput = document.getElementById('layer-filter-active');
     var clearButton = document.getElementById('layer-filter-clear');
+    document.getElementById('toggle-layer-mode').addEventListener('click', toggleLayerDisplayMode);
     var toggleIds = Object.create(null);
     StormScopeLayerRegistry.descriptors.forEach(function (descriptor) { toggleIds[descriptor.toggleId] = true; });
     queryInput.addEventListener('input', renderLayerNavigation);
@@ -6806,6 +6860,7 @@
     panel.addEventListener('change', function (event) {
       if (toggleIds[event.target.id]) renderLayerNavigation();
     });
+    renderLayerDisplayMode();
     renderLayerNavigation();
   }
 
@@ -7318,6 +7373,7 @@
       try { localStorage.setItem(StormScopeI18n.STORAGE_KEY, appLocale); } catch (error) { /* optional */ }
       StormScopeI18n.localizeDocument(document);
       renderLayerNavigation();
+      renderLayerDisplayMode();
       updateConnectionState();
       radarController.updateScrubber();
       radarController.applyPalette();
@@ -8118,6 +8174,7 @@
     initMap();
     initWeatherUnits();
     initLowDataMode();
+    initLayerDisplayMode();
     initWakeLock();
     initRadarPreferences();
     startupSharedScene = readStartupSharedScene();
@@ -8156,6 +8213,7 @@
         enabled: StormScopeLayerRegistry.captureEnabled(document)
       };
     },
+    getLayerDisplayMode: function () { return layerDisplayMode; },
     captureSharedScene: captureSharedScene,
     getSharedSceneUrl: sharedSceneUrl,
     buildSituationSnapshot: function (includeSceneUrl) {

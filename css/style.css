@@ -667,6 +667,33 @@ button:focus-visible {
 
 #layer-filter-clear:disabled { cursor: default; opacity: 0.55; }
 
+.layer-mode-control {
+  display: grid;
+  gap: 6px;
+  margin-top: 9px;
+  padding-top: 9px;
+  border-top: 1px solid var(--border);
+}
+
+.layer-mode-heading { color: var(--text-dim); font-size: 11px; font-weight: 600; }
+
+#toggle-layer-mode {
+  min-height: 34px;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-panel-hover);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+#toggle-layer-mode:hover,
+#toggle-layer-mode[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+
+.layer-mode-description { margin: 0; color: var(--text-dim); font-size: 11px; line-height: 1.4; }
+
 .layer-filter-empty {
   margin: 8px 0 12px;
   padding: 10px;

@@ -121,7 +121,7 @@ test('NWPS river gauges are bounded, forecast-aware, and lifecycle-owned', () =>
   const gaugePosition = html.indexOf('js/river-gauges.js');
   const appPosition = html.indexOf('js/app.js');
   assert.ok(floodPosition >= 0 && gaugePosition > floodPosition && appPosition > gaugePosition);
-  assert.match(serviceWorker, /var VERSION = 'v112'/);
+  assert.match(serviceWorker, /var VERSION = 'v113'/);
   assert.match(serviceWorker, /\.\/js\/river-gauges\.js/);
   assert.match(riverGaugesSource, /resultRecordCount: String\(MAX_RECORDS\)/);
   assert.match(riverGaugesSource, /function buildQueries\(bounds, zoom\)/);
@@ -283,10 +283,16 @@ test('layer navigation is searchable, active-only, localized, and state-preservi
   assert.match(html, /id="layer-filter-count"[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(html, /id="layer-filter-clear"[^>]*disabled/);
   assert.match(html, /id="layer-filter-empty"[^>]*role="status"[^>]*hidden/);
+  assert.match(html, /id="toggle-layer-mode"[^>]*aria-pressed="false"/);
+  assert.match(html, /id="layer-mode-description"[^>]*role="status"[^>]*aria-live="polite"/);
   assert.match(html, /data-layer-section="hazards"/);
   assert.match(html, /data-layer-id="earthquakes"/);
   assert.match(css, /\.layer-filter-toolbar[\s\S]*position: sticky/);
   assert.match(app, /function renderLayerNavigation\(\)/);
+  assert.match(app, /LAYER_DISPLAY_MODE_STORAGE_KEY/);
+  assert.match(app, /SIMPLE_LAYER_IDS/);
+  assert.match(app, /function toggleLayerDisplayMode\(\)/);
+  assert.match(app, /function enforceSimpleAlertSafety\(\)/);
   assert.match(app, /layerFilterText\(descriptor\)\.indexOf\(query\)/);
   assert.match(app, /!activeOnly \|\| Boolean\(toggle && toggle\.checked\)/);
   assert.match(app, /event\.key === 'Escape'/);
