@@ -80,6 +80,31 @@ test('number, date, and frame-age formatting follow the selected locale', () => 
   assert.equal(i18n.formatAge(5, 'es'), 'hace 5 minutos');
 });
 
+test('unit formatting uses locale-aware Intl measurements for metric and US paths', () => {
+  assert.equal(i18n.formatUnit(20, 'celsius', null, 'en'), '20°C');
+  assert.equal(i18n.formatUnit(68, 'fahrenheit', null, 'en'), '68°F');
+  assert.equal(i18n.formatUnit(16, 'kilometer-per-hour', null, 'es'), '16 km/h');
+  assert.equal(i18n.formatUnit(10, 'mile-per-hour', null, 'en'), '10 mph');
+  assert.match(i18n.formatUnit(45, 'percent', null, 'es'), /^45\D*%$/);
+  assert.equal(i18n.formatUnit(12.3, 'degree', { maximumFractionDigits: 1 }, 'es'), '12,3°');
+  assert.equal(i18n.formatUnitLabel('mile-per-hour', 'es'), 'mi/h');
+  assert.match(i18n.formatUnit(30, 'millibar', null, 'es'), /^30\D+mb$/);
+});
+
+test('runtime numeric, date, and unit displays use the shared formatting boundary', () => {
+  const app = fs.readFileSync(path.join(root, 'js', 'app.js'), 'utf8');
+  const weather = fs.readFileSync(path.join(root, 'js', 'weather.js'), 'utf8');
+  const radarController = fs.readFileSync(path.join(root, 'js', 'radar-controller.js'), 'utf8');
+  assert.match(app, /function localUnit\(/);
+  assert.match(app, /StormScopeI18n\.formatUnit/);
+  assert.match(weather, /function formatUnit\(/);
+  assert.doesNotMatch(weather, /Math\.round\([^\n]*\)\s*\+\s*['"][^'"]*(?:°|%|km|mi|mph)/);
+  assert.doesNotMatch(app, /(?:localNumber|formatNumber)\([^\n]*\)\s*\+\s*['"][^'"]*(?:°|%|km|mi|mph|ft|mb)/);
+  assert.doesNotMatch(app, /Math\.round\([^\n]*\)\s*\+\s*['"][^'"]*(?:°|%|km|mi|mph|ft|mb)/);
+  assert.doesNotMatch(radarController, /toLocale(?:String|DateString|TimeString)/);
+  assert.match(radarController, /formatDateTime\(frame\.time/);
+});
+
 test('Spanish deterministic weather, CAP, source, radar, and recovery vocabulary is complete', () => {
   const compass = ['n', 'nne', 'ne', 'ene', 'e', 'ese', 'se', 'sse', 's', 'ssw', 'sw', 'wsw', 'w', 'wnw', 'nw', 'nnw'];
   compass.forEach((direction) => assert.notEqual(i18n.t(`direction.${direction}`, null, 'es'), `direction.${direction}`));

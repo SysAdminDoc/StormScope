@@ -1,9 +1,9 @@
 (function (root, factory) {
   'use strict';
-  var api = factory();
+  var api = factory(root);
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.StormScopeWeather = api;
-})(typeof window !== 'undefined' ? window : null, function () {
+})(typeof window !== 'undefined' ? window : null, function (root) {
   'use strict';
 
   var US_REGIONS = new Set([
@@ -40,30 +40,57 @@
     return String(locale || '').toLowerCase().startsWith('en-us') ? 'us' : 'metric';
   }
 
-  function temperatureFromFahrenheit(value, units) {
-    var number = Number(value);
-    return units === 'metric' ? Math.round((number - 32) * 5 / 9) + '°C' : Math.round(number) + '°F';
+  function formatNumber(value, locale) {
+    return new Intl.NumberFormat(locale || undefined, { maximumFractionDigits: 0 }).format(value);
   }
 
-  function temperatureFromCelsius(value, units) {
+  function formatUnit(value, unit, locale) {
+    if (root && root.StormScopeI18n && typeof root.StormScopeI18n.formatUnit === 'function') {
+      return root.StormScopeI18n.formatUnit(value, unit, { maximumFractionDigits: 0 }, locale);
+    }
+    return new Intl.NumberFormat(locale || undefined, {
+      style: 'unit', unit: unit, unitDisplay: 'short', maximumFractionDigits: 0
+    }).format(value);
+  }
+
+  function formatUnitLabel(unit, locale) {
+    if (root && root.StormScopeI18n && typeof root.StormScopeI18n.formatUnitLabel === 'function') {
+      return root.StormScopeI18n.formatUnitLabel(unit, locale);
+    }
+    var number = formatNumber(0, locale);
+    return formatUnit(0, unit, locale).replace(number, '').trim();
+  }
+
+  function temperatureFromFahrenheit(value, units, locale) {
+    var number = Number(value);
+    return units === 'metric'
+      ? formatUnit(Math.round((number - 32) * 5 / 9), 'celsius', locale)
+      : formatUnit(Math.round(number), 'fahrenheit', locale);
+  }
+
+  function temperatureFromCelsius(value, units, locale) {
     if (value == null) return null;
     var number = Number(value);
     if (!Number.isFinite(number)) return null;
-    return units === 'metric' ? Math.round(number) + '°C' : Math.round(number * 9 / 5 + 32) + '°F';
+    return units === 'metric'
+      ? formatUnit(Math.round(number), 'celsius', locale)
+      : formatUnit(Math.round(number * 9 / 5 + 32), 'fahrenheit', locale);
   }
 
-  function windFromKmh(value, units) {
+  function windFromKmh(value, units, locale) {
     if (value == null) return null;
     var number = Number(value);
     if (!Number.isFinite(number)) return null;
-    return Math.round(units === 'metric' ? number : number / 1.609344) + (units === 'metric' ? ' km/h' : ' mph');
+    return formatUnit(Math.round(units === 'metric' ? number : number / 1.609344),
+      units === 'metric' ? 'kilometer-per-hour' : 'mile-per-hour', locale);
   }
 
-  function distanceFromKm(value, units) {
+  function distanceFromKm(value, units, locale) {
     if (value == null) return null;
     var number = Number(value);
     if (!Number.isFinite(number)) return null;
-    return Math.round(units === 'metric' ? number : number * 0.621371) + (units === 'metric' ? ' km' : ' mi');
+    return formatUnit(Math.round(units === 'metric' ? number : number * 0.621371),
+      units === 'metric' ? 'kilometer' : 'mile', locale);
   }
 
   function trustedNwsUrl(value) {
@@ -191,13 +218,14 @@
     });
   }
 
-  function windFromMph(value, units) {
+  function windFromMph(value, units, locale) {
     var text = String(value || '');
     var converted = text.replace(/\d+(?:\.\d+)?/g, function (match) {
       var number = Number(match);
-      return String(Math.round(units === 'metric' ? number * 1.609344 : number));
+      return formatNumber(Math.round(units === 'metric' ? number * 1.609344 : number), locale);
     });
-    return converted.replace(/\s*mph\b/i, units === 'metric' ? ' km/h' : ' mph').trim();
+    return converted.replace(/\s*mph\b/i, ' ' + formatUnitLabel(
+      units === 'metric' ? 'kilometer-per-hour' : 'mile-per-hour', locale)).trim();
   }
 
   function formatTime(value, locale, unknownValue) {
@@ -205,6 +233,11 @@
     if (!value) return unknown;
     var date = new Date(value);
     if (Number.isNaN(date.getTime())) return unknown;
+    if (root && root.StormScopeI18n && typeof root.StormScopeI18n.formatDateTime === 'function') {
+      return root.StormScopeI18n.formatDateTime(date, {
+        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+      }, locale);
+    }
     return new Intl.DateTimeFormat(locale || undefined, {
       month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
     }).format(date);

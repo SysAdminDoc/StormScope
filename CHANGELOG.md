@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Consolidated transient weather-context announcements into one debounced scene/status announcer and added localized accessible counts to camera and storm-report clusters.
+- Routed runtime numeric, unit, and date displays through shared locale-aware `Intl` helpers, including weather toggles, provider popups, and regression coverage.
 - Added an opt-in, client-only radar WebM loop export with bounded frame/resolution/size budgets, burned-in source and capture age, request-budget-aware tile preflight, local download-only handling, and low-data/reduced-motion/capability fallbacks.
 - Added an opt-in 128×72 motion-compensated radar preview worker that profiles adjacent observed XYZ frames, cancels stale jobs, and falls back to crossfade when motion, data, visibility, comparison, memory, or worker budgets disallow it.
 - Added an optional, default-off NOAA SWPC space-weather layer with a bounded north-up Ovation aurora raster, planetary K-index, active alert strip, freshness/attribution, independent last-good feed recovery, scene persistence, English/Spanish copy, and unit/headless coverage.

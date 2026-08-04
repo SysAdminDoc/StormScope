@@ -375,7 +375,7 @@
     function updateTimeDisplay() {
       var frame = state.frames[state.index];
       if (!frame) return;
-      var time = new Date(frame.time).toLocaleTimeString(getLocale(), {
+      var time = formatDateTime(frame.time, {
         hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short'
       });
       var age = providers.getFrameAge(frame, state.providerId);

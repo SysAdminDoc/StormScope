@@ -2,10 +2,10 @@
 'use strict';
 
 (function (root, factory) {
-  var api = factory();
+  var api = factory(root);
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.StormScopeRiverGauges = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
   var OBSERVED_URL = 'https://mapservices.weather.noaa.gov/eventdriven/rest/services/water/riv_gauges/MapServer/0';
   var FORECAST_URL = 'https://mapservices.weather.noaa.gov/eventdriven/rest/services/water/riv_gauges/MapServer/1';
   var STAGEFLOW_URL = 'https://api.water.noaa.gov/nwps/v1/gauges';
@@ -419,8 +419,17 @@
     var clearTimer = options.clearTimeout || clearTimeout;
     var translate = typeof options.translate === 'function' ? options.translate : function (key) { return key; };
     var localNumber = typeof options.localNumber === 'function' ? options.localNumber : function (value) { return String(value); };
+    var formatUnit = typeof options.formatUnit === 'function' ? options.formatUnit : function (value, unit) {
+      if (root && root.StormScopeI18n && typeof root.StormScopeI18n.formatUnit === 'function') {
+        return root.StormScopeI18n.formatUnit(value, unit);
+      }
+      return localNumber(value) + (unit ? '\u00a0' + unit : '');
+    };
     var contextTimestamp = typeof options.contextTimestamp === 'function' ? options.contextTimestamp : function (value) { return new Date(value).toISOString(); };
-    var formatAge = typeof options.formatAge === 'function' ? options.formatAge : function (minutes) { return Math.round(minutes) + ' min'; };
+    var formatAge = typeof options.formatAge === 'function' ? options.formatAge : function (minutes) {
+      return root && root.StormScopeI18n && typeof root.StormScopeI18n.formatAge === 'function'
+        ? root.StormScopeI18n.formatAge(minutes) : String(Math.round(minutes)) + ' min';
+    };
     var isEnabled = typeof options.isEnabled === 'function' ? options.isEnabled : function () { return true; };
     var isHidden = typeof options.isDocumentHidden === 'function' ? options.isDocumentHidden : function () { return false; };
     var setStatus = typeof options.setStatus === 'function' ? options.setStatus : function () {};
@@ -502,7 +511,7 @@
 
     function valueText(value, unit) {
       if (value == null) return translate('context.gaugeUnavailable');
-      return localNumber(value) + (unit ? ' ' + unit : '');
+      return formatUnit(value, unit);
     }
 
     function timeText(value) {

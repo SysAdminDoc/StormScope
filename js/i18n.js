@@ -414,7 +414,7 @@
       'context.cpcSource': 'NOAA CPC',
       'context.cpcLimitation': 'Drought and extended-range outlooks are planning guidance, not warnings.',
       'context.cpcFeature': '{product}', 'context.cpcCategory': 'Category: {category}',
-      'context.cpcProbability': 'Probability: {value}%', 'context.cpcTarget': 'Target: {target}',
+      'context.cpcProbability': 'Probability: {value}', 'context.cpcTarget': 'Target: {target}',
       'context.cpcIssued': 'Issued {time}', 'context.cpcValid': 'Valid {start}–{end}',
       'context.cpcOfficial': 'Open official NOAA CPC outlook',
       'context.cpcCategory.no-drought': 'No drought', 'context.cpcCategory.development': 'Development',
@@ -447,7 +447,7 @@
       'context.tropical.center': 'Advisory center', 'context.tropical.track': 'Forecast track',
       'context.tropical.cone': 'Forecast cone', 'context.tropical.watches': 'Coastal watches and warnings',
       'context.tropicalFeature': '{product} • issued {time}',
-      'context.tropicalIntensity': 'Maximum sustained wind {wind} mph • minimum pressure {pressure} mb',
+      'context.tropicalIntensity': 'Maximum sustained wind {wind} • minimum pressure {pressure}',
       'context.tropicalAdvisory': 'Open official NHC advisory',
       'context.loading': 'Loading official data…', 'context.unavailable': 'Official data unavailable; retry scheduled',
       'context.refreshFailed': 'Refresh failed • showing previous official data',
@@ -463,16 +463,16 @@
       'context.metarTemperature': 'Temperature: {value}', 'context.metarDewpoint': 'Dewpoint: {value}',
       'context.metarWind': 'Wind: {value}', 'context.metarGust': 'Gust: {value}',
       'context.metarVisibility': 'Visibility: {value}', 'context.metarWeather': 'Weather: {value}',
-      'context.metarSky': 'Sky: {value}', 'context.metarCeiling': 'Ceiling: {value} ft',
+      'context.metarSky': 'Sky: {value}', 'context.metarCeiling': 'Ceiling: {value}',
       'context.metarFlightCategory': 'Flight category: {category}', 'context.metarRaw': 'Raw METAR report',
       'context.metarNoData': 'Not reported', 'context.metarSource': 'Open official METAR report',
       'context.metarCluster': '{count} METAR stations', 'context.stormReportCluster': '{count} local storm reports',
       'context.wildfireStatus': '{count} wildfire perimeters • {freshness} • {time}',
-      'context.wildfireName': 'Unnamed wildfire', 'context.acres': '{count} acres',
-      'context.contained': '{count}% contained', 'context.nifcSource': 'Open official NIFC record',
+      'context.wildfireName': 'Unnamed wildfire', 'context.acres': '{count}',
+      'context.contained': '{count} contained', 'context.nifcSource': 'Open official NIFC record',
       'context.earthquakesOff': 'Earthquakes off',
       'context.earthquakeStatus': '{count} earthquakes • {freshness} • {time}',
-      'context.earthquakeMagnitude': 'Magnitude {mag}', 'context.earthquakeDepth': 'Depth {depth} km',
+      'context.earthquakeMagnitude': 'Magnitude {mag}', 'context.earthquakeDepth': 'Depth {depth}',
       'context.earthquakeUnknownPlace': 'Location unavailable', 'context.usgsSource': 'Open official USGS event',
       'context.earthquakeIntensityLoad': 'Load ShakeMap / DYFI intensity context',
       'context.earthquakeIntensityReload': 'Reload intensity context',
@@ -483,7 +483,7 @@
       'context.earthquakeIntensityFeature': '{product} intensity context',
       'context.earthquakeIntensityValue': 'Intensity {value}',
       'context.earthquakeIntensityResponses': '{count} public responses',
-      'context.earthquakeIntensityDistance': '{distance} km from the event',
+      'context.earthquakeIntensityDistance': '{distance} from the event',
       'context.earthquakeIntensityIssued': 'Issued {time}',
       'context.earthquakeIntensitySource': 'Open official USGS intensity product',
       'context.earthquakeIntensity.shakemap': 'USGS ShakeMap',
@@ -549,9 +549,9 @@
       'context.mesoscaleInfo': '{info}', 'context.mesoscaleGuidance': 'Short-fuse guidance—not a warning.',
       'context.mesoscaleSource': 'Open official SPC discussion',
       'context.stormReportsOff': 'Local storm reports off',
-      'context.stormReportsStatus': '{count} local storm reports • {window}h • {freshness} • {time}',
+      'context.stormReportsStatus': '{count} local storm reports • {window} • {freshness} • {time}',
       'context.stormReportFeature': '{type}', 'context.stormReportLocation': '{location}',
-      'context.stormReportMagnitude': '{magnitude} {unit}', 'context.stormReportReported': 'Reported {time}',
+      'context.stormReportMagnitude': '{magnitude}', 'context.stormReportReported': 'Reported {time}',
       'context.stormReportSource': 'Source: {source}', 'context.stormReportRemarks': '{remarks}',
       'context.stormReportOfficial': 'Open official NWS office',
       'incident.camerasNearAlert': 'Cameras near this alert', 'incident.camerasNearFire': 'Cameras near this wildfire',
@@ -638,7 +638,7 @@
       'summary.title': 'Situation summary', 'summary.open': 'Open situation summary',
       'summary.close': 'Close situation summary', 'summary.refresh': 'Refresh summary',
       'summary.updated': 'Updated {time}', 'summary.announced': 'Situation summary updated.', 'summary.mapHeading': 'Map position',
-      'summary.mapPosition': '{lat}, {lon}; zoom {zoom}.', 'summary.coordinate': '{value}° {direction}',
+      'summary.mapPosition': '{lat}, {lon}; zoom {zoom}.', 'summary.coordinate': '{value} {direction}',
       'summary.north': 'N', 'summary.south': 'S', 'summary.east': 'E', 'summary.west': 'W',
       'summary.radarHeading': 'Radar at map center', 'summary.radarPending': 'Radar status is still loading.',
       'summary.radarClear': '{source}: clear; coverage available; {age}.',
@@ -1125,7 +1125,7 @@
       'context.cpcSource': 'NOAA CPC',
       'context.cpcLimitation': 'Las perspectivas de sequía y rango extendido son orientación para planificación, no avisos.',
       'context.cpcFeature': '{product}', 'context.cpcCategory': 'Categoría: {category}',
-      'context.cpcProbability': 'Probabilidad: {value}%', 'context.cpcTarget': 'Objetivo: {target}',
+      'context.cpcProbability': 'Probabilidad: {value}', 'context.cpcTarget': 'Objetivo: {target}',
       'context.cpcIssued': 'Emitida {time}', 'context.cpcValid': 'Válida de {start} a {end}',
       'context.cpcOfficial': 'Abrir perspectiva oficial del NOAA CPC',
       'context.cpcCategory.no-drought': 'Sin sequía', 'context.cpcCategory.development': 'Desarrollo',
@@ -1158,7 +1158,7 @@
       'context.tropical.center': 'Centro del aviso', 'context.tropical.track': 'Trayectoria pronosticada',
       'context.tropical.cone': 'Cono de pronóstico', 'context.tropical.watches': 'Vigilancias y avisos costeros',
       'context.tropicalFeature': '{product} • emitido {time}',
-      'context.tropicalIntensity': 'Viento máximo sostenido {wind} mph • presión mínima {pressure} mb',
+      'context.tropicalIntensity': 'Viento máximo sostenido {wind} • presión mínima {pressure}',
       'context.tropicalAdvisory': 'Abrir aviso oficial del NHC',
       'context.loading': 'Cargando datos oficiales…', 'context.unavailable': 'Datos oficiales no disponibles; reintento programado',
       'context.refreshFailed': 'Falló la actualización • mostrando datos oficiales anteriores',
@@ -1174,16 +1174,16 @@
       'context.metarTemperature': 'Temperatura: {value}', 'context.metarDewpoint': 'Punto de rocío: {value}',
       'context.metarWind': 'Viento: {value}', 'context.metarGust': 'Ráfaga: {value}',
       'context.metarVisibility': 'Visibilidad: {value}', 'context.metarWeather': 'Tiempo: {value}',
-      'context.metarSky': 'Cielo: {value}', 'context.metarCeiling': 'Techo: {value} pies',
+      'context.metarSky': 'Cielo: {value}', 'context.metarCeiling': 'Techo: {value}',
       'context.metarFlightCategory': 'Categoría de vuelo: {category}', 'context.metarRaw': 'Informe METAR sin procesar',
       'context.metarNoData': 'No informado', 'context.metarSource': 'Abrir informe METAR oficial',
       'context.metarCluster': '{count} estaciones METAR', 'context.stormReportCluster': '{count} informes locales de tormentas',
       'context.wildfireStatus': '{count} perímetros de incendios • {freshness} • {time}',
-      'context.wildfireName': 'Incendio sin nombre', 'context.acres': '{count} acres',
-      'context.contained': '{count}% contenido', 'context.nifcSource': 'Abrir registro oficial del NIFC',
+      'context.wildfireName': 'Incendio sin nombre', 'context.acres': '{count}',
+      'context.contained': '{count} contenido', 'context.nifcSource': 'Abrir registro oficial del NIFC',
       'context.earthquakesOff': 'Terremotos desactivados',
       'context.earthquakeStatus': '{count} terremotos • {freshness} • {time}',
-      'context.earthquakeMagnitude': 'Magnitud {mag}', 'context.earthquakeDepth': 'Profundidad {depth} km',
+      'context.earthquakeMagnitude': 'Magnitud {mag}', 'context.earthquakeDepth': 'Profundidad {depth}',
       'context.earthquakeUnknownPlace': 'Ubicación no disponible', 'context.usgsSource': 'Abrir evento oficial del USGS',
       'context.earthquakeIntensityLoad': 'Cargar contexto de intensidad ShakeMap / DYFI',
       'context.earthquakeIntensityReload': 'Recargar contexto de intensidad',
@@ -1194,7 +1194,7 @@
       'context.earthquakeIntensityFeature': 'Contexto de intensidad {product}',
       'context.earthquakeIntensityValue': 'Intensidad {value}',
       'context.earthquakeIntensityResponses': '{count} respuestas públicas',
-      'context.earthquakeIntensityDistance': '{distance} km del evento',
+      'context.earthquakeIntensityDistance': '{distance} del evento',
       'context.earthquakeIntensityIssued': 'Emitido {time}',
       'context.earthquakeIntensitySource': 'Abrir producto oficial de intensidad del USGS',
       'context.earthquakeIntensity.shakemap': 'ShakeMap del USGS',
@@ -1260,9 +1260,9 @@
       'context.mesoscaleInfo': '{info}', 'context.mesoscaleGuidance': 'Guía de corto plazo: no es una advertencia.',
       'context.mesoscaleSource': 'Abrir discusión oficial del SPC',
       'context.stormReportsOff': 'Informes locales de tormentas desactivados',
-      'context.stormReportsStatus': '{count} informes locales • {window} h • {freshness} • {time}',
+      'context.stormReportsStatus': '{count} informes locales • {window} • {freshness} • {time}',
       'context.stormReportFeature': '{type}', 'context.stormReportLocation': '{location}',
-      'context.stormReportMagnitude': '{magnitude} {unit}', 'context.stormReportReported': 'Informado {time}',
+      'context.stormReportMagnitude': '{magnitude}', 'context.stormReportReported': 'Informado {time}',
       'context.stormReportSource': 'Fuente: {source}', 'context.stormReportRemarks': '{remarks}',
       'context.stormReportOfficial': 'Abrir oficina oficial del NWS',
       'incident.camerasNearAlert': 'Cámaras cerca de esta alerta', 'incident.camerasNearFire': 'Cámaras cerca de este incendio',
@@ -1349,7 +1349,7 @@
       'summary.title': 'Resumen de situación', 'summary.open': 'Abrir resumen de situación',
       'summary.close': 'Cerrar resumen de situación', 'summary.refresh': 'Actualizar resumen',
       'summary.updated': 'Actualizado {time}', 'summary.announced': 'Resumen de situación actualizado.', 'summary.mapHeading': 'Posición del mapa',
-      'summary.mapPosition': '{lat}, {lon}; zoom {zoom}.', 'summary.coordinate': '{value}° {direction}',
+      'summary.mapPosition': '{lat}, {lon}; zoom {zoom}.', 'summary.coordinate': '{value} {direction}',
       'summary.north': 'N', 'summary.south': 'S', 'summary.east': 'E', 'summary.west': 'O',
       'summary.radarHeading': 'Radar en el centro del mapa', 'summary.radarPending': 'El estado del radar aún se está cargando.',
       'summary.radarClear': '{source}: despejado; cobertura disponible; {age}.',
@@ -1459,8 +1459,92 @@
     return interpolate(value == null ? key : value, variables);
   }
 
+  var UNIT_ALIASES = Object.freeze({
+    'c': 'celsius', 'celsius': 'celsius', 'degc': 'celsius', '°c': 'celsius',
+    'f': 'fahrenheit', 'fahrenheit': 'fahrenheit', 'degf': 'fahrenheit', '°f': 'fahrenheit',
+    'km/h': 'kilometer-per-hour', 'kmh': 'kilometer-per-hour', 'kmh-1': 'kilometer-per-hour',
+    'kilometer-per-hour': 'kilometer-per-hour',
+    'mph': 'mile-per-hour', 'mi/h': 'mile-per-hour', 'mile-per-hour': 'mile-per-hour',
+    'km': 'kilometer', 'kilometer': 'kilometer', 'kilometers': 'kilometer',
+    'mi': 'mile', 'mile': 'mile', 'miles': 'mile',
+    '%': 'percent', 'percent': 'percent',
+    'mm': 'millimeter', 'millimeter': 'millimeter', 'millimeters': 'millimeter',
+    'in': 'inch', 'inch': 'inch', 'inches': 'inch',
+    'm': 'meter', 'meter': 'meter', 'meters': 'meter',
+    's': 'second', 'sec': 'second', 'second': 'second', 'seconds': 'second',
+    'm/s': 'meter-per-second', 'mps': 'meter-per-second', 'meter-per-second': 'meter-per-second',
+    'ft': 'foot', 'foot': 'foot', 'feet': 'foot',
+    '°': 'degree', 'degree': 'degree', 'degrees': 'degree',
+    'acre': 'acre', 'acres': 'acre',
+    'μg/m³': 'microgram-per-cubic-meter', 'µg/m³': 'microgram-per-cubic-meter',
+    'ug/m3': 'microgram-per-cubic-meter',
+    'mb': 'millibar', 'millibar': 'millibar', 'millibars': 'millibar',
+    'hpa': 'hectopascal', 'hectopascal': 'hectopascal', 'hectopascals': 'hectopascal',
+    'kt': 'knot', 'knot': 'knot', 'knots': 'knot',
+    'cfs': 'cubic-foot-per-second'
+  });
+
+  var UNIT_DESCRIPTORS = Object.freeze({
+    celsius: Object.freeze({ intlUnit: 'celsius', unitDisplay: 'short' }),
+    fahrenheit: Object.freeze({ intlUnit: 'fahrenheit', unitDisplay: 'short' }),
+    'kilometer-per-hour': Object.freeze({ intlUnit: 'kilometer-per-hour', unitDisplay: 'short' }),
+    'mile-per-hour': Object.freeze({ intlUnit: 'mile-per-hour', unitDisplay: 'short' }),
+    kilometer: Object.freeze({ intlUnit: 'kilometer', unitDisplay: 'short' }),
+    mile: Object.freeze({ intlUnit: 'mile', unitDisplay: 'short' }),
+    percent: Object.freeze({ intlUnit: 'percent', unitDisplay: 'narrow' }),
+    millimeter: Object.freeze({ intlUnit: 'millimeter', unitDisplay: 'short' }),
+    inch: Object.freeze({ intlUnit: 'inch', unitDisplay: 'short' }),
+    meter: Object.freeze({ intlUnit: 'meter', unitDisplay: 'short' }),
+    second: Object.freeze({ intlUnit: 'second', unitDisplay: 'short' }),
+    'meter-per-second': Object.freeze({ intlUnit: 'meter-per-second', unitDisplay: 'short' }),
+    foot: Object.freeze({ intlUnit: 'foot', unitDisplay: 'short' }),
+    degree: Object.freeze({ intlUnit: 'degree', unitDisplay: 'narrow' }),
+    acre: Object.freeze({ intlUnit: 'acre', unitDisplay: 'long' }),
+    'microgram-per-cubic-meter': Object.freeze({ label: 'μg/m³' }),
+    millibar: Object.freeze({ label: 'mb' }),
+    hectopascal: Object.freeze({ label: 'hPa' }),
+    knot: Object.freeze({ label: 'kt' }),
+    'cubic-foot-per-second': Object.freeze({ label: 'cfs' })
+  });
+
+  function normalizedUnit(value) {
+    var key = String(value == null ? '' : value).trim().toLowerCase();
+    if (key.indexOf(':') !== -1) key = key.slice(key.lastIndexOf(':') + 1);
+    return UNIT_ALIASES[key] || key;
+  }
+
+  function unitDescriptor(value) {
+    var key = normalizedUnit(value);
+    return { key: key, descriptor: UNIT_DESCRIPTORS[key] || null };
+  }
+
   function formatNumber(value, options, locale) {
     return new Intl.NumberFormat(normalizeLocale(locale || currentLocale), options || {}).format(value);
+  }
+
+  function formatUnitLabel(unit, locale) {
+    var resolved = unitDescriptor(unit);
+    if (!resolved.descriptor) return String(unit == null ? '' : unit);
+    if (!resolved.descriptor.intlUnit) return resolved.descriptor.label;
+    var parts = new Intl.NumberFormat(normalizeLocale(locale || currentLocale), {
+      style: 'unit', unit: resolved.descriptor.intlUnit, unitDisplay: resolved.descriptor.unitDisplay
+    }).formatToParts(0);
+    return parts.filter(function (part) { return part.type === 'unit' || part.type === 'percentSign'; })
+      .map(function (part) { return part.value; }).join('');
+  }
+
+  function formatUnit(value, unit, options, locale) {
+    var resolved = unitDescriptor(unit);
+    if (!resolved.descriptor) {
+      return formatNumber(value, options, locale) + (unit ? ' ' + String(unit) : '');
+    }
+    if (!resolved.descriptor.intlUnit) {
+      return formatNumber(value, options, locale) + ' ' + resolved.descriptor.label;
+    }
+    var formatOptions = Object.assign({}, options || {}, {
+      style: 'unit', unit: resolved.descriptor.intlUnit, unitDisplay: resolved.descriptor.unitDisplay
+    });
+    return new Intl.NumberFormat(normalizeLocale(locale || currentLocale), formatOptions).format(value);
   }
 
   function formatDateTime(value, options, locale) {
@@ -1539,6 +1623,8 @@
     formatAge: formatAge,
     formatDateTime: formatDateTime,
     formatNumber: formatNumber,
+    formatUnit: formatUnit,
+    formatUnitLabel: formatUnitLabel,
     localizeDocument: localizeDocument
   });
 });

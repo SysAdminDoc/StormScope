@@ -308,6 +308,15 @@
     return StormScopeI18n.formatNumber(value, null, appLocale);
   }
 
+  function localUnit(value, unit, options) {
+    return StormScopeI18n.formatUnit(value, unit, options, appLocale);
+  }
+
+  function localMeasurement(value, unit) {
+    var number = Number(value);
+    return Number.isFinite(number) ? localUnit(number, unit) : String(value || '') + (unit ? '\u00a0' + unit : '');
+  }
+
   function setTransientAnnouncement(message) {
     var announcer = document.getElementById('transient-announcer');
     if (announcer) announcer.textContent = message;
@@ -748,6 +757,7 @@
     fetch: window.fetch.bind(window),
     translate: tr,
     localNumber: localNumber,
+    formatUnit: localUnit,
     contextTimestamp: contextTimestamp,
     formatAge: function (minutes) { return StormScopeI18n.formatAge(minutes, appLocale); },
     getMap: function () { return map; },
@@ -781,6 +791,7 @@
     jsonp: true,
     translate: tr,
     localNumber: localNumber,
+    formatUnit: localUnit,
     contextTimestamp: contextTimestamp,
     formatAge: function (minutes) { return StormScopeI18n.formatAge(minutes, appLocale); },
     getMap: function () { return map; },
@@ -799,6 +810,7 @@
     L: L,
     translate: tr,
     localNumber: localNumber,
+    formatUnit: localUnit,
     contextTimestamp: contextTimestamp,
     formatAge: function (minutes) { return StormScopeI18n.formatAge(minutes, appLocale); },
     getMap: function () { return map; },
@@ -1606,7 +1618,8 @@
 
   function metarWindText(speedKt, direction) {
     if (speedKt == null) return tr('context.metarNoData');
-    var speed = StormScopeWeather.windFromKmh(Number(speedKt) * 1.852, weatherUnits) || metarValue(speedKt) + ' kt';
+    var speed = StormScopeWeather.windFromKmh(Number(speedKt) * 1.852, weatherUnits, appLocale) ||
+      localUnit(speedKt, 'knot');
     return direction == null ? speed : speed + ' ' + localizedWindDirection(direction);
   }
 
@@ -1628,16 +1641,18 @@
     observed.textContent = tr('context.metarObserved', { time: contextTimestamp(properties.observationTime) });
     container.appendChild(observed);
     appendRow('context.metarTemperature', properties.tempC == null
-      ? null : StormScopeWeather.temperatureFromCelsius(properties.tempC, weatherUnits));
+      ? null : StormScopeWeather.temperatureFromCelsius(properties.tempC, weatherUnits, appLocale));
     appendRow('context.metarDewpoint', properties.dewpointC == null
-      ? null : StormScopeWeather.temperatureFromCelsius(properties.dewpointC, weatherUnits));
+      ? null : StormScopeWeather.temperatureFromCelsius(properties.dewpointC, weatherUnits, appLocale));
     appendRow('context.metarWind', metarWindText(properties.windSpeedKt, properties.windDirection));
     appendRow('context.metarGust', properties.windGustKt == null
       ? null : metarWindText(properties.windGustKt, null));
     appendRow('context.metarVisibility', properties.visibility);
     appendRow('context.metarWeather', properties.weather);
     appendRow('context.metarSky', properties.skyCover);
-    appendRow('context.metarCeiling', properties.ceilingFt == null ? properties.cloudBaseFt : properties.ceilingFt);
+    appendRow('context.metarCeiling', properties.ceilingFt == null
+      ? (properties.cloudBaseFt == null ? null : localUnit(properties.cloudBaseFt, 'foot'))
+      : localUnit(properties.ceilingFt, 'foot'));
     appendRow('context.metarFlightCategory', properties.flightCategory);
 
     if (properties.rawText) {
@@ -1859,7 +1874,8 @@
     if (properties.intensity != null) {
       var intensity = document.createElement('span');
       intensity.textContent = tr('context.tropicalIntensity', {
-        wind: localNumber(properties.intensity), pressure: properties.pressure == null ? tr('weather.unknown') : localNumber(properties.pressure)
+        wind: StormScopeWeather.windFromKmh(Number(properties.intensity) * 1.852, weatherUnits, appLocale),
+        pressure: properties.pressure == null ? tr('weather.unknown') : localUnit(properties.pressure, 'millibar')
       });
       container.appendChild(intensity);
     }
@@ -2583,13 +2599,12 @@
 
   function privateAnnotationDistanceText(distanceKm) {
     var value = weatherUnits === 'metric' ? distanceKm : distanceKm * 0.621371;
-    return StormScopeI18n.formatNumber(value, { maximumFractionDigits: 1 }, appLocale) +
-      (weatherUnits === 'metric' ? ' km' : ' mi');
+    return localUnit(value, weatherUnits === 'metric' ? 'kilometer' : 'mile', { maximumFractionDigits: 1 });
   }
 
   function privateAnnotationBearingText(bearingDegrees) {
-    return StormScopeI18n.formatNumber(bearingDegrees, { maximumFractionDigits: 1 }, appLocale) +
-      '° ' + localizedWindDirection(bearingDegrees);
+    return localUnit(bearingDegrees, 'degree', { maximumFractionDigits: 1 }) +
+      ' ' + localizedWindDirection(bearingDegrees);
   }
 
   function privateAnnotationLatLngs(record) {
@@ -3118,12 +3133,12 @@
     container.appendChild(name);
     if (Number.isFinite(Number(properties.poly_GISAcres))) {
       var acres = document.createElement('span');
-      acres.textContent = tr('context.acres', { count: localNumber(Math.round(Number(properties.poly_GISAcres))) });
+      acres.textContent = tr('context.acres', { count: localUnit(Math.round(Number(properties.poly_GISAcres)), 'acre') });
       container.appendChild(acres);
     }
     if (Number.isFinite(Number(properties.attr_PercentContained))) {
       var contained = document.createElement('span');
-      contained.textContent = tr('context.contained', { count: localNumber(Math.round(Number(properties.attr_PercentContained))) });
+      contained.textContent = tr('context.contained', { count: localUnit(Math.round(Number(properties.attr_PercentContained)), 'percent') });
       container.appendChild(contained);
     }
     var link = document.createElement('a');
@@ -3139,7 +3154,7 @@
   function incidentCameraRelation(result) {
     if (result.inside) return tr('incident.insideArea');
     return tr('incident.nearbyRelation', {
-      distance: StormScopeWeather.distanceFromKm(result.distanceKm, weatherUnits),
+      distance: StormScopeWeather.distanceFromKm(result.distanceKm, weatherUnits, appLocale),
       bearing: localizedWindDirection(result.bearing)
     });
   }
@@ -3401,7 +3416,9 @@
     container.appendChild(place);
     if (properties.depthKm != null) {
       var depth = document.createElement('span');
-      depth.textContent = tr('context.earthquakeDepth', { depth: localNumber(Math.round(properties.depthKm)) });
+      depth.textContent = tr('context.earthquakeDepth', {
+        depth: localUnit(properties.depthKm, 'kilometer', { maximumFractionDigits: 0 })
+      });
       container.appendChild(depth);
     }
     if (properties.time != null) {
@@ -3456,7 +3473,9 @@
     }
     if (properties.distanceKm != null) {
       var distance = document.createElement('span');
-      distance.textContent = tr('context.earthquakeIntensityDistance', { distance: localNumber(properties.distanceKm) });
+      distance.textContent = tr('context.earthquakeIntensityDistance', {
+        distance: localUnit(properties.distanceKm, 'kilometer')
+      });
       container.appendChild(distance);
     }
     if (properties.place) {
@@ -4224,7 +4243,7 @@
     }
     var provider = StormScopeSpcReports.providers.reports;
     setContextStatusElement('storm-report-status', tr('context.stormReportsStatus', {
-      count: localNumber(stormReportCount), window: localNumber(stormReportWindow),
+      count: localNumber(stormReportCount), window: localUnit(stormReportWindow, 'hour'),
       freshness: freshnessLabel(stormReportLatestAt, provider.staleMs),
       time: stormReportLatestAt ? contextTimestamp(stormReportLatestAt) : tr('weather.unknown')
     }), 'ready');
@@ -4247,7 +4266,7 @@
     if (properties.magnitude) {
       var magnitude = document.createElement('span');
       magnitude.textContent = tr('context.stormReportMagnitude', {
-        magnitude: properties.magnitude, unit: properties.units || ''
+        magnitude: localMeasurement(properties.magnitude, properties.units)
       }).trim();
       container.appendChild(magnitude);
     }
@@ -6205,8 +6224,8 @@
 
   function forecastTemperature(value, unit) {
     return unit === 'F'
-      ? StormScopeWeather.temperatureFromFahrenheit(value, weatherUnits)
-      : Math.round(value) + '°' + unit;
+      ? StormScopeWeather.temperatureFromFahrenheit(value, weatherUnits, appLocale)
+      : localUnit(Math.round(value), unit === 'C' ? 'celsius' : unit === 'F' ? 'fahrenheit' : unit);
   }
 
   async function fetchNwsObservation(stationsUrl, lat, lon, signal) {
@@ -6234,15 +6253,15 @@
     var station = observation.station;
     var stationLabel = (station.name ? station.name + ' (' + station.id + ')' : station.id) +
       ' • ' + tr('weather.distanceAway', {
-        distance: StormScopeWeather.distanceFromKm(station.distanceKm, weatherUnits) || tr('weather.unknown')
+        distance: StormScopeWeather.distanceFromKm(station.distanceKm, weatherUnits, appLocale) || tr('weather.unknown')
       });
-    var wind = StormScopeWeather.windFromKmh(observation.windKmh, weatherUnits);
+    var wind = StormScopeWeather.windFromKmh(observation.windKmh, weatherUnits, appLocale);
     if (wind && observation.windDirection !== null) wind += ' ' + localizedWindDirection(observation.windDirection);
     return [
-      [tr('weather.temperature'), StormScopeWeather.temperatureFromCelsius(observation.temperatureC, weatherUnits) || tr('weather.notAvailable')],
+      [tr('weather.temperature'), StormScopeWeather.temperatureFromCelsius(observation.temperatureC, weatherUnits, appLocale) || tr('weather.notAvailable')],
       [tr('weather.conditionsProvider'), observation.conditions || tr('weather.notAvailable')],
       [tr('weather.wind'), wind || tr('weather.notAvailable')],
-      [tr('weather.humidity'), observation.humidity !== null ? localNumber(Math.round(observation.humidity)) + '%' : tr('weather.notAvailable')],
+      [tr('weather.humidity'), observation.humidity !== null ? localUnit(Math.round(observation.humidity), 'percent') : tr('weather.notAvailable')],
       [tr('weather.observed'), localTime(observation.timestamp) + ' • ' + StormScopeI18n.formatAge(ageMinutes, appLocale)],
       [tr('weather.station'), stationLabel],
       [tr('weather.source'), tr('weather.nwsObservation')]
@@ -6262,10 +6281,10 @@
       [tr('weather.forecastRange'), range],
       [tr('weather.conditionsProvider'), current.shortForecast],
       [tr('weather.precipChance'), precip != null
-        ? localNumber(precip) + '%' : tr('weather.notAvailable')],
-      [tr('weather.wind'), StormScopeWeather.windFromMph(current.windSpeed, weatherUnits) + ' ' + localizedWindDirection(current.windDirection)],
+      ? localUnit(precip, 'percent') : tr('weather.notAvailable')],
+      [tr('weather.wind'), StormScopeWeather.windFromMph(current.windSpeed, weatherUnits, appLocale) + ' ' + localizedWindDirection(current.windDirection)],
       [tr('weather.humidity'), current.relativeHumidity && current.relativeHumidity.value != null
-        ? localNumber(current.relativeHumidity.value) + '%' : tr('weather.notAvailable')],
+        ? localUnit(current.relativeHumidity.value, 'percent') : tr('weather.notAvailable')],
       [tr('weather.forecastIssued'), localTime(forecast.updatedAt)],
       [tr('weather.forecastValid'), localTime(current.startTime)],
       [tr('weather.source'), tr('weather.nwsForecast')]
@@ -6281,14 +6300,13 @@
     else if (unit.endsWith(':in') || unit === 'in') millimeters = value * 25.4;
     else return tr('weather.notAvailable');
     var output = weatherUnits === 'metric' ? millimeters : millimeters / 25.4;
-    var suffix = weatherUnits === 'metric' ? ' mm' : ' in';
-    return StormScopeI18n.formatNumber(output, { maximumFractionDigits: 2 }, appLocale) + suffix;
+    return localUnit(output, weatherUnits === 'metric' ? 'millimeter' : 'inch', { maximumFractionDigits: 2 });
   }
 
   function precipitationTimelineCard(item) {
     var time = localTime(item.startTime);
     var chance = item.probabilityOfPrecipitation === null
-      ? tr('weather.notAvailable') : localNumber(item.probabilityOfPrecipitation) + '%';
+      ? tr('weather.notAvailable') : localUnit(item.probabilityOfPrecipitation, 'percent');
     var amount = forecastPrecipitationAmount(item.precipitationAmount);
     var forecast = item.shortForecast || tr('weather.notAvailable');
     var card = document.createElement('article');
@@ -6336,7 +6354,7 @@
       ? tr('weather.aqiPrimaryValue', {
         pollutant: tr('weather.aqi.pollutant.' + primary.id),
         concentration: primary.concentration === null
-          ? tr('weather.notAvailable') : localNumber(primary.concentration) + ' μg/m³',
+          ? tr('weather.notAvailable') : localUnit(primary.concentration, 'microgram-per-cubic-meter'),
         aqi: primary.aqi === null ? tr('weather.notAvailable') : localNumber(primary.aqi)
       })
       : tr('weather.notAvailable');
@@ -6370,10 +6388,10 @@
       var windDir = localizedWindDirection(c.wind_direction_10m || 0);
 
       showWeatherItems(weatherLoading, weatherData, [
-        [tr('weather.temperature'), localNumber(Math.round(c.temperature_2m)) + (metric ? '°C' : '°F')],
+        [tr('weather.temperature'), localUnit(Math.round(c.temperature_2m), metric ? 'celsius' : 'fahrenheit')],
         [tr('weather.conditions'), condition],
-        [tr('weather.wind'), localNumber(Math.round(c.wind_speed_10m)) + (metric ? ' km/h ' : ' mph ') + windDir],
-        [tr('weather.humidity'), c.relative_humidity_2m != null ? localNumber(c.relative_humidity_2m) + '%' : tr('weather.notAvailable')],
+        [tr('weather.wind'), localUnit(Math.round(c.wind_speed_10m), metric ? 'kilometer-per-hour' : 'mile-per-hour') + ' ' + windDir],
+        [tr('weather.humidity'), c.relative_humidity_2m != null ? localUnit(c.relative_humidity_2m, 'percent') : tr('weather.notAvailable')],
         [tr('weather.observed'), StormScopeWeather.formatOpenMeteoTime(c.time, data.utc_offset_seconds, appLocale, tr('weather.unknown'))],
         [tr('weather.source'), tr(isFallback ? 'weather.openMeteoFallback' : 'weather.openMeteo')]
       ]);
@@ -6980,9 +6998,9 @@
 
   function situationCoordinate(value, positiveKey, negativeKey) {
     return tr('summary.coordinate', {
-      value: StormScopeI18n.formatNumber(Math.abs(value), {
+      value: localUnit(Math.abs(value), 'degree', {
         minimumFractionDigits: 2, maximumFractionDigits: 2
-      }, appLocale),
+      }),
       direction: tr(value >= 0 ? positiveKey : negativeKey)
     });
   }
@@ -7142,7 +7160,7 @@
   }
 
   function routeCorridorWidthText(widthKm) {
-    return localNumber(widthKm) + ' km';
+    return localUnit(widthKm, 'kilometer');
   }
 
   function routeCorridorBuildResults(candidate, widthKm) {
@@ -7258,8 +7276,8 @@
         var label = document.createElement('span');
         label.textContent = tr('summary.routeCorridorCameraLine', {
           name: result.camera.name,
-          along: StormScopeWeather.distanceFromKm(result.routeDistanceKm, weatherUnits),
-          distance: StormScopeWeather.distanceFromKm(result.distanceKm, weatherUnits)
+          along: StormScopeWeather.distanceFromKm(result.routeDistanceKm, weatherUnits, appLocale),
+          distance: StormScopeWeather.distanceFromKm(result.distanceKm, weatherUnits, appLocale)
         });
         item.appendChild(label);
         var actions = document.createElement('div');
@@ -7441,7 +7459,7 @@
         nearby.forEach(function (result) {
           appendSituationDataTableRow(body, tr('summary.dataTableCamera'), result.camera.name,
             tr('summary.dataTableCameraDetails', {
-              distance: StormScopeWeather.distanceFromKm(result.distanceKm, weatherUnits),
+              distance: StormScopeWeather.distanceFromKm(result.distanceKm, weatherUnits, appLocale),
               bearing: localizedWindDirection(result.bearing)
             }), tr('camera.health.' + String(result.camera.health || 'unknown')), {
               label: tr('summary.dataTableOpenCamera'), run: function () { openCameraModal(result.camera); }
@@ -7518,7 +7536,7 @@
           var label = document.createElement('span');
           label.textContent = tr('summary.cameraLine', {
             name: result.camera.name,
-            distance: StormScopeWeather.distanceFromKm(result.distanceKm, weatherUnits),
+            distance: StormScopeWeather.distanceFromKm(result.distanceKm, weatherUnits, appLocale),
             bearing: localizedWindDirection(result.bearing)
           });
           item.appendChild(label);

@@ -306,8 +306,17 @@
     var clearTimer = options.clearTimeout || clearTimeout;
     var translate = typeof options.translate === 'function' ? options.translate : function (key) { return key; };
     var localNumber = typeof options.localNumber === 'function' ? options.localNumber : function (value) { return String(value); };
+    var formatUnit = typeof options.formatUnit === 'function' ? options.formatUnit : function (value, unit) {
+      if (root && root.StormScopeI18n && typeof root.StormScopeI18n.formatUnit === 'function') {
+        return root.StormScopeI18n.formatUnit(value, unit);
+      }
+      return localNumber(value) + (unit ? '\u00a0' + unit : '');
+    };
     var contextTimestamp = typeof options.contextTimestamp === 'function' ? options.contextTimestamp : function (value) { return new Date(value).toISOString(); };
-    var formatAge = typeof options.formatAge === 'function' ? options.formatAge : function (minutes) { return Math.round(minutes) + ' min'; };
+    var formatAge = typeof options.formatAge === 'function' ? options.formatAge : function (minutes) {
+      return root && root.StormScopeI18n && typeof root.StormScopeI18n.formatAge === 'function'
+        ? root.StormScopeI18n.formatAge(minutes) : String(Math.round(minutes)) + ' min';
+    };
     var isEnabled = typeof options.isEnabled === 'function' ? options.isEnabled : function () { return true; };
     var isHidden = typeof options.isDocumentHidden === 'function' ? options.isDocumentHidden : function () { return false; };
     var setStatus = typeof options.setStatus === 'function' ? options.setStatus : function () {};
@@ -397,7 +406,9 @@
       heading.textContent = translate('context.cpcFeature', { product: properties.sourceLabel || 'NOAA CPC' });
       container.appendChild(heading);
       appendRow(container, translate('context.cpcCategory', { category: categoryLabel(properties) }));
-      if (properties.probability != null) appendRow(container, translate('context.cpcProbability', { value: localNumber(properties.probability) }));
+      if (properties.probability != null) appendRow(container, translate('context.cpcProbability', {
+        value: formatUnit(properties.probability, 'percent')
+      }));
       if (properties.target) appendRow(container, translate('context.cpcTarget', { target: properties.target }));
       appendRow(container, translate('context.cpcIssued', { time: timeText(properties.issuedAt) }));
       appendRow(container, translate('context.cpcValid', { start: timeText(properties.startsAt), end: timeText(properties.endsAt) }));
