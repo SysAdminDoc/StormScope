@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Consolidated transient weather-context announcements into one debounced scene/status announcer and added localized accessible counts to camera and storm-report clusters.
 - Added an optional, default-off NOAA/NWS WPC Winter Storm Severity Index layer using the bounded aggregate Days 1–3 impact polygons, official severity colors, issue/valid/source metadata, planning-only DOM popups, independent lifecycle recovery, English/Spanish labels, and unit/headless coverage. SW v115.
 - Added keyless NOAA/NWS RIDGE WMS as a bounded CONUS third radar fallback after RainViewer and MRMS, with capabilities-derived recent frames, explicit WMS timestamps, source/age metadata, and truthful outside-envelope coverage states. SW v114.
 - Added a persisted Simple/Pro layer-detail mode: Simple keeps radar, cameras, NWS alerts, watches, and wildfire controls visible while retaining authoritative status text; Pro reveals the complete catalog, and the preference stays local and outside shared scenes. SW v113.

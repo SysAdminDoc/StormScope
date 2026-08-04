@@ -683,6 +683,20 @@ test('SPC severe & tornado watches are an optional, attributed, keyless layer wi
   assert.match(app, /link\.href = safeExternalUrl\(properties\.officialUrl\)/);
 });
 
+test('scene updates consolidate context announcements and cluster counts stay accessible', () => {
+  assert.match(html, /id="transient-announcer"[^>]*role="status"[^>]*aria-live="polite"[^>]*aria-atomic="true"/);
+  assert.match(html, /id="wpc-outlook-status"[^>]*role="status"[^>]*aria-live="off"/);
+  assert.match(html, /id="snow-status"[^>]*role="status"[^>]*aria-live="off"/);
+  assert.match(app, /function beginSceneAnnouncementBatch\(\)/);
+  assert.match(app, /function endSceneAnnouncementBatch\(\)/);
+  assert.match(app, /accessibility\.sceneApplied/);
+  assert.match(app, /camera\.clusterCount/);
+  assert.match(app, /context\.stormReportCluster/);
+  assert.match(app, /role="img" aria-label="' \+ label/);
+  assert.equal(i18n.catalogs.en['accessibility.sceneApplied'], 'View applied. {count} layers active.');
+  assert.equal(i18n.catalogs.es['accessibility.sceneApplied'], 'Vista aplicada. {count} capas activas.');
+});
+
 test('SPC convective outlooks are an optional, attributed, keyless layer wired end to end', () => {
   assert.match(html, /js\/convective-outlooks\.js/);
   assert.match(serviceWorker, /\.\/js\/convective-outlooks\.js/);

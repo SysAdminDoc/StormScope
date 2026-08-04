@@ -1085,6 +1085,12 @@ async function main() {
       `first camera shard should render within 2.5 s, observed ${cameraMetrics.firstBatchMs} ms`);
     await page.waitForFunction(() => document.getElementById('camera-source-health').textContent
       .startsWith('All ingestion sources:'));
+    const cameraClusterLabelHandle = await page.waitForFunction(() => {
+      const cluster = [...document.querySelectorAll('.marker-cluster [role="img"][aria-label]')]
+        .find((element) => element.getAttribute('aria-label').includes('cameras in this cluster'));
+      return cluster ? cluster.getAttribute('aria-label') : false;
+    });
+    assert.match(await cameraClusterLabelHandle.jsonValue(), /cameras in this cluster/);
 
     // Geolocation "locate me": grant + mock a position, then verify the map
     // recenters and the polite announcer confirms it. Coordinates are session-only.
@@ -2425,6 +2431,15 @@ async function main() {
     scenePage.baseURL = baseURL + '#' + sceneCodec.toHash(sharedScene);
     await addNetworkFixtures(scenePage);
     await waitForApp(scenePage);
+    await scenePage.waitForFunction(() => /View applied\. \d+ layers active\./.test(
+      document.getElementById('transient-announcer').textContent));
+    const sceneAccessibility = await scenePage.evaluate(() => ({
+      announcement: document.getElementById('transient-announcer').textContent,
+      contextLiveRegions: document.querySelectorAll('.context-statuses [role="status"][aria-live="polite"]').length
+    }));
+    assert.match(sceneAccessibility.announcement, /^View applied\. \d+ layers active\.$/);
+    assert.equal(sceneAccessibility.contextLiveRegions, 0,
+      'context statuses should defer to the shared scene announcer');
     await scenePage.locator('#camera-modal').waitFor({ state: 'visible' });
     const restoredScene = await scenePage.evaluate(() => ({
       scene: window._stormscope.captureSharedScene(),

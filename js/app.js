@@ -58,6 +58,13 @@
   var pendingSceneCameraId = null;
   var sceneHashTimer = null;
   var sceneHashApplying = false;
+  var transientAnnouncementTimer = null;
+  var transientAnnouncementQueue = [];
+  var contextStatusAnnouncementsEnabled = false;
+  var sceneAnnouncementDepth = 0;
+  var sceneAnnouncementMuteUntil = 0;
+  var sceneAnnouncementRestoreTimer = null;
+  var mutedLiveRegions = null;
   var cameraDataTimestamp = null;
   var diagnostics = StormScopeDiagnostics.create();
   var radarWasPlaying = false;
@@ -278,6 +285,72 @@
     return StormScopeI18n.formatNumber(value, null, appLocale);
   }
 
+  function setTransientAnnouncement(message) {
+    var announcer = document.getElementById('transient-announcer');
+    if (announcer) announcer.textContent = message;
+  }
+
+  function flushTransientAnnouncements() {
+    transientAnnouncementTimer = null;
+    var messages = transientAnnouncementQueue.filter(function (message, index, list) {
+      return message && list.indexOf(message) === index;
+    });
+    transientAnnouncementQueue = [];
+    if (!messages.length || sceneAnnouncementDepth > 0 || Date.now() < sceneAnnouncementMuteUntil) return;
+    setTransientAnnouncement(messages.length === 1 ? messages[0] : tr('accessibility.statusBatch', {
+      count: localNumber(messages.length)
+    }));
+  }
+
+  function queueTransientAnnouncement(message) {
+    if (!contextStatusAnnouncementsEnabled || !message || sceneAnnouncementDepth > 0 ||
+        Date.now() < sceneAnnouncementMuteUntil) return;
+    transientAnnouncementQueue.push(message);
+    clearTimeout(transientAnnouncementTimer);
+    transientAnnouncementTimer = setTimeout(flushTransientAnnouncements, 150);
+  }
+
+  function restoreMutedLiveRegions() {
+    clearTimeout(sceneAnnouncementRestoreTimer);
+    sceneAnnouncementRestoreTimer = null;
+    if (!mutedLiveRegions) return;
+    mutedLiveRegions.forEach(function (entry) {
+      if (entry.element.isConnected) entry.element.setAttribute('aria-live', entry.value);
+    });
+    mutedLiveRegions = null;
+  }
+
+  function beginSceneAnnouncementBatch() {
+    if (sceneAnnouncementDepth === 0) {
+      restoreMutedLiveRegions();
+      clearTimeout(transientAnnouncementTimer);
+      transientAnnouncementQueue = [];
+      mutedLiveRegions = Array.prototype.slice.call(document.querySelectorAll('[role="status"][aria-live]'))
+        .filter(function (element) {
+          return ['transient-announcer', 'locate-announcer', 'situation-announcer'].indexOf(element.id) === -1;
+        })
+        .map(function (element) {
+          return { element: element, value: element.getAttribute('aria-live') };
+        });
+      mutedLiveRegions.forEach(function (entry) { entry.element.setAttribute('aria-live', 'off'); });
+    }
+    sceneAnnouncementDepth += 1;
+  }
+
+  function endSceneAnnouncementBatch() {
+    if (!sceneAnnouncementDepth) return;
+    sceneAnnouncementDepth -= 1;
+    if (sceneAnnouncementDepth) return;
+    var enabled = StormScopeLayerRegistry.captureEnabled(document);
+    var activeCount = Object.keys(enabled).filter(function (id) { return enabled[id]; }).length;
+    sceneAnnouncementMuteUntil = Date.now() + 1000;
+    setTransientAnnouncement(tr('accessibility.sceneApplied', { count: localNumber(activeCount) }));
+    sceneAnnouncementRestoreTimer = setTimeout(function () {
+      sceneAnnouncementMuteUntil = 0;
+      restoreMutedLiveRegions();
+    }, 1000);
+  }
+
   radarController = StormScopeRadarController.create({
     document: document,
     L: L,
@@ -491,6 +564,7 @@
     element.textContent = message;
     element.classList.toggle('error', state === 'error');
     element.classList.toggle('stale', state === 'stale');
+    if (element.getAttribute('aria-live') === 'off') queueTransientAnnouncement(message);
   }
 
   function renderTerminatorStatus() {
@@ -3524,8 +3598,9 @@
       disableClusteringAtZoom: 11,
       iconCreateFunction: function (cluster) {
         var count = cluster.getChildCount();
+        var label = escapeHtml(tr('context.stormReportCluster', { count: localNumber(count) }));
         return L.divIcon({
-          html: '<div aria-label="' + count + ' local storm reports"><span>' + count + '</span></div>',
+          html: '<div role="img" aria-label="' + label + '"><span aria-hidden="true">' + count + '</span></div>',
           className: 'storm-report-cluster', iconSize: L.point(34, 34)
         });
       }
@@ -3825,8 +3900,9 @@
         iconCreateFunction: function (cluster) {
           var count = cluster.getChildCount();
           var size = count < 50 ? 'small' : count < 200 ? 'medium' : 'large';
+          var label = escapeHtml(tr('camera.clusterCount', { count: localNumber(count) }));
           return L.divIcon({
-            html: '<div><span>' + count + '</span></div>',
+            html: '<div role="img" aria-label="' + label + '"><span aria-hidden="true">' + count + '</span></div>',
             className: 'marker-cluster marker-cluster-' + size,
             iconSize: L.point(40, 40)
           });
@@ -4386,48 +4462,53 @@
 
   function applyViewSnapshot(snapshot) {
     if (!snapshot) return;
-    StormScopeLayerRegistry.applyControlState(document, snapshot, 'profile');
-    wpcOutlookDay = Number(document.getElementById('wpc-outlook-day').value);
-    convectiveDay = Number(document.getElementById('convective-day').value);
-    fireWeatherDay = Number(document.getElementById('fire-weather-day').value);
-    stormReportWindow = Number(document.getElementById('storm-report-window').value);
-    map.setView([snapshot.center.lat, snapshot.center.lon], snapshot.zoom, { animate: false });
-    var layers = snapshot.layers || {};
-    var layerBindings = operationalLayerRuntimeBindings();
-    StormScopeLayerRegistry.descriptors.forEach(function (descriptor) {
-      var enabled = layers[descriptor.sceneKey];
-      if (typeof enabled === 'boolean') applyLayerEnabled(descriptor, enabled, layerBindings);
-    });
-    enforceSimpleAlertSafety();
-    if (snapshot.opacity && typeof snapshot.opacity.radar === 'number') {
-      radarController.setOpacity(snapshot.opacity.radar);
-      document.getElementById('radar-opacity').value = String(Math.round(radarController.getState().opacity * 100));
+    beginSceneAnnouncementBatch();
+    try {
+      StormScopeLayerRegistry.applyControlState(document, snapshot, 'profile');
+      wpcOutlookDay = Number(document.getElementById('wpc-outlook-day').value);
+      convectiveDay = Number(document.getElementById('convective-day').value);
+      fireWeatherDay = Number(document.getElementById('fire-weather-day').value);
+      stormReportWindow = Number(document.getElementById('storm-report-window').value);
+      map.setView([snapshot.center.lat, snapshot.center.lon], snapshot.zoom, { animate: false });
+      var layers = snapshot.layers || {};
+      var layerBindings = operationalLayerRuntimeBindings();
+      StormScopeLayerRegistry.descriptors.forEach(function (descriptor) {
+        var enabled = layers[descriptor.sceneKey];
+        if (typeof enabled === 'boolean') applyLayerEnabled(descriptor, enabled, layerBindings);
+      });
+      enforceSimpleAlertSafety();
+      if (snapshot.opacity && typeof snapshot.opacity.radar === 'number') {
+        radarController.setOpacity(snapshot.opacity.radar);
+        document.getElementById('radar-opacity').value = String(Math.round(radarController.getState().opacity * 100));
+      }
+      if (snapshot.dataMode) applyDataMode(snapshot.dataMode, true);
+      if (snapshot.radar) {
+        radarController.setPalette(snapshot.radar.palette, true);
+        radarController.setSpeed(snapshot.radar.speed, true);
+      }
+      if (snapshot.alertSeverity) {
+        document.getElementById('alert-severity').value = snapshot.alertSeverity;
+        renderAlerts();
+      }
+      if (snapshot.cameraFilters) {
+        document.getElementById('camera-query').value = snapshot.cameraFilters.query;
+        document.getElementById('camera-state').value = snapshot.cameraFilters.state;
+        document.getElementById('camera-source').value = snapshot.cameraFilters.source;
+        document.getElementById('camera-type').value = snapshot.cameraFilters.type;
+        document.getElementById('camera-sort').value = snapshot.cameraFilters.sort;
+        document.getElementById('camera-healthy').checked = snapshot.cameraFilters.healthy;
+        document.getElementById('camera-favorites').checked = snapshot.cameraFilters.favorites;
+      }
+      if (snapshot.weatherUnits) {
+        weatherUnits = snapshot.weatherUnits;
+        document.getElementById('weather-units').value = weatherUnits;
+        try { localStorage.setItem('stormscope-weather-units', weatherUnits); } catch (error) { /* optional */ }
+        if (activeCamera) fetchWeather(activeCamera.lat, activeCamera.lon, activeCamera);
+      }
+      renderLayerNavigation();
+    } finally {
+      endSceneAnnouncementBatch();
     }
-    if (snapshot.dataMode) applyDataMode(snapshot.dataMode, true);
-    if (snapshot.radar) {
-      radarController.setPalette(snapshot.radar.palette, true);
-      radarController.setSpeed(snapshot.radar.speed, true);
-    }
-    if (snapshot.alertSeverity) {
-      document.getElementById('alert-severity').value = snapshot.alertSeverity;
-      renderAlerts();
-    }
-    if (snapshot.cameraFilters) {
-      document.getElementById('camera-query').value = snapshot.cameraFilters.query;
-      document.getElementById('camera-state').value = snapshot.cameraFilters.state;
-      document.getElementById('camera-source').value = snapshot.cameraFilters.source;
-      document.getElementById('camera-type').value = snapshot.cameraFilters.type;
-      document.getElementById('camera-sort').value = snapshot.cameraFilters.sort;
-      document.getElementById('camera-healthy').checked = snapshot.cameraFilters.healthy;
-      document.getElementById('camera-favorites').checked = snapshot.cameraFilters.favorites;
-    }
-    if (snapshot.weatherUnits) {
-      weatherUnits = snapshot.weatherUnits;
-      document.getElementById('weather-units').value = weatherUnits;
-      try { localStorage.setItem('stormscope-weather-units', weatherUnits); } catch (error) { /* optional */ }
-      if (activeCamera) fetchWeather(activeCamera.lat, activeCamera.lon, activeCamera);
-    }
-    renderLayerNavigation();
   }
 
   function setSavedStateStatus(message, error) {
@@ -8317,6 +8398,7 @@
     registerServiceWorker();
     initLifecycle();
     scheduleSavedLocationAlertPoll(0);
+    contextStatusAnnouncementsEnabled = true;
   } catch (bootError) {
     diagnostics.capture(bootError, 'boot');
     showFatalRecovery();
