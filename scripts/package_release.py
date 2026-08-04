@@ -93,7 +93,7 @@ def validate_version_surfaces(version: str) -> None:
     sw_cache = first_match("sw.js", r"^var VERSION\s*=\s*['\"]v(\d+)['\"]")
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     latest_block = re.search(
-        rf"^## v{re.escape(version)}\s+-[^\n]*\n(?P<body>[\s\S]*?)(?=^## v|\Z)",
+        rf"^## v{re.escape(version)}\s+-[^\n]*\n(?P<body>[\s\S]*?)(?=^## (?:v\d|Unreleased)\b|\Z)",
         changelog,
         re.MULTILINE,
     )

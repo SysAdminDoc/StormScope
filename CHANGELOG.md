@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.124.0 - 2026-08-03
+
+- Completed the roadmap with locale-aware runtime formatting and bounded local radar loop export. SW v117.
+
 ## Unreleased
 
 - Consolidated transient weather-context announcements into one debounced scene/status announcer and added localized accessible counts to camera and storm-report clusters.

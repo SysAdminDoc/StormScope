@@ -18,7 +18,7 @@
   })();
 
   var MAP_CENTER = [39.5, -98.5];
-  var APP_VERSION = '0.123.0';
+  var APP_VERSION = '0.124.0';
   var MAP_ZOOM = 5;
   var IMAGE_REFRESH_INTERVAL = 15000;
   var CAMERA_OBSERVATION_TTL = 6 * 60 * 60 * 1000;

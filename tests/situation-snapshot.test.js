@@ -6,7 +6,7 @@ const snapshot = require('../js/situation-snapshot.js');
 
 test('normalizes a privacy-bounded public snapshot and excludes private or precise state', () => {
   const result = snapshot.build({
-    exportedAt: '2026-08-03T12:00:00Z', appVersion: '0.123.0', locale: 'es',
+    exportedAt: '2026-08-03T12:00:00Z', appVersion: '0.124.0', locale: 'es',
     map: { center: { latitude: 39.123456, longitude: -98.654321 }, zoom: 5.4 },
     sources: [
       { id: 'radar', source: 'RainViewer', issueAt: 1785758400000, freshness: 'fresh' },

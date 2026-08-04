@@ -28,7 +28,7 @@ class PackageReleaseTests(unittest.TestCase):
         (root / "sw.js").write_text(f"var VERSION = 'v{cache}';\n")
         (root / "README.md").write_text(f"[version-{version}-blue]\n")
         (root / "CHANGELOG.md").write_text(
-            f"# Changelog\n\n## v{version} - 2026-07-13\n\n- Prior release. SW v{cache}.\n"
+            f"# Changelog\n\n## v{version} - 2026-07-13\n\n- Prior release. SW v{cache}.\n\n## Unreleased\n\n"
         )
         for relative in package_release.USER_AGENT_FILES:
             (root / relative).write_text(f"USER_AGENT = 'StormScope/{version}'\n")
