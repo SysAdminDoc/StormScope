@@ -856,10 +856,11 @@ button:focus-visible {
 .satellite-scrubber-row input { width: 100%; min-width: 0; accent-color: var(--accent); grid-column: 1 / -1; }
 .satellite-range-label { color: var(--text-dim); font-size: 9px; }
 .satellite-range-label-latest { justify-self: end; }
-.satellite-swatch, .terminator-swatch, .snow-swatch, .tropical-swatch, .wpc-outlook-swatch, .usgs-gauge-swatch, .lightning-swatch, .wildfire-swatch, .earthquake-swatch, .surface-observation-swatch, .fire-weather-swatch { width: 9px; height: 9px; border-radius: 2px; }
+.satellite-swatch, .terminator-swatch, .snow-swatch, .tropical-swatch, .wpc-outlook-swatch, .usgs-gauge-swatch, .lightning-swatch, .wildfire-swatch, .earthquake-swatch, .surface-observation-swatch, .fire-weather-swatch, .space-weather-swatch { width: 9px; height: 9px; border-radius: 2px; }
 .earthquake-swatch { border-radius: 50%; border: 2px solid #f76707; background: rgba(247, 103, 7, 0.25); }
 .convective-swatch { border: 2px solid #c9a400; background: rgba(246, 246, 127, 0.4); }
 .fire-weather-swatch { border: 2px dashed #e69800; background: linear-gradient(135deg, rgba(230, 152, 0, 0.45), rgba(230, 0, 169, 0.45)); }
+.space-weather-swatch { border: 1px solid #c7f9e9; background: linear-gradient(135deg, #4ee9b4, #9b6bff); }
 .watch-swatch { border: 2px dashed #d6006e; background: rgba(214, 0, 110, 0.12); }
 .satellite-swatch { background: linear-gradient(135deg, #2a9d8f, #e9c46a); }
 .terminator-swatch { border: 1px solid #91a7c2; background: rgba(7, 21, 41, 0.8); }
@@ -873,6 +874,9 @@ button:focus-visible {
 .lightning-swatch { background: linear-gradient(135deg, #00e5ff, #ff2d55); }
 .surface-observation-swatch { background: #38bdf8; border: 1px solid #e0f2fe; border-radius: 50%; }
 .wildfire-swatch { border: 1px solid #ff6b35; background: rgba(255, 107, 53, 0.2); }
+.space-weather-details { grid-column: 2 / 4; display: grid; gap: 4px; margin: 1px 0 0; padding: 5px 7px; border: 1px dashed var(--border); border-radius: 6px; background: var(--bg-inset); color: var(--text-dim); line-height: 1.35; }
+.space-weather-details ul { display: grid; gap: 2px; margin: 0; padding: 0 0 0 15px; }
+.space-weather-details li { margin: 0; }
 .tropical-storm-list { grid-column: 2 / 4; display: grid; gap: 4px; margin: 1px 0 0; padding: 0; list-style: none; }
 .tropical-storm-list:empty { display: none; }
 .tropical-storm-list li { display: grid; gap: 2px; padding: 5px 7px; border: 1px dashed var(--border); border-radius: 6px; background: var(--bg-inset); }

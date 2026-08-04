@@ -83,6 +83,7 @@ var SHELL_ASSETS = [
   './js/spatial-query.js',
   './js/wake-lock.js',
   './js/situation-snapshot.js',
+  './js/space-weather.js',
   './js/radar-motion.js',
   './js/radar-motion-worker.js',
   './js/radar-controller.js',

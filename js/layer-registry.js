@@ -50,6 +50,11 @@
       labelKey: 'layers.satellite', groupId: 'storms', groupLabelKey: 'layers.groupStorms'
     },
     {
+      id: 'spaceWeather', toggleId: 'toggle-space-weather', defaultEnabled: false, lifecycleId: 'space-weather',
+      labelKey: 'layers.spaceWeather', groupId: 'storms', groupLabelKey: 'layers.groupStorms',
+      searchKeys: ['context.spaceWeatherLimitation', 'context.spaceWeatherSource']
+    },
+    {
       id: 'tropical', toggleId: 'toggle-tropical', defaultEnabled: false, lifecycleId: 'tropical',
       labelKey: 'layers.tropical', groupId: 'storms', groupLabelKey: 'layers.groupStorms'
     },

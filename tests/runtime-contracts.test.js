@@ -23,6 +23,7 @@ const radarMotionWorkerSource = fs.readFileSync(path.join(root, 'js', 'radar-mot
 const riverGaugesSource = fs.readFileSync(path.join(root, 'js', 'river-gauges.js'), 'utf8');
 const winterOutlooksSource = fs.readFileSync(path.join(root, 'js', 'winter-outlooks.js'), 'utf8');
 const fireWeatherSource = fs.readFileSync(path.join(root, 'js', 'fire-weather.js'), 'utf8');
+const spaceWeatherSource = fs.readFileSync(path.join(root, 'js', 'space-weather.js'), 'utf8');
 const spatialQuery = fs.readFileSync(path.join(root, 'js', 'spatial-query.js'), 'utf8');
 const spatialQuerySource = spatialQuery;
 const privateAnnotationSource = fs.readFileSync(path.join(root, 'js', 'private-annotations.js'), 'utf8');
@@ -760,6 +761,32 @@ test('SPC fire-weather outlooks are bounded Day 1–8 forecast guidance with saf
   assert.match(css, /\.fire-weather-swatch/);
   assert.equal(i18n.catalogs.en['context.fireWeatherForecast'].includes('observed wildfire perimeter'), true);
   assert.ok(i18n.catalogs.es['context.fireWeatherForecast']);
+});
+
+test('SWPC aurora and space-weather feeds are optional, bounded, attributed, and independently recoverable', () => {
+  const situationPosition = html.indexOf('js/situation-snapshot.js');
+  const spaceWeatherPosition = html.indexOf('js/space-weather.js');
+  const motionPosition = html.indexOf('js/radar-motion.js');
+  const appPosition = html.indexOf('js/app.js');
+  assert.ok(situationPosition >= 0 && spaceWeatherPosition > situationPosition && motionPosition > spaceWeatherPosition && appPosition > motionPosition);
+  assert.match(serviceWorker, /\.\/js\/space-weather\.js/);
+  assert.match(spaceWeatherSource, /ovation_aurora_latest\.json/);
+  assert.match(spaceWeatherSource, /noaa-planetary-k-index\.json/);
+  assert.match(spaceWeatherSource, /products\/alerts\.json/);
+  assert.match(spaceWeatherSource, /AURORA_WIDTH = 360/);
+  assert.match(spaceWeatherSource, /AURORA_HEIGHT = 181/);
+  assert.match(spaceWeatherSource, /MAX_ALERTS = 8/);
+  assert.match(spaceWeatherSource, /Promise\.allSettled/);
+  assert.match(spaceWeatherSource, /state\.lastGood = hasData/);
+  assert.match(spaceWeatherSource, /contextRasterPane/);
+  assert.match(html, /id="toggle-space-weather"/);
+  assert.match(html, /id="space-weather-status"[^>]*role="status"/);
+  assert.match(html, /https:\/\/services\.swpc\.noaa\.gov/);
+  assert.match(app, /StormScopeSpaceWeather\.create/);
+  assert.match(app, /spaceWeatherController\.renderStatus/);
+  assert.match(layerRegistrySource, /id: 'spaceWeather', toggleId: 'toggle-space-weather'/);
+  assert.equal(i18n.catalogs.en['layers.spaceWeather'], 'NOAA SWPC Space Weather & Aurora');
+  assert.ok(i18n.catalogs.es['context.spaceWeatherLimitation']);
 });
 
 test('USGS earthquakes are an optional, attributed, keyless layer wired end to end', () => {

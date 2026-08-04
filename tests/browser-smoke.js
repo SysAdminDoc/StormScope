@@ -115,7 +115,7 @@ async function exerciseLayerDisplayMode(page) {
     'layer detail mode must stay outside shared scenes');
 
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await waitForApp(page);
+  await waitForApp(page, false);
   await page.locator('#btn-layers').click();
   await page.locator('#layers-panel').waitFor({ state: 'visible' });
   assert.equal(await page.evaluate(() => window._stormscope.getLayerDisplayMode()), 'pro',
@@ -417,6 +417,40 @@ async function addNetworkFixtures(page, metrics, options) {
             { time: Math.floor(Date.now() / 1000) - 300, path: '/v2/radar/fixture-latest' }
           ], nowcast: [] }
         })
+      });
+      return;
+    }
+    if (url === 'https://services.swpc.noaa.gov/json/ovation_aurora_latest.json') {
+      await route.fulfill({
+        contentType: 'application/json',
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({
+          type: 'MultiPoint',
+          'Observation Time': new Date(Date.now() - 5 * 60000).toISOString(),
+          'Forecast Time': new Date(Date.now() + 30 * 60000).toISOString(),
+          coordinates: [[0, 60, 65], [180, -60, 35], [359, 0, 90], [15, 45, 55]]
+        })
+      });
+      return;
+    }
+    if (url === 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json') {
+      if (metrics.spaceWeatherFailKp) {
+        await route.fulfill({ status: 503, contentType: 'application/json', body: '{}' });
+        return;
+      }
+      await route.fulfill({
+        contentType: 'application/json',
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify([{ time_tag: new Date(Date.now() - 10 * 60000).toISOString(), Kp: 4.33, a_running: 12, station_count: 18 }])
+      });
+      return;
+    }
+    if (url === 'https://services.swpc.noaa.gov/products/alerts.json') {
+      await route.fulfill({
+        contentType: 'application/json',
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify([{ product_id: 'K04W', issue_datetime: new Date(Date.now() - 20 * 60000).toISOString(),
+          message: `WARNING: Geomagnetic K-index of 4\nValid To: ${new Date(Date.now() + 3 * 3600000).toISOString()}` }])
       });
       return;
     }
@@ -969,7 +1003,7 @@ async function main() {
     const permalinkPage = await context.newPage();
     permalinkPage.baseURL = baseURL;
     await addNetworkFixtures(permalinkPage);
-    await waitForApp(permalinkPage);
+    await waitForApp(permalinkPage, false);
     await permalinkPage.locator('#btn-layers').click();
     await permalinkPage.locator('#layers-panel').waitFor({ state: 'visible' });
     await ensureProLayerMode(permalinkPage);
@@ -998,7 +1032,7 @@ async function main() {
     savedLocationPage.baseURL = baseURL;
     const savedAlertMetrics = { rainViewerRequests: 0, savedAlertRequests: 0 };
     await addNetworkFixtures(savedLocationPage, savedAlertMetrics, { savedAlertFixture });
-    await waitForApp(savedLocationPage);
+    await waitForApp(savedLocationPage, false);
     await savedLocationPage.locator('#btn-layers').click();
     await savedLocationPage.locator('#view-name').fill('Saved Plains');
     await savedLocationPage.locator('#save-view').click();
@@ -1308,7 +1342,7 @@ async function main() {
     const persistedOverlayPage = await context.newPage();
     persistedOverlayPage.baseURL = baseURL;
     await addNetworkFixtures(persistedOverlayPage);
-    await waitForApp(persistedOverlayPage);
+    await waitForApp(persistedOverlayPage, false);
     await persistedOverlayPage.getByRole('button', { name: 'Toggle layers panel' }).click();
     await persistedOverlayPage.locator('.local-overlay-item').filter({ hasText: 'incident-plan' }).waitFor({ state: 'visible' });
     assert.equal((await persistedOverlayPage.evaluate(() => window._stormscope.getContextState())).localOverlays, 1);
@@ -1383,7 +1417,7 @@ async function main() {
     const recoveredOverlayPage = await context.newPage();
     recoveredOverlayPage.baseURL = baseURL;
     await addNetworkFixtures(recoveredOverlayPage);
-    await waitForApp(recoveredOverlayPage);
+    await waitForApp(recoveredOverlayPage, false);
     await recoveredOverlayPage.getByRole('button', { name: 'Toggle layers panel' }).click();
     await recoveredOverlayPage.locator('.local-overlay-item').filter({ hasText: 'incident-plan' }).waitFor({ state: 'visible' });
     await recoveredOverlayPage.close();
@@ -1473,7 +1507,7 @@ async function main() {
     const persistedAnnotationPage = await context.newPage();
     persistedAnnotationPage.baseURL = baseURL;
     await addNetworkFixtures(persistedAnnotationPage);
-    await waitForApp(persistedAnnotationPage);
+    await waitForApp(persistedAnnotationPage, false);
     await persistedAnnotationPage.getByRole('button', { name: 'Toggle layers panel' }).click();
     await persistedAnnotationPage.locator('.private-annotation-item').filter({ hasText: 'Point marker' }).waitFor({ state: 'visible' });
     assert.equal(await persistedAnnotationPage.locator('.private-annotation-item').count(), 1);
@@ -1581,6 +1615,32 @@ async function main() {
     await page.locator('#usgs-gauge-status').filter({ hasText: '1 NOAA NWPS river gauges' }).waitFor({ state: 'visible' });
     assert.ok(networkMetrics.riverGaugeRequests >= 2);
     assert.ok(networkMetrics.riverGaugeMaxRecordCount <= 200);
+    await page.locator('#toggle-space-weather').check();
+    await page.locator('#space-weather-status').filter({ hasText: 'aurora grid cells' }).waitFor({ state: 'visible' });
+    const spaceWeatherReady = await page.evaluate(() => window._stormscope.getSpaceWeatherState());
+    assert.equal(spaceWeatherReady.enabled, true);
+    assert.equal(spaceWeatherReady.status, 'ready');
+    assert.ok(spaceWeatherReady.auroraCount > 0);
+    assert.equal(spaceWeatherReady.kp, 4.33);
+    assert.equal(spaceWeatherReady.alertCount, 1);
+    assert.equal(await page.locator('#space-weather-details').isVisible(), true);
+    assert.match(await page.locator('#space-weather-alerts').textContent(), /K04W/);
+    networkMetrics.spaceWeatherFailKp = true;
+    await page.evaluate(() => window._stormscope.refreshSpaceWeather());
+    await page.waitForFunction(() => window._stormscope.getSpaceWeatherState().status === 'partial');
+    const spaceWeatherPartial = await page.evaluate(() => window._stormscope.getSpaceWeatherState());
+    assert.equal(spaceWeatherPartial.enabled, true);
+    assert.equal(spaceWeatherPartial.kp, spaceWeatherReady.kp);
+    assert.equal(spaceWeatherPartial.alertCount, spaceWeatherReady.alertCount);
+    networkMetrics.spaceWeatherFailKp = false;
+    await page.evaluate(() => window._stormscope.refreshSpaceWeather());
+    await page.waitForFunction(() => window._stormscope.getSpaceWeatherState().status === 'ready');
+    await page.locator('#toggle-space-weather').uncheck();
+    assert.deepEqual(await page.evaluate(() => window._stormscope.getSpaceWeatherState()), {
+      enabled: false, status: 'off', auroraCount: 0, auroraMaxProbability: 0,
+      auroraObservationAt: null, kp: null, kpTime: null, alerts: [], alertCount: 0,
+      updatedAt: null, lastGood: false, partial: false
+    });
     const popupOpened = await page.evaluate(() => {
       window.__wildfireInjected = false;
       let opened = false;
@@ -2274,7 +2334,7 @@ async function main() {
     await page.locator('#earthquake-magnitude').selectOption('4.5');
     await page.locator('#earthquake-period').selectOption('week');
     assert.deepEqual(await page.evaluate(() => window._stormscope.getLayerRegistryState().ids), [
-      'radar', 'cameras', 'coverage', 'terminator', 'snow', 'alerts', 'lightning', 'surfaceObservations', 'wildfires', 'satellite', 'tropical',
+      'radar', 'cameras', 'coverage', 'terminator', 'snow', 'alerts', 'lightning', 'surfaceObservations', 'wildfires', 'satellite', 'spaceWeather', 'tropical',
       'wpcOutlooks', 'wssi', 'usgsGauges', 'earthquakes', 'convective', 'fireWeather', 'watches', 'mesoscale', 'stormReports'
     ]);
     await page.locator('#camera-favorites').evaluate(element => {
@@ -2427,7 +2487,7 @@ async function main() {
     });
     const sharedScene = {
       map: { lat: 39.75, lon: -98.25, zoom: 6 },
-      layers: { radar: true, cameras: true, coverage: false, terminator: false, snow: false, surfaceObservations: false, alerts: true, lightning: false, wildfires: false, satellite: false, tropical: false,
+      layers: { radar: true, cameras: true, coverage: false, terminator: false, snow: false, surfaceObservations: false, alerts: true, lightning: false, wildfires: false, satellite: false, spaceWeather: false, tropical: false,
         wpcOutlooks: false, wssi: false, usgsGauges: false, earthquakes: false, convective: false, fireWeather: false, watches: false, mesoscale: false, stormReports: false },
       radar: { opacity: 0.48, palette: 'contrast', speed: 400, frameTime: sceneFixture.frameTime },
       alertSeverity: 'severe',
@@ -2442,7 +2502,7 @@ async function main() {
     const scenePage = await context.newPage();
     scenePage.baseURL = baseURL + '#' + sceneCodec.toHash(sharedScene);
     await addNetworkFixtures(scenePage);
-    await waitForApp(scenePage);
+    await waitForApp(scenePage, false);
     await scenePage.waitForFunction(() => /View applied\. \d+ layers active\./.test(
       document.getElementById('transient-announcer').textContent));
     const sceneAccessibility = await scenePage.evaluate(() => ({
@@ -2535,7 +2595,7 @@ async function main() {
       });
     });
     await addNetworkFixtures(wakePage);
-    await waitForApp(wakePage);
+    await waitForApp(wakePage, false);
     if (await wakePage.locator('#radar-play').getAttribute('aria-pressed') === 'true') {
       await wakePage.locator('#radar-play').click();
     }

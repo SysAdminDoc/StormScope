@@ -31,6 +31,7 @@
   var themePreference = 'auto';
   var radarController = null;
   var riverGaugesController = null;
+  var spaceWeatherController = null;
   var satelliteRequestBudget = StormScopeRadarProviders.createRollingRequestBudget({ limit: 30, windowMs: 60000 });
   var activeCamera = null;
   var priorFocusEl = null;
@@ -440,6 +441,20 @@
     }
   });
   teardownResources.push(riverGaugesController);
+
+  spaceWeatherController = StormScopeSpaceWeather.create({
+    document: document,
+    L: L,
+    fetch: window.fetch.bind(window),
+    translate: tr,
+    localNumber: localNumber,
+    getMap: function () { return map; },
+    isEnabled: function () { return document.getElementById('toggle-space-weather').checked; },
+    isDocumentHidden: function () { return document.hidden; },
+    setStatus: function (message, state) { setContextStatusElement('space-weather-status', message, state); },
+    onStateChange: renderSpaceWeatherDetails
+  });
+  teardownResources.push(spaceWeatherController);
 
   function localTime(value) {
     return StormScopeWeather.formatTime(value, appLocale, tr('weather.unknown'));
@@ -3327,6 +3342,30 @@
     fireWeatherStatusState = 'off';
     renderFireWeatherStatus();
     renderRouteCorridorPanel();
+  }
+
+  // ── NOAA SWPC space weather and aurora ──
+
+  function renderSpaceWeatherDetails(state) {
+    var details = document.getElementById('space-weather-details');
+    var kpElement = document.getElementById('space-weather-kp');
+    var alertsElement = document.getElementById('space-weather-alerts');
+    if (!details || !kpElement || !alertsElement) return;
+    state = state || {};
+    var hasKp = state.kp != null && Number.isFinite(Number(state.kp));
+    var kpFresh = hasKp && state.kpTime != null && Date.now() - Number(state.kpTime) <= StormScopeSpaceWeather.KP_STALE_MS;
+    kpElement.textContent = hasKp ? tr('context.spaceWeatherKp', {
+      kp: localNumber(state.kp), freshness: tr('context.' + (kpFresh ? 'fresh' : 'stale'))
+    }) : '';
+    alertsElement.replaceChildren();
+    (state.alerts || []).forEach(function (alert) {
+      var item = document.createElement('li');
+      item.textContent = tr('context.spaceWeatherAlert', {
+        product: alert.productId, title: alert.title
+      });
+      alertsElement.appendChild(item);
+    });
+    details.hidden = state.status === 'off' || (!hasKp && !(state.alerts || []).length);
   }
 
   // ── SPC severe & tornado watches ──
@@ -7408,6 +7447,10 @@
         aborts: function () { return satelliteAbort; },
         timers: function () { return [satelliteRefreshTimer, satelliteMoveTimer, satelliteAnimationTimer, satelliteFrameRequestTimer]; }
       },
+      spaceWeather: {
+        refresh: spaceWeatherController.refresh, disable: spaceWeatherController.disable,
+        aborts: spaceWeatherController.getAbort, timers: spaceWeatherController.getTimers
+      },
       tropical: {
         refresh: refreshTropical, disable: disableTropical,
         aborts: function () { return tropicalAbort; }, timers: function () { return tropicalRefreshTimer; }
@@ -7657,6 +7700,7 @@
       renderWssiStatus();
       renderGaugeStatus();
       renderFireWeatherStatus();
+      spaceWeatherController.renderStatus();
       renderMesoscaleStatus();
       renderStormReportStatus();
       renderSurfaceObservationStatus();
@@ -8570,6 +8614,8 @@
         day: fireWeatherDay, updatedAt: fireWeatherUpdatedAt
       };
     },
+    getSpaceWeatherState: function () { return spaceWeatherController.getState(); },
+    refreshSpaceWeather: function () { return spaceWeatherController.refresh(); },
     getSnowState: function () {
       return { enabled: Boolean(snowLayer), status: snowStatusState, updatedAt: snowFetchedAt };
     },
