@@ -1125,6 +1125,11 @@ async function main() {
     savedLocationPage.baseURL = baseURL;
     await savedLocationPage.addInitScript(() => {
       window.__appBadgeCalls = [];
+      window.__launchQueueConsumer = null;
+      Object.defineProperty(window, 'launchQueue', {
+        configurable: true,
+        value: { setConsumer: (consumer) => { window.__launchQueueConsumer = consumer; } }
+      });
       Object.defineProperty(navigator, 'setAppBadge', {
         configurable: true,
         value: (count) => { window.__appBadgeCalls.push(['set', count]); return Promise.resolve(); }
@@ -1137,6 +1142,13 @@ async function main() {
     const savedAlertMetrics = { rainViewerRequests: 0, savedAlertRequests: 0 };
     await addNetworkFixtures(savedLocationPage, savedAlertMetrics, { savedAlertFixture });
     await waitForApp(savedLocationPage, false);
+    await savedLocationPage.evaluate(async () => {
+      const file = new File(['{"type":"Feature","geometry":{"type":"Point","coordinates":[-99,39]},"properties":{"name":"OS open"}}'],
+        'os-open.geojson', { type: 'application/geo+json' });
+      await window.__launchQueueConsumer({ files: [{ getFile: async () => file }] });
+    });
+    await savedLocationPage.locator('#local-overlay-status').filter({ hasText: 'Imported “os-open” with 1 feature.' })
+      .waitFor({ state: 'attached' });
     await savedLocationPage.locator('#btn-layers').click();
     await savedLocationPage.locator('#view-name').fill('Saved Plains');
     await savedLocationPage.locator('#save-view').click();
@@ -1365,6 +1377,9 @@ async function main() {
     await page.locator('#snapshot-include-scene').check();
     const linkedSnapshot = await page.evaluate(() => window._stormscope.buildSituationSnapshot(true));
     assert.match(linkedSnapshot.json.public_scene_url, /#scene=1\./);
+    await page.evaluate(() => {
+      Object.defineProperty(window, 'showSaveFilePicker', { configurable: true, value: undefined });
+    });
     const snapshotDownloadPromise = page.waitForEvent('download');
     await page.locator('#download-situation-snapshot').click();
     const snapshotDownload = await snapshotDownloadPromise;
@@ -1372,6 +1387,29 @@ async function main() {
     const downloadedSnapshot = JSON.parse(fs.readFileSync(await snapshotDownload.path(), 'utf8'));
     assert.equal(downloadedSnapshot.schema, 1);
     assert.equal(Object.hasOwn(downloadedSnapshot, 'public_scene_url'), true);
+    await page.evaluate(() => {
+      window.__snapshotPickerWrites = [];
+      window.__snapshotPickerOptions = null;
+      Object.defineProperty(window, 'showSaveFilePicker', {
+        configurable: true,
+        value: async (options) => {
+          window.__snapshotPickerOptions = options;
+          return { createWritable: async () => ({
+            write: async (blob) => { window.__snapshotPickerWrites.push(await blob.text()); },
+            close: async () => {}
+          }) };
+        }
+      });
+    });
+    await page.locator('#download-situation-snapshot').click();
+    await page.locator('#situation-export-status').filter({ hasText: 'Situation snapshot saved.' }).waitFor({ state: 'visible' });
+    const pickerSnapshot = await page.evaluate(() => ({
+      options: window.__snapshotPickerOptions,
+      json: JSON.parse(window.__snapshotPickerWrites[0])
+    }));
+    assert.equal(pickerSnapshot.options.suggestedName, 'stormscope-situation-snapshot.json');
+    assert.deepEqual(pickerSnapshot.options.types[0].accept, { 'application/json': ['.json'] });
+    assert.equal(pickerSnapshot.json.schema, 1);
     const summaryMapState = await page.evaluate(() => {
       const map = window._stormscope.getMap();
       return { center: map.getCenter(), zoom: map.getZoom() };

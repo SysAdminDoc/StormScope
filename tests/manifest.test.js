@@ -39,6 +39,18 @@ test('manifest receives bounded GPX and GeoJSON share files through the service 
   });
 });
 
+test('manifest registers bounded GPX and GeoJSON file handling inside the app scope', () => {
+  assert.deepEqual(manifest.file_handlers, [{
+    action: './index.html?file_handler=1',
+    accept: {
+      'application/gpx+xml': ['.gpx'],
+      'application/geo+json': ['.geojson'],
+      'application/json': ['.json']
+    }
+  }]);
+  assert.deepEqual(manifest.launch_handler, { client_mode: 'focus-existing' });
+});
+
 test('manifest shortcuts are bounded valid public scenes with existing icons', () => {
   assert.equal(manifest.shortcuts.length, 2);
   const scenes = manifest.shortcuts.map(shortcut => {

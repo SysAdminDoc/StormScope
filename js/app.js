@@ -2721,6 +2721,33 @@
     });
   }
 
+  function consumeFileHandlerLaunch(params) {
+    var source = params && params.files;
+    var available = Math.max(0, StormScopeLocalOverlays.MAX_OVERLAYS - localOverlayRecords.length);
+    var handles = source && typeof source.length === 'number'
+      ? Array.prototype.slice.call(source, 0, available) : [];
+    if (!handles.length) {
+      if (available === 0) setLocalOverlayStatus('overlays.error.limit', null, true);
+      return Promise.resolve(false);
+    }
+    return localOverlayReady.then(function () {
+      return Promise.all(handles.map(function (handle) {
+        if (!handle || typeof handle.getFile !== 'function') return Promise.resolve(false);
+        return Promise.resolve().then(function () { return handle.getFile(); }).then(function (file) {
+          return importLocalOverlay(file);
+        }).catch(function () { return false; });
+      }));
+    }).then(function (results) {
+      if (!results.some(Boolean)) setLocalOverlayStatus('overlays.error.invalid', null, true);
+      return results.some(Boolean);
+    });
+  }
+
+  function initFileHandling() {
+    if (!window.launchQueue || typeof window.launchQueue.setConsumer !== 'function') return;
+    try { window.launchQueue.setConsumer(consumeFileHandlerLaunch); } catch (error) { /* optional PWA capability */ }
+  }
+
   function wildfirePopup(feature) {
     var properties = feature.properties || {};
     var container = document.createElement('div');
@@ -7270,12 +7297,44 @@
     }
   }
 
-  function downloadSituationSnapshot() {
+  async function saveSituationSnapshotWithPicker(blob, filename) {
+    var handle = await window.showSaveFilePicker({
+      suggestedName: filename,
+      excludeAcceptAllOption: true,
+      types: [{ description: tr('snapshot.fileType'), accept: { 'application/json': ['.json'] } }]
+    });
+    var writable = null;
+    try {
+      writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+    } catch (error) {
+      if (writable && typeof writable.abort === 'function') await writable.abort().catch(function () {});
+      throw error;
+    }
+  }
+
+  async function downloadSituationSnapshot() {
     var status = document.getElementById('situation-export-status');
     try {
       var includeScene = document.getElementById('snapshot-include-scene').checked;
       var result = buildSituationSnapshot(includeScene);
-      downloadLocalOverlay('stormscope-situation-snapshot.json', JSON.stringify(result.json, null, 2), 'application/json');
+      var filename = 'stormscope-situation-snapshot.json';
+      var text = JSON.stringify(result.json, null, 2);
+      var blob = new Blob([text], { type: 'application/json' });
+      if (typeof window.showSaveFilePicker === 'function') {
+        try {
+          await saveSituationSnapshotWithPicker(blob, filename);
+          status.textContent = tr('snapshot.saved');
+          return;
+        } catch (error) {
+          if (error && error.name === 'AbortError') {
+            status.textContent = tr('snapshot.saveCancelled');
+            return;
+          }
+        }
+      }
+      downloadLocalOverlay(filename, text, 'application/json');
       status.textContent = tr('snapshot.downloaded');
     } catch (error) {
       status.textContent = tr('snapshot.failed');
@@ -8758,6 +8817,7 @@
     startupSharedScene = readStartupSharedScene();
     initSavedState({ restoreLastView: !startupSharedScene });
     initLocalOverlays();
+    initFileHandling();
     if (startupSharedScene) {
       sceneHashApplying = true;
       try { applySharedScene(startupSharedScene); } finally { sceneHashApplying = false; }

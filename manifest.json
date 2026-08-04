@@ -5,6 +5,17 @@
   "description": "Real-time weather radar with live traffic and weather cameras across America and the world.",
   "start_url": "./index.html",
   "scope": "./",
+  "file_handlers": [
+    {
+      "action": "./index.html?file_handler=1",
+      "accept": {
+        "application/gpx+xml": [".gpx"],
+        "application/geo+json": [".geojson"],
+        "application/json": [".json"]
+      }
+    }
+  ],
+  "launch_handler": { "client_mode": "focus-existing" },
   "share_target": {
     "action": "./share-target",
     "method": "POST",

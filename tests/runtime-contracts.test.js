@@ -274,6 +274,10 @@ test('saved views provide foreground NWS alert polling with bounded notices', ()
   assert.match(app, /function syncSavedLocationAlertBadge\(\)/);
   assert.match(app, /badgeApi\.setAppBadge/);
   assert.match(app, /badgeApi\.clearAppBadge/);
+  assert.match(app, /function initFileHandling\(\)/);
+  assert.match(app, /window\.launchQueue\.setConsumer/);
+  assert.match(app, /function consumeFileHandlerLaunch\(params\)/);
+  assert.match(app, /window\.showSaveFilePicker/);
   assert.match(css, /\.saved-location-alert-banner/);
   for (const locale of ['en', 'es']) {
     for (const key of ['alerts.savedLocationHelp', 'alerts.savedLocationOne', 'alerts.savedLocationMany',
