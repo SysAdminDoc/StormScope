@@ -24,6 +24,7 @@ const riverGaugesSource = fs.readFileSync(path.join(root, 'js', 'river-gauges.js
 const winterOutlooksSource = fs.readFileSync(path.join(root, 'js', 'winter-outlooks.js'), 'utf8');
 const fireWeatherSource = fs.readFileSync(path.join(root, 'js', 'fire-weather.js'), 'utf8');
 const spaceWeatherSource = fs.readFileSync(path.join(root, 'js', 'space-weather.js'), 'utf8');
+const marineBuoysSource = fs.readFileSync(path.join(root, 'js', 'marine-buoys.js'), 'utf8');
 const spatialQuery = fs.readFileSync(path.join(root, 'js', 'spatial-query.js'), 'utf8');
 const spatialQuerySource = spatialQuery;
 const privateAnnotationSource = fs.readFileSync(path.join(root, 'js', 'private-annotations.js'), 'utf8');
@@ -787,6 +788,35 @@ test('SWPC aurora and space-weather feeds are optional, bounded, attributed, and
   assert.match(layerRegistrySource, /id: 'spaceWeather', toggleId: 'toggle-space-weather'/);
   assert.equal(i18n.catalogs.en['layers.spaceWeather'], 'NOAA SWPC Space Weather & Aurora');
   assert.ok(i18n.catalogs.es['context.spaceWeatherLimitation']);
+});
+
+test('NDBC marine buoy observations are optional, viewport-bounded, DOM-only, and teardown-safe', () => {
+  const spaceWeatherPosition = html.indexOf('js/space-weather.js');
+  const marineBuoysPosition = html.indexOf('js/marine-buoys.js');
+  const appPosition = html.indexOf('js/app.js');
+  assert.ok(spaceWeatherPosition >= 0 && marineBuoysPosition > spaceWeatherPosition && appPosition > marineBuoysPosition);
+  assert.match(serviceWorker, /\.\/js\/marine-buoys\.js/);
+  assert.match(marineBuoysSource, /cwwcNDBCMet\.json/);
+  assert.match(marineBuoysSource, /MAX_TABLE_ROWS = 5000/);
+  assert.match(marineBuoysSource, /LOOKBACK_MS = 2 \* 60 \* 60 \* 1000/);
+  assert.match(marineBuoysSource, /function buildQueries\(bounds, zoom, now\)/);
+  assert.match(marineBuoysSource, /function normalizeCollection/);
+  assert.match(marineBuoysSource, /function jsonpRequest/);
+  assert.match(marineBuoysSource, /Promise\.allSettled/);
+  assert.match(marineBuoysSource, /contextVectorPane/);
+  assert.match(marineBuoysSource, /safeExternalUrl/);
+  assert.match(html, /id="toggle-marine-buoys"/);
+  assert.match(html, /id="marine-buoy-status"[^>]*role="status"/);
+  assert.match(html, /https:\/\/www\.ndbc\.noaa\.gov\//);
+  const csp = html.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)"/)[1];
+  assert.match(csp, /script-src 'self' https:\/\/coastwatch\.pfeg\.noaa\.gov/);
+  assert.match(csp, /connect-src[^;]*https:\/\/coastwatch\.pfeg\.noaa\.gov/);
+  assert.match(app, /StormScopeMarineBuoys\.create/);
+  assert.match(app, /marineBuoysController\.scheduleMoveRefresh/);
+  assert.match(app, /marineBuoysController\.renderStatus/);
+  assert.match(layerRegistrySource, /id: 'marineBuoys', toggleId: 'toggle-marine-buoys'/);
+  assert.equal(i18n.catalogs.en['layers.marineBuoys'], 'NOAA NDBC Marine Buoys');
+  assert.ok(i18n.catalogs.es['context.marineBuoysLimitation']);
 });
 
 test('USGS earthquakes are an optional, attributed, keyless layer wired end to end', () => {

@@ -454,6 +454,28 @@ async function addNetworkFixtures(page, metrics, options) {
       });
       return;
     }
+    if (url.startsWith('https://coastwatch.pfeg.noaa.gov/erddap/tabledap/cwwcNDBCMet.json')) {
+      const requestUrl = new URL(url);
+      const callback = requestUrl.searchParams.get('.jsonp');
+      if (!callback || !/^[A-Za-z_$][A-Za-z0-9_$.]*$/.test(callback)) {
+        await route.abort();
+        return;
+      }
+      if (metrics) metrics.marineBuoyRequests = (metrics.marineBuoyRequests || 0) + 1;
+      const now = Date.now();
+      const table = {
+        columnNames: ['station', 'longitude', 'latitude', 'time', 'wd', 'wspd', 'gst', 'wvht', 'dpd', 'apd', 'mwd', 'wtmp'],
+        rows: [
+          ['44060', -72.698, 34.675, new Date(now - 5 * 60000).toISOString(), 190, 7, 9, 2.4, 7, 6.4, 211, 18.4],
+          ['41001', -72.0, 34.0, new Date(now - 10 * 60000).toISOString(), 200, 8, 10, 3.1, 8.2, 6.9, 220, 27.6]
+        ]
+      };
+      await route.fulfill({
+        contentType: 'application/javascript; charset=utf-8',
+        body: `${callback}(${JSON.stringify({ table })});`
+      });
+      return;
+    }
     if (url.startsWith('https://satellitemaps.nesdis.noaa.gov/arcgis/rest/services/MERGEDGC_Last_24hr/ImageServer/exportImage')) {
       metrics.satelliteExports = (metrics.satelliteExports || 0) + 1;
       await route.fulfill({ contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: pixel });
@@ -1615,6 +1637,31 @@ async function main() {
     await page.locator('#usgs-gauge-status').filter({ hasText: '1 NOAA NWPS river gauges' }).waitFor({ state: 'visible' });
     assert.ok(networkMetrics.riverGaugeRequests >= 2);
     assert.ok(networkMetrics.riverGaugeMaxRecordCount <= 200);
+    await page.locator('#toggle-marine-buoys').check();
+    await page.locator('#marine-buoy-status').filter({ hasText: '2 NOAA NDBC buoys' }).waitFor({ state: 'visible' });
+    const marineBuoyReady = await page.evaluate(() => window._stormscope.getMarineBuoyState());
+    assert.equal(marineBuoyReady.enabled, true);
+    assert.equal(marineBuoyReady.status, 'ready');
+    assert.equal(marineBuoyReady.count, 2);
+    assert.equal(networkMetrics.marineBuoyRequests, 1);
+    const marineBuoyPopupOpened = await page.evaluate(() => {
+      let opened = false;
+      window._stormscope.getMap().eachLayer(layer => {
+        if (opened || typeof layer.getLayers !== 'function') return;
+        const child = layer.getLayers().find(item => item.feature && item.feature.properties &&
+          item.feature.properties.stationId === '44060');
+        if (child) { child.openPopup(); opened = true; }
+      });
+      return opened;
+    });
+    assert.equal(marineBuoyPopupOpened, true);
+    await page.locator('.marine-buoy-popup').waitFor({ state: 'visible' });
+    assert.match(await page.locator('.marine-buoy-popup').textContent(), /Significant wave/);
+    await page.locator('#toggle-marine-buoys').uncheck();
+    assert.deepEqual(await page.evaluate(() => window._stormscope.getMarineBuoyState()), {
+      enabled: false, status: 'off', count: 0, updatedAt: null, layer: null, zoom: null,
+      lastGood: false, partial: false
+    });
     await page.locator('#toggle-space-weather').check();
     await page.locator('#space-weather-status').filter({ hasText: 'aurora grid cells' }).waitFor({ state: 'visible' });
     const spaceWeatherReady = await page.evaluate(() => window._stormscope.getSpaceWeatherState());
@@ -2334,7 +2381,7 @@ async function main() {
     await page.locator('#earthquake-magnitude').selectOption('4.5');
     await page.locator('#earthquake-period').selectOption('week');
     assert.deepEqual(await page.evaluate(() => window._stormscope.getLayerRegistryState().ids), [
-      'radar', 'cameras', 'coverage', 'terminator', 'snow', 'alerts', 'lightning', 'surfaceObservations', 'wildfires', 'satellite', 'spaceWeather', 'tropical',
+      'radar', 'cameras', 'coverage', 'terminator', 'snow', 'alerts', 'lightning', 'surfaceObservations', 'wildfires', 'satellite', 'spaceWeather', 'marineBuoys', 'tropical',
       'wpcOutlooks', 'wssi', 'usgsGauges', 'earthquakes', 'convective', 'fireWeather', 'watches', 'mesoscale', 'stormReports'
     ]);
     await page.locator('#camera-favorites').evaluate(element => {
@@ -2487,7 +2534,7 @@ async function main() {
     });
     const sharedScene = {
       map: { lat: 39.75, lon: -98.25, zoom: 6 },
-      layers: { radar: true, cameras: true, coverage: false, terminator: false, snow: false, surfaceObservations: false, alerts: true, lightning: false, wildfires: false, satellite: false, spaceWeather: false, tropical: false,
+      layers: { radar: true, cameras: true, coverage: false, terminator: false, snow: false, surfaceObservations: false, alerts: true, lightning: false, wildfires: false, satellite: false, spaceWeather: false, marineBuoys: false, tropical: false,
         wpcOutlooks: false, wssi: false, usgsGauges: false, earthquakes: false, convective: false, fireWeather: false, watches: false, mesoscale: false, stormReports: false },
       radar: { opacity: 0.48, palette: 'contrast', speed: 400, frameTime: sceneFixture.frameTime },
       alertSeverity: 'severe',

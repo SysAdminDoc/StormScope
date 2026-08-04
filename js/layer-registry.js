@@ -55,6 +55,11 @@
       searchKeys: ['context.spaceWeatherLimitation', 'context.spaceWeatherSource']
     },
     {
+      id: 'marineBuoys', toggleId: 'toggle-marine-buoys', defaultEnabled: false, lifecycleId: 'marine-buoys',
+      labelKey: 'layers.marineBuoys', groupId: 'storms', groupLabelKey: 'layers.groupStorms',
+      searchKeys: ['context.marineBuoysLimitation', 'context.marineBuoysSource']
+    },
+    {
       id: 'tropical', toggleId: 'toggle-tropical', defaultEnabled: false, lifecycleId: 'tropical',
       labelKey: 'layers.tropical', groupId: 'storms', groupLabelKey: 'layers.groupStorms'
     },

@@ -32,6 +32,7 @@
   var radarController = null;
   var riverGaugesController = null;
   var spaceWeatherController = null;
+  var marineBuoysController = null;
   var satelliteRequestBudget = StormScopeRadarProviders.createRollingRequestBudget({ limit: 30, windowMs: 60000 });
   var activeCamera = null;
   var priorFocusEl = null;
@@ -455,6 +456,25 @@
     onStateChange: renderSpaceWeatherDetails
   });
   teardownResources.push(spaceWeatherController);
+
+  marineBuoysController = StormScopeMarineBuoys.create({
+    document: document,
+    L: L,
+    jsonp: true,
+    translate: tr,
+    localNumber: localNumber,
+    contextTimestamp: contextTimestamp,
+    formatAge: function (minutes) { return StormScopeI18n.formatAge(minutes, appLocale); },
+    getMap: function () { return map; },
+    isEnabled: function () { return document.getElementById('toggle-marine-buoys').checked; },
+    isDocumentHidden: function () { return document.hidden; },
+    setStatus: function (message, state) { setContextStatusElement('marine-buoy-status', message, state); },
+    safeExternalUrl: safeExternalUrl,
+    appendNearbyCameraSection: function (container, geometry, heading) {
+      appendNearbyCameraSection(container, geometry, heading);
+    }
+  });
+  teardownResources.push(marineBuoysController);
 
   function localTime(value) {
     return StormScopeWeather.formatTime(value, appLocale, tr('weather.unknown'));
@@ -7451,6 +7471,10 @@
         refresh: spaceWeatherController.refresh, disable: spaceWeatherController.disable,
         aborts: spaceWeatherController.getAbort, timers: spaceWeatherController.getTimers
       },
+      marineBuoys: {
+        refresh: marineBuoysController.refresh, disable: marineBuoysController.disable,
+        aborts: marineBuoysController.getAbort, timers: marineBuoysController.getTimers
+      },
       tropical: {
         refresh: refreshTropical, disable: disableTropical,
         aborts: function () { return tropicalAbort; }, timers: function () { return tropicalRefreshTimer; }
@@ -7701,6 +7725,7 @@
       renderGaugeStatus();
       renderFireWeatherStatus();
       spaceWeatherController.renderStatus();
+      marineBuoysController.renderStatus();
       renderMesoscaleStatus();
       renderStormReportStatus();
       renderSurfaceObservationStatus();
@@ -7990,6 +8015,9 @@
       }
       if (document.getElementById('toggle-usgs-gauges').checked) {
         riverGaugesController.scheduleMoveRefresh();
+      }
+      if (document.getElementById('toggle-marine-buoys').checked) {
+        marineBuoysController.scheduleMoveRefresh();
       }
       if (document.getElementById('toggle-fire-weather').checked) {
         clearTimeout(fireWeatherMoveTimer);
@@ -8616,6 +8644,8 @@
     },
     getSpaceWeatherState: function () { return spaceWeatherController.getState(); },
     refreshSpaceWeather: function () { return spaceWeatherController.refresh(); },
+    getMarineBuoyState: function () { return marineBuoysController.getState(); },
+    refreshMarineBuoys: function () { return marineBuoysController.refresh(); },
     getSnowState: function () {
       return { enabled: Boolean(snowLayer), status: snowStatusState, updatedAt: snowFetchedAt };
     },
