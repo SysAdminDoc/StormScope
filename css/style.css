@@ -324,6 +324,20 @@ button:focus-visible {
   margin: 12px 0;
 }
 
+.situation-data-table-actions { margin: 0 0 10px; }
+.situation-data-table-actions button { width: 100%; }
+.situation-data-table-panel { display: grid; gap: 7px; overflow: hidden; }
+.situation-data-table-panel > p { margin: 0; }
+.situation-data-table-wrap { max-width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; }
+.situation-data-table { width: 100%; min-width: 520px; border-collapse: collapse; font-size: 11px; }
+.situation-data-table caption { padding: 0 0 6px; text-align: left; color: var(--text-dim); font-size: 11px; }
+.situation-data-table th,
+.situation-data-table td { padding: 6px; border-top: 1px solid var(--border); vertical-align: top; text-align: left; }
+.situation-data-table thead th { color: var(--text-dim); font-weight: 600; }
+.situation-data-table tbody th { color: var(--text-dim); font-weight: 600; white-space: nowrap; }
+.situation-data-table td { min-width: 92px; line-height: 1.35; overflow-wrap: anywhere; }
+.situation-data-table-action { min-height: 28px; padding: 4px 7px; white-space: nowrap; }
+
 .situation-section {
   padding: 9px;
   border: 1px solid var(--border);
@@ -385,6 +399,7 @@ button:focus-visible {
 }
 .situation-export-status { min-height: 1.35em; margin: 6px 0 0; color: var(--text-dim); font-size: 11px; }
 
+.situation-data-table-actions button,
 .situation-section button,
 #refresh-summary {
   min-height: 32px;

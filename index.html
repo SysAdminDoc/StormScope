@@ -81,6 +81,14 @@
       <button id="close-summary" type="button" aria-label="Close situation summary">×</button>
     </div>
     <div id="situation-content"></div>
+    <div class="situation-data-table-actions">
+      <button id="toggle-situation-table" type="button" aria-expanded="false" aria-controls="situation-data-table-panel" data-i18n="summary.dataTableToggle">Show accessible data table</button>
+    </div>
+    <section id="situation-data-table-panel" class="situation-section situation-data-table-panel hidden" aria-labelledby="situation-data-table-heading">
+      <h3 id="situation-data-table-heading" data-i18n="summary.dataTableHeading">Accessible hazard and camera data</h3>
+      <p id="situation-data-table-description" data-i18n="summary.dataTableDescription">This keyboard-readable table uses data already loaded by StormScope. Opening it makes no new requests.</p>
+      <div id="situation-data-table-wrap" class="situation-data-table-wrap"></div>
+    </section>
     <section id="route-corridor-panel" class="situation-section route-corridor-panel" aria-labelledby="route-corridor-heading">
       <h3 id="route-corridor-heading" data-i18n="summary.routeCorridorHeading">Route corridor</h3>
       <p data-i18n="summary.routeCorridorPrivacy">Choose one imported LineString and a local corridor width to order official hazards and verified cameras along your route. This stays on this device and is not shared.</p>

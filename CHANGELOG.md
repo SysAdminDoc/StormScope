@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added an on-demand semantic hazard and camera data table to the Situation Summary, providing keyboard-readable active alerts, visible loaded-hazard counts, and nearest verified camera actions without additional network requests.
 - Added local route-corridor situation mode for imported LineStrings, with bounded local geometry, intersecting official hazard context, verified cameras ordered along travel, and a private 2–4 camera route monitor.
 - Added a default-off NOAA NWPS river-gauge layer with viewport/zoom-bounded observed and forecast products, flood-category markers, explicit observed-vs-forecast DOM popups, freshness/attribution, safe raw-source links, and last-good recovery. SW v110.
 - Added a default-off SPC Day 1–8 fire-weather outlook layer with bounded wind/low-humidity and dry-thunderstorm polygons, official risk styling, issue/valid metadata, forecast-vs-observed DOM popups, freshness/attribution, Day selection in scenes and profiles, partial-feed recovery, and headless browser coverage. SW v111.

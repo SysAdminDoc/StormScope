@@ -232,6 +232,7 @@
   var summaryWildfireFetchedAt = 0;
   var summaryWildfireBoundsKey = null;
   var summaryWildfireAbort = null;
+  var situationDataTableVisible = false;
   var incidentCameraSections = [];
   var activeRouteCorridor = null;
   var dataModePreference = 'auto';
@@ -5850,6 +5851,9 @@
       (activeAlerts.length ? ' (' + localNumber(activeAlerts.length) + ')' : ''));
     syncAlertsPanelVisibility();
     renderRouteCorridorPanel();
+    if (situationDataTableVisible && !document.getElementById('situation-panel').classList.contains('hidden')) {
+      renderSituationDataTable();
+    }
   }
 
   function hideAlertDetail() {
@@ -6264,6 +6268,146 @@
     document.getElementById('route-corridor-status').textContent = tr('summary.routeCorridorCleared');
   }
 
+  function situationDataTableStateLabel(state) {
+    if (state === 'ready' || state === 'no-active') return tr('summary.dataTableReady');
+    if (state === 'loading' || state === 'idle') return tr('summary.dataTableLoading');
+    return tr('summary.dataTableUnavailable');
+  }
+
+  function appendSituationDataTableRow(body, type, name, measure, area, action) {
+    var row = document.createElement('tr');
+    var typeCell = document.createElement('th');
+    typeCell.scope = 'row';
+    typeCell.textContent = type;
+    row.appendChild(typeCell);
+    [name, measure, area].forEach(function (value) {
+      var cell = document.createElement('td');
+      cell.textContent = value == null || value === '' ? '—' : String(value);
+      row.appendChild(cell);
+    });
+    var actionCell = document.createElement('td');
+    if (action) {
+      var button = incidentCameraButton(action.label, 'situation-data-table-action', action.run);
+      actionCell.appendChild(button);
+    } else actionCell.textContent = '—';
+    row.appendChild(actionCell);
+    body.appendChild(row);
+  }
+
+  function situationDataTableHazards() {
+    var warningCount = activeAlerts.filter(function (alert) { return alert.kind === 'warning'; }).length;
+    var rows = [
+      { name: tr('snapshot.hazardAlerts'), count: activeAlerts.length, state: 'ready' },
+      { name: tr('snapshot.hazardWarnings'), count: warningCount, state: 'ready' }
+    ];
+    rows.push({
+      name: tr('snapshot.hazardWildfires'),
+      count: summaryWildfireStatus === 'ready' ? summaryWildfireCount : null,
+      state: summaryWildfireStatus
+    });
+    function addLayer(name, count, state, enabled) {
+      if (enabled) rows.push({ name: name, count: count, state: state });
+    }
+    var gauges = riverGaugeState();
+    addLayer(tr('snapshot.hazardLightning'), null, lightningStatusState, Boolean(lightningLayer));
+    addLayer(tr('snapshot.hazardTropical'), tropicalStorms.length, tropicalStatusState, Boolean(tropicalLayer));
+    addLayer(tr('snapshot.hazardOutlooks'), wpcOutlookCount, wpcStatusState, Boolean(wpcEroLayer || wpcFloodLayer));
+    addLayer(tr('snapshot.hazardGauges'), gauges.count, gauges.status, Boolean(gauges.layer));
+    addLayer(tr('snapshot.hazardEarthquakes'), earthquakeCount, earthquakeStatusState, Boolean(earthquakeLayer));
+    addLayer(tr('snapshot.hazardConvective'), convectiveCount, convectiveStatusState, Boolean(convectiveLayer));
+    addLayer(tr('snapshot.hazardFireWeather'), fireWeatherCount, fireWeatherStatusState, Boolean(fireWeatherLayer));
+    addLayer(tr('snapshot.hazardWatches'), watchCount, watchStatusState, Boolean(watchLayer));
+    addLayer(tr('snapshot.hazardMesoscale'), mesoscaleCount, mesoscaleStatusState, Boolean(mesoscaleLayer));
+    addLayer(tr('snapshot.hazardStormReports'), stormReportCount, stormReportStatusState, Boolean(stormReportLayer));
+    addLayer(tr('snapshot.hazardSurfaceObservations'), surfaceObservationCount, surfaceObservationStatusState, Boolean(surfaceObservationLayer));
+    return rows;
+  }
+
+  function renderSituationDataTable() {
+    var panel = document.getElementById('situation-data-table-panel');
+    var button = document.getElementById('toggle-situation-table');
+    if (!panel || !button) return;
+    panel.classList.toggle('hidden', !situationDataTableVisible);
+    button.setAttribute('aria-expanded', String(situationDataTableVisible));
+    button.textContent = tr(situationDataTableVisible ? 'summary.dataTableHide' : 'summary.dataTableToggle');
+    if (!situationDataTableVisible) return;
+
+    var wrap = document.getElementById('situation-data-table-wrap');
+    wrap.replaceChildren();
+    var table = document.createElement('table');
+    table.id = 'situation-data-table';
+    table.className = 'situation-data-table';
+    table.setAttribute('aria-describedby', 'situation-data-table-description');
+    var caption = document.createElement('caption');
+    caption.textContent = tr('summary.dataTableCaption');
+    table.appendChild(caption);
+    var head = document.createElement('thead');
+    var headerRow = document.createElement('tr');
+    [
+      'summary.dataTableCategory', 'summary.dataTableName', 'summary.dataTableMeasure',
+      'summary.dataTableArea', 'summary.dataTableAction'
+    ].forEach(function (key) {
+      var cell = document.createElement('th');
+      cell.scope = 'col';
+      cell.textContent = tr(key);
+      headerRow.appendChild(cell);
+    });
+    head.appendChild(headerRow);
+    table.appendChild(head);
+    var body = document.createElement('tbody');
+    var alerts = activeAlerts.slice(0, 100);
+    if (!alerts.length) {
+      appendSituationDataTableRow(body, tr('summary.dataTableAlert'), tr('summary.dataTableNoAlerts'), '0', '—', null);
+    } else {
+      alerts.forEach(function (alert) {
+        appendSituationDataTableRow(body, tr('summary.dataTableAlert'), alert.event || tr('alerts.weatherAlert'),
+          tr('severity.' + String(alert.severity || 'unknown').toLowerCase()),
+          alert.areaDescription || tr('summary.dataTableUnknown'), {
+            label: tr('summary.readAlert'), run: function () { readAlertFromSummary(alert); }
+          });
+      });
+      if (activeAlerts.length > alerts.length) {
+        appendSituationDataTableRow(body, tr('summary.dataTableAlert'),
+          tr('summary.dataTableAdditionalAlerts', { count: localNumber(activeAlerts.length - alerts.length) }), '—', '—', null);
+      }
+    }
+    situationDataTableHazards().forEach(function (hazard) {
+      appendSituationDataTableRow(body, tr('summary.dataTableHazard'), hazard.name,
+        hazard.count == null ? '—' : localNumber(hazard.count), situationDataTableStateLabel(hazard.state), null);
+    });
+
+    var center = map.getCenter();
+    if (cameraCatalogDeferred || cameraLoadMetrics.completeMs == null) {
+      appendSituationDataTableRow(body, tr('summary.dataTableCamera'),
+        cameraCatalogDeferred ? tr('summary.camerasDeferred') : tr('summary.camerasLoading'), '—',
+        tr('summary.dataTableLoading'), null);
+    } else {
+      var nearby = StormScopeCameraStore.nearestVerifiedCameras(allCameras, {
+        lat: center.lat, lon: center.lng
+      }, 5);
+      if (!nearby.length) {
+        appendSituationDataTableRow(body, tr('summary.dataTableCamera'), tr('summary.dataTableNoCameras'), '0', '—', null);
+      } else {
+        nearby.forEach(function (result) {
+          appendSituationDataTableRow(body, tr('summary.dataTableCamera'), result.camera.name,
+            tr('summary.dataTableCameraDetails', {
+              distance: StormScopeWeather.distanceFromKm(result.distanceKm, weatherUnits),
+              bearing: localizedWindDirection(result.bearing)
+            }), tr('camera.health.' + String(result.camera.health || 'unknown')), {
+              label: tr('summary.dataTableOpenCamera'), run: function () { openCameraModal(result.camera); }
+            });
+        });
+      }
+    }
+    table.appendChild(body);
+    wrap.appendChild(table);
+  }
+
+  function toggleSituationDataTable() {
+    situationDataTableVisible = !situationDataTableVisible;
+    renderSituationDataTable();
+  }
+
   function renderSituationSummary(announce) {
     var content = document.getElementById('situation-content');
     content.replaceChildren();
@@ -6337,6 +6481,7 @@
       }
     }
     renderRouteCorridorPanel();
+    renderSituationDataTable();
     document.getElementById('situation-updated').textContent = tr('summary.updated', { time: localTime(Date.now()) });
     if (announce) document.getElementById('situation-announcer').textContent = tr('summary.announced');
     if (summaryWildfireStatus !== 'loading' && summaryWildfireStatus !== 'error') refreshSituationWildfires();
@@ -7072,6 +7217,7 @@
       closeMapComparison(true);
     });
     document.getElementById('btn-summary').addEventListener('click', toggleSituationSummary);
+    document.getElementById('toggle-situation-table').addEventListener('click', toggleSituationDataTable);
     document.getElementById('close-summary').addEventListener('click', function () {
       closeOpenPanel('situation-panel', 'btn-summary');
     });
@@ -7188,6 +7334,7 @@
       updateMonitorSelectionUi();
       scheduleSearchRender();
       renderAlerts();
+      renderSituationDataTable();
       renderLightningStatus();
       renderSnowStatus();
       renderSatelliteStatus();

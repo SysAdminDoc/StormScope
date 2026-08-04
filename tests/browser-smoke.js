@@ -1082,6 +1082,25 @@ async function main() {
     assert.match(summaryText, /Radar at map center.*coverage|Radar at map center.*no coverage/s);
     assert.match(summaryText, /1 active alerts, including 1 warnings/);
     assert.match(summaryText, /Nearest verified cameras.*5 nearest verified cameras/s);
+    const situationTableRequests = [];
+    const situationTableRequestListener = request => situationTableRequests.push(request.url());
+    page.on('request', situationTableRequestListener);
+    await page.getByRole('button', { name: 'Show accessible data table' }).click();
+    await page.locator('#situation-data-table-panel').waitFor({ state: 'visible' });
+    page.off('request', situationTableRequestListener);
+    assert.deepEqual(situationTableRequests, [], 'opening the data table must not fetch new data');
+    assert.deepEqual(await page.locator('#situation-data-table thead th').allTextContents(), [
+      'Type', 'Event or name', 'Severity or count', 'Area or details', 'Action'
+    ]);
+    const situationTable = page.locator('#situation-data-table');
+    await situationTable.getByText('Severe Thunderstorm Warning', { exact: true }).waitFor({ state: 'visible' });
+    await situationTable.getByText('Test County', { exact: true }).waitFor({ state: 'visible' });
+    assert.equal(await situationTable.getByRole('button', { name: 'Read alert' }).count(), 1);
+    assert.equal(await situationTable.getByRole('button', { name: 'Open camera' }).count(), 5);
+    await situationTable.getByRole('button', { name: 'Open camera' }).first().focus();
+    assert.equal(await page.evaluate(() => document.activeElement.classList.contains('situation-data-table-action')), true);
+    await page.getByRole('button', { name: 'Hide accessible data table' }).click();
+    await page.locator('#situation-data-table-panel').waitFor({ state: 'hidden' });
     const snapshot = await page.evaluate(() => window._stormscope.buildSituationSnapshot(false));
     assert.equal(snapshot.json.schema, 1);
     assert.deepEqual(snapshot.json.map.center, { latitude: 39.5, longitude: -98.5 });

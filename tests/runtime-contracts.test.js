@@ -363,8 +363,14 @@ test('accessible situation summary is user-triggered and exposes non-map navigat
   assert.match(html, /id="situation-panel"[^>]*aria-labelledby="situation-heading"/);
   assert.match(html, /id="situation-heading"[^>]*tabindex="-1"/);
   assert.match(html, /id="situation-announcer"[^>]*aria-live="polite"/);
+  assert.match(html, /id="toggle-situation-table"[^>]*aria-controls="situation-data-table-panel"/);
+  assert.match(html, /id="situation-data-table-panel"[^>]*aria-labelledby="situation-data-table-heading"/);
+  assert.match(html, /id="situation-data-table-description"/);
   assert.match(app, /function renderSituationSummary/);
+  assert.match(app, /function renderSituationDataTable/);
+  assert.match(app, /function situationDataTableHazards/);
   assert.match(app, /StormScopeCameraStore\.nearestVerifiedCameras/);
+  assert.match(app, /function toggleSituationDataTable/);
   assert.match(app, /showAlertDetail\(alert, true, document\.getElementById\('btn-summary'\), false\)/);
   const snapshotPosition = html.indexOf('js/situation-snapshot.js');
   const appPosition = html.indexOf('js/app.js');
@@ -382,7 +388,14 @@ test('accessible situation summary is user-triggered and exposes non-map navigat
   for (const locale of ['en', 'es']) {
     for (const key of ['snapshot.includeScene', 'snapshot.copy', 'snapshot.download', 'snapshot.title',
       'snapshot.sourcesHeading', 'snapshot.hazardsHeading', 'snapshot.selectedCameraHeading',
-      'snapshot.publicScene']) {
+      'snapshot.publicScene', 'summary.dataTableToggle', 'summary.dataTableHide',
+      'summary.dataTableHeading', 'summary.dataTableDescription', 'summary.dataTableCaption',
+      'summary.dataTableCategory', 'summary.dataTableName', 'summary.dataTableMeasure',
+      'summary.dataTableArea', 'summary.dataTableAction', 'summary.dataTableAlert',
+      'summary.dataTableHazard', 'summary.dataTableCamera', 'summary.dataTableNoAlerts',
+      'summary.dataTableNoCameras', 'summary.dataTableAdditionalAlerts', 'summary.dataTableLoading',
+      'summary.dataTableUnavailable', 'summary.dataTableReady', 'summary.dataTableUnknown',
+      'summary.dataTableCameraDetails', 'summary.dataTableOpenCamera']) {
       assert.ok(i18n.catalogs[locale][key], `${locale} catalog should define ${key}`);
     }
   }
