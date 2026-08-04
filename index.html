@@ -81,6 +81,22 @@
       <button id="close-summary" type="button" aria-label="Close situation summary">×</button>
     </div>
     <div id="situation-content"></div>
+    <section id="route-corridor-panel" class="situation-section route-corridor-panel" aria-labelledby="route-corridor-heading">
+      <h3 id="route-corridor-heading" data-i18n="summary.routeCorridorHeading">Route corridor</h3>
+      <p data-i18n="summary.routeCorridorPrivacy">Choose one imported LineString and a local corridor width to order official hazards and verified cameras along your route. This stays on this device and is not shared.</p>
+      <div class="route-corridor-controls">
+        <label for="route-corridor-route" data-i18n="summary.routeCorridorRoute">Imported route</label>
+        <select id="route-corridor-route"></select>
+        <label for="route-corridor-width" data-i18n="summary.routeCorridorWidth">Corridor width</label>
+        <div class="route-corridor-width-input"><input id="route-corridor-width" type="number" min="1" max="100" step="1" value="10" inputmode="decimal"><span aria-hidden="true">km</span></div>
+      </div>
+      <div class="route-corridor-actions">
+        <button id="route-corridor-activate" type="button" data-i18n="summary.routeCorridorApply">Analyze route</button>
+        <button id="route-corridor-clear" type="button" disabled data-i18n="summary.routeCorridorClear">Clear route</button>
+      </div>
+      <div id="route-corridor-status" role="status" aria-live="polite"></div>
+      <div id="route-corridor-results"></div>
+    </section>
     <p id="situation-announcer" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></p>
     <label class="situation-snapshot-option" for="snapshot-include-scene">
       <input id="snapshot-include-scene" type="checkbox">

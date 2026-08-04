@@ -74,3 +74,36 @@ test('point and line queries expose bounded distance and deterministic bearing',
   assert.deepEqual(spatial.queryCameras([camera(2, { lon: -90 })], point, { maxDistanceKm: 20 }), []);
   assert.equal(spatial.nearestGeometryPoint({ type: 'Unsupported', coordinates: [] }, { lat: 0, lon: 0 }), null);
 });
+
+test('route projections and corridor cameras are ordered along travel', () => {
+  const route = [[-100, 40], [-99, 40], [-99, 41]];
+  const projection = spatial.projectRoute(route, { lat: 40.02, lon: -99.8 });
+  assert.ok(projection.distanceKm > 1 && projection.distanceKm < 3);
+  assert.ok(projection.routeDistanceKm > 15 && projection.routeDistanceKm < 20);
+  assert.ok(projection.progress > 0 && projection.progress < 0.5);
+  assert.ok(spatial.lineLengthKm(route) > 190 && spatial.lineLengthKm(route) < 200);
+
+  const results = spatial.queryRouteCameras([
+    camera(1, { name: 'Later turn', lat: 40.5, lon: -99.01 }),
+    camera(2, { name: 'First leg', lat: 40.02, lon: -99.8 }),
+    camera(3, { name: 'Unverified', lat: 40.1, lon: -99.6, last_verified: null }),
+    camera(4, { name: 'Degraded', lat: 40.1, lon: -99.5, health: 'degraded' }),
+    camera(5, { name: 'Off route', lat: 42, lon: -99 })
+  ], route, { maxDistanceKm: 10, limit: 10 });
+  assert.deepEqual(results.map(result => result.camera.id), [2, 1]);
+  assert.ok(results[0].routeDistanceKm < results[1].routeDistanceKm);
+  assert.equal(results[0].verification, 'verified');
+});
+
+test('route corridor matching catches crossings, contained areas, and nearby points', () => {
+  const route = [[-100, 40], [-99, 40]];
+  const crossing = {
+    type: 'Polygon',
+    coordinates: [[[-99.6, 39.5], [-99.4, 39.5], [-99.4, 40.5], [-99.6, 40.5], [-99.6, 39.5]]]
+  };
+  const nearbyPoint = { type: 'Point', coordinates: [-99.2, 40.01] };
+  const farPoint = { type: 'Point', coordinates: [-98, 40] };
+  assert.equal(spatial.intersectsRouteCorridor(route, crossing, 1), true);
+  assert.equal(spatial.intersectsRouteCorridor(route, nearbyPoint, 2), true);
+  assert.equal(spatial.intersectsRouteCorridor(route, farPoint, 2), false);
+});

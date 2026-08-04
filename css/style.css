@@ -337,6 +337,27 @@ button:focus-visible {
 .situation-section li { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .situation-section li span { min-width: 0; font-size: 12px; }
 
+.route-corridor-panel { display: grid; gap: 7px; }
+.route-corridor-panel > p { margin: 0; }
+.route-corridor-controls { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 8px; align-items: center; }
+.route-corridor-controls select, .route-corridor-width-input input { min-width: 0; box-sizing: border-box; width: 100%; }
+.route-corridor-width-input { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: center; }
+.route-corridor-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.route-corridor-panel button { min-height: 32px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-panel-hover); color: var(--text); font: inherit; cursor: pointer; }
+.route-corridor-panel button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.route-corridor-panel button:disabled { opacity: 0.45; cursor: not-allowed; }
+#route-corridor-status { min-height: 1.4em; color: var(--text-dim); font-size: 11px; line-height: 1.4; }
+#route-corridor-results { display: grid; gap: 7px; }
+.route-corridor-result-group { display: grid; gap: 5px; }
+.route-corridor-result-group h4 { margin: 0; font-size: 12px; }
+.route-corridor-result-group p { margin: 0; color: var(--text-dim); font-size: 11px; line-height: 1.4; }
+.route-corridor-result-group ul { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.route-corridor-result-group li { display: grid; gap: 5px; padding: 6px; border: 1px solid var(--border); border-radius: 6px; }
+.route-corridor-result-group li > span { min-width: 0; font-size: 11px; line-height: 1.35; }
+.route-corridor-camera-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.route-corridor-camera-actions button, .route-corridor-monitor { min-width: 0; padding-inline: 5px; }
+.route-corridor-monitor { width: 100%; border-color: var(--accent) !important; }
+
 .situation-snapshot-option {
   display: flex;
   align-items: flex-start;

@@ -1133,13 +1133,50 @@ async function main() {
     assert.equal((await persistedOverlayPage.evaluate(() => window._stormscope.getContextState())).localOverlays, 1);
     await persistedOverlayPage.close();
 
-    const gpx = '<?xml version="1.0"?><gpx version="1.1"><wpt lat="38.5" lon="-90.5"><name>Checkpoint</name></wpt>' +
-      '<trk><name>Route</name><trkseg><trkpt lat="38" lon="-91"></trkpt><trkpt lat="39" lon="-90"></trkpt></trkseg></trk></gpx>';
+    const routeAnchors = await page.evaluate(() => window._stormscope.getCameraResults()
+      .filter(camera => camera.health === 'healthy' && camera.last_verified &&
+        ['image', 'hls', 'mjpeg', 'youtube'].includes(String(camera.type).toLowerCase()))
+      .slice(0, 2)
+      .map(camera => ({ name: camera.name, lat: camera.lat, lon: camera.lon })));
+    assert.equal(routeAnchors.length, 2, 'route smoke needs two verified playable cameras');
+    const gpx = '<?xml version="1.0"?><gpx version="1.1"><wpt lat="' + routeAnchors[0].lat +
+      '" lon="' + routeAnchors[0].lon + '"><name>Checkpoint</name></wpt>' +
+      '<trk><name>Route</name><trkseg><trkpt lat="' + routeAnchors[0].lat + '" lon="' + routeAnchors[0].lon +
+      '"></trkpt><trkpt lat="' + routeAnchors[1].lat + '" lon="' + routeAnchors[1].lon +
+      '"></trkpt></trkseg></trk></gpx>';
     await page.locator('#local-overlay-file').setInputFiles({
       name: 'route.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(gpx)
     });
     await page.locator('#local-overlay-status').filter({ hasText: 'Imported “route” with 2 features' }).waitFor({ state: 'visible' });
     assert.equal(await page.locator('.local-overlay-item').count(), 2);
+    await page.getByRole('button', { name: 'Open situation summary' }).click();
+    const routeSelect = page.locator('#route-corridor-route');
+    await routeSelect.locator('option').nth(1).waitFor({ state: 'attached' });
+    await routeSelect.selectOption({ index: 1 });
+    await page.locator('#route-corridor-width').fill('5');
+    await page.locator('#route-corridor-activate').click();
+    await page.locator('#route-corridor-status').filter({ hasText: 'Route corridor analyzed.' }).waitFor({ state: 'visible' });
+    const routeCameraGroup = page.locator('#route-corridor-results .route-corridor-result-group').nth(1);
+    await routeCameraGroup.waitFor({ state: 'visible' });
+    assert.ok(await routeCameraGroup.locator('.route-open-camera').count() >= 2,
+      'route corridor should expose at least two verified cameras');
+    const routeCameraText = await routeCameraGroup.textContent();
+    assert.ok(await routeCameraGroup.locator('li').count() <= 12, 'route camera results must stay bounded');
+    assert.match(routeCameraText, /along route/);
+    assert.doesNotMatch(JSON.stringify(await page.evaluate(() => window._stormscope.captureSharedScene())),
+      /route|route-corridor|Checkpoint/i, 'route corridor state must stay out of shared scenes');
+    const routeMonitor = page.locator('.route-corridor-monitor');
+    await routeMonitor.waitFor({ state: 'visible' });
+    assert.equal(await routeMonitor.isEnabled(), true);
+    await routeMonitor.click();
+    await page.locator('#monitor-modal').waitFor({ state: 'visible' });
+    const routeMonitorCount = await page.locator('.monitor-cell').count();
+    assert.ok(routeMonitorCount >= 2 && routeMonitorCount <= 4, 'route monitor must stay bounded to 2–4 cameras');
+    await page.locator('#monitor-close').click();
+    await page.locator('#route-corridor-clear').click();
+    await page.locator('#route-corridor-status').filter({ hasText: 'Route corridor cleared.' }).waitFor({ state: 'visible' });
+    await page.getByRole('button', { name: 'Close situation summary' }).click();
+    await page.getByRole('button', { name: 'Toggle layers panel' }).click();
     assert.doesNotMatch(JSON.stringify(await page.evaluate(() => window._stormscope.captureSharedScene())),
       /incident-plan|route|localOverlay/i, 'shared scenes must exclude private local overlay data and IDs');
     const malformed = JSON.stringify({ type: 'Point', coordinates: [999, 0] });

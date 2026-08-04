@@ -18,6 +18,7 @@ const cameraRecordSource = fs.readFileSync(path.join(root, 'js', 'camera-record.
 const cameraFeedSource = fs.readFileSync(path.join(root, 'js', 'camera-feed.js'), 'utf8');
 const serviceWorker = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
 const spatialQuery = fs.readFileSync(path.join(root, 'js', 'spatial-query.js'), 'utf8');
+const spatialQuerySource = spatialQuery;
 const privateAnnotationSource = fs.readFileSync(path.join(root, 'js', 'private-annotations.js'), 'utf8');
 const wakeLockSource = fs.readFileSync(path.join(root, 'js', 'wake-lock.js'), 'utf8');
 const layerRegistrySource = fs.readFileSync(path.join(root, 'js', 'layer-registry.js'), 'utf8');
@@ -530,6 +531,35 @@ test('private measurements and annotations stay bounded and outside shared or di
   const diagnosticsEnd = app.indexOf('function initDiagnostics()', diagnosticsStart);
   assert.ok(diagnosticsStart >= 0 && diagnosticsEnd > diagnosticsStart);
   assert.doesNotMatch(app.slice(diagnosticsStart, diagnosticsEnd), /privateAnnotation|annotation-tool/);
+});
+
+test('route corridor mode uses local LineStrings, bounded geometry, and route-order camera selection', () => {
+  assert.match(html, /id="route-corridor-route"/);
+  assert.match(html, /id="route-corridor-width"/);
+  assert.match(html, /id="route-corridor-activate"/);
+  assert.match(html, /id="route-corridor-results"/);
+  assert.match(app, /function routeCorridorFeatureCandidates\(\)/);
+  assert.match(app, /StormScopeSpatialQuery\.queryRouteCameras/);
+  assert.match(app, /StormScopeSpatialQuery\.intersectsRouteCorridor/);
+  assert.match(app, /function openRouteCorridorMonitor\(\)/);
+  assert.match(app, /monitorSelection\.replace\(cameras\)/);
+  assert.match(spatialQuerySource, /function projectRoute\(line, point\)/);
+  assert.match(spatialQuerySource, /function queryRouteCameras\(cameras, line, options\)/);
+  assert.match(spatialQuerySource, /function intersectsRouteCorridor\(line, geometry, maxDistanceKm\)/);
+  assert.match(css, /\.route-corridor-panel/);
+  for (const locale of ['en', 'es']) {
+    for (const key of ['summary.routeCorridorHeading', 'summary.routeCorridorPrivacy',
+      'summary.routeCorridorNoImported', 'summary.routeCorridorStatus',
+      'summary.routeCorridorCameraLine', 'summary.routeCorridorOpenMonitor']) {
+      assert.ok(i18n.catalogs[locale][key], `${locale} catalog should define ${key}`);
+    }
+  }
+  const sceneStart = app.indexOf('function captureSharedScene()');
+  const sceneEnd = app.indexOf('function scheduleSceneHashWrite()', sceneStart);
+  assert.doesNotMatch(app.slice(sceneStart, sceneEnd), /routeCorridor|route-corridor/);
+  const snapshotStart = app.indexOf('function buildSituationSnapshot(includeSceneUrl)');
+  const snapshotEnd = app.indexOf('function copySituationSnapshot()', snapshotStart);
+  assert.doesNotMatch(app.slice(snapshotStart, snapshotEnd), /routeCorridor|route-corridor/);
 });
 
 test('place/address geocoding is keyless, debounced, attributed, and session-only', () => {

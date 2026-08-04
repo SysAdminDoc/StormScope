@@ -192,6 +192,7 @@
   var wildfireMoveTimer = null;
   var wildfireUpdatedAt = null;
   var wildfireCount = 0;
+  var wildfireFeatures = [];
   var wildfireStatusState = 'off';
   var wildfireAttributionAdded = false;
   var earthquakeLayer = null;
@@ -255,6 +256,7 @@
   var summaryWildfireBoundsKey = null;
   var summaryWildfireAbort = null;
   var incidentCameraSections = [];
+  var activeRouteCorridor = null;
   var dataModePreference = 'auto';
   var dataPolicy = StormScopeDataMode.resolve('auto', navigator.connection);
   var lowDataMode = dataPolicy.lowData;
@@ -2429,6 +2431,7 @@
     });
     document.getElementById('export-local-overlays').disabled = !localOverlayRecords.length;
     document.getElementById('clear-local-overlays').disabled = !localOverlayRecords.length;
+    renderRouteCorridorPanel();
   }
 
   function annotationTransaction(mode, operation) {
@@ -3094,6 +3097,7 @@
       }
       wildfireUpdatedAt = snapshot.metadata.updatedAt;
       wildfireCount = collection.features.length;
+      wildfireFeatures = collection.features.slice();
       wildfireStatusState = 'ready';
       summaryWildfireStatus = 'ready';
       summaryWildfireCount = wildfireCount;
@@ -3101,6 +3105,7 @@
       summaryWildfireFetchedAt = Date.now();
       summaryWildfireBoundsKey = wildfireBoundsKey(bounds);
       renderWildfireStatus();
+      renderRouteCorridorPanel();
     } catch (error) {
       if (error.name === 'AbortError') return;
       if (generation !== wildfireGeneration) return;
@@ -3120,6 +3125,7 @@
     wildfireMoveTimer = null;
     if (wildfireLayer) map.removeLayer(wildfireLayer);
     wildfireLayer = null;
+    wildfireFeatures = [];
     if (wildfireAttributionAdded) {
       var provider = StormScopeContextLayers.providers.wildfires;
       map.attributionControl.removeAttribution('<a href="' + provider.attribution.url + '" target="_blank" rel="noopener noreferrer">' + provider.attribution.text + '</a>');
@@ -3127,6 +3133,7 @@
     }
     wildfireStatusState = 'off';
     renderWildfireStatus();
+    renderRouteCorridorPanel();
   }
 
   // ── USGS earthquakes ──
@@ -3368,6 +3375,7 @@
       convectiveCount = collection.features.length;
       convectiveStatusState = 'ready';
       renderConvectiveStatus();
+      renderRouteCorridorPanel();
     } catch (error) {
       if (error.name === 'AbortError') return;
       if (generation !== convectiveGeneration) return;
@@ -3486,6 +3494,7 @@
       watchCount = collection.features.length;
       watchStatusState = 'ready';
       renderWatchStatus();
+      renderRouteCorridorPanel();
     } catch (error) {
       if (error.name === 'AbortError') return;
       if (generation !== watchGeneration) return;
@@ -3614,6 +3623,7 @@
       mesoscaleCount = result.collection.features.length;
       mesoscaleStatusState = 'ready';
       renderMesoscaleStatus();
+      renderRouteCorridorPanel();
     } catch (error) {
       if (error.name === 'AbortError') return;
       if (generation !== mesoscaleGeneration) return;
@@ -4095,6 +4105,7 @@
       });
       scheduleSearchRender();
       refreshIncidentCameraSections();
+      renderRouteCorridorPanel();
     } catch (error) {
       cameraCatalogDeferred = true;
       button.disabled = false;
@@ -4166,6 +4177,7 @@
       updateDataFreshness();
       scheduleSearchRender();
       refreshIncidentCameraSections();
+      renderRouteCorridorPanel();
       if (pendingSceneCameraId != null) {
         var sharedCamera = allCameras.find(function (camera) { return String(camera.id) === pendingSceneCameraId; });
         if (sharedCamera) openCameraModal(sharedCamera);
@@ -6330,6 +6342,7 @@
     document.getElementById('btn-alerts').setAttribute('aria-label', tr('nav.alerts') +
       (activeAlerts.length ? ' (' + localNumber(activeAlerts.length) + ')' : ''));
     syncAlertsPanelVisibility();
+    renderRouteCorridorPanel();
   }
 
   function hideAlertDetail() {
@@ -6485,6 +6498,259 @@
     }
   }
 
+  function boundedRouteLine(line) {
+    if (!Array.isArray(line)) return [];
+    var maxPoints = 512;
+    if (line.length <= maxPoints) return line.map(function (coordinate) { return coordinate.slice(0, 2); });
+    var result = [];
+    for (var index = 0; index < maxPoints - 1; index += 1) {
+      var sourceIndex = Math.round(index * (line.length - 1) / (maxPoints - 1));
+      result.push(line[sourceIndex].slice(0, 2));
+    }
+    result.push(line[line.length - 1].slice(0, 2));
+    return result;
+  }
+
+  function routeCorridorFeatureCandidates() {
+    var candidates = [];
+    localOverlayRecords.forEach(function (record) {
+      var features = record && record.data && Array.isArray(record.data.features) ? record.data.features : [];
+      features.forEach(function (feature, index) {
+        if (!feature || !feature.geometry || feature.geometry.type !== 'LineString' ||
+            !Array.isArray(feature.geometry.coordinates) || feature.geometry.coordinates.length < 2) return;
+        var properties = feature.properties || {};
+        candidates.push({
+          key: record.id + ':' + index,
+          name: properties.name || record.name + ' • ' + localNumber(index + 1),
+          line: boundedRouteLine(feature.geometry.coordinates),
+          record: record,
+          feature: feature
+        });
+      });
+    });
+    return candidates.slice(0, 50);
+  }
+
+  function collectRouteLayerFeatures(layer, result) {
+    if (!layer) return;
+    if (layer.feature && layer.feature.geometry) result.push(layer.feature);
+    if (typeof layer.getLayers === 'function') layer.getLayers().forEach(function (child) {
+      collectRouteLayerFeatures(child, result);
+    });
+  }
+
+  function routeCorridorHazardCandidates() {
+    var hazards = [];
+    activeAlerts.forEach(function (alert) {
+      if (!alert.geometry) return;
+      hazards.push({
+        kind: 'NWS alert', name: alert.event || tr('alerts.weatherAlert'), geometry: alert.geometry
+      });
+    });
+    wildfireFeatures.forEach(function (feature) {
+      var properties = feature.properties || {};
+      hazards.push({
+        kind: 'NIFC wildfire', name: properties.poly_IncidentName || properties.IncidentName || tr('context.wildfireName'),
+        geometry: feature.geometry
+      });
+    });
+    function addLayerHazards(layer, kind, name) {
+      var features = [];
+      collectRouteLayerFeatures(layer, features);
+      features.forEach(function (feature) {
+        var properties = feature.properties || {};
+        hazards.push({ kind: kind, name: name(properties), geometry: feature.geometry });
+      });
+    }
+    addLayerHazards(watchLayer, 'SPC watch', function (properties) {
+      return properties.watchKind ? tr('context.watch.' + properties.watchKind) : 'SPC watch';
+    });
+    addLayerHazards(convectiveLayer, 'SPC outlook', function (properties) {
+      return properties.outlookCategory ? tr('context.spc.' + properties.outlookCategory) : tr('context.convectiveFeature', { category: tr('weather.unknown') });
+    });
+    addLayerHazards(mesoscaleLayer, 'SPC discussion', function (properties) {
+      return properties.discussionTitle || properties.discussionInfo || 'SPC discussion';
+    });
+    return hazards.filter(function (hazard) { return hazard.geometry; }).slice(0, 2000);
+  }
+
+  function routeCorridorWidthText(widthKm) {
+    return localNumber(widthKm) + ' km';
+  }
+
+  function routeCorridorBuildResults(candidate, widthKm) {
+    var routeGeometry = { type: 'LineString', coordinates: candidate.line };
+    var cameras = cameraLoadMetrics.completeMs == null ? [] : StormScopeSpatialQuery.queryRouteCameras(allCameras, candidate.line, {
+      maxDistanceKm: widthKm, limit: 12, verifiedOnly: true
+    });
+    var hazards = routeCorridorHazardCandidates().filter(function (hazard) {
+      return StormScopeSpatialQuery.intersectsRouteCorridor(candidate.line, hazard.geometry, widthKm);
+    });
+    return { routeGeometry: routeGeometry, cameras: cameras, hazards: hazards };
+  }
+
+  function routeCorridorAppendGroup(container, headingText) {
+    var section = document.createElement('section');
+    section.className = 'route-corridor-result-group';
+    var heading = document.createElement('h4');
+    heading.textContent = headingText;
+    section.appendChild(heading);
+    container.appendChild(section);
+    return section;
+  }
+
+  function openRouteCorridorMonitor() {
+    if (!activeRouteCorridor) return;
+    var cameras = StormScopeSpatialQuery.monitorCandidates(activeRouteCorridor.results.cameras, 2, 4);
+    if (cameras.length < 2) {
+      document.getElementById('route-corridor-status').textContent = tr('summary.routeCorridorMonitorUnavailable');
+      return;
+    }
+    try {
+      monitorSelection.replace(cameras);
+      updateMonitorSelectionUi();
+      renderRouteCorridorPanel();
+      openMonitor();
+    } catch (error) {
+      document.getElementById('route-corridor-status').textContent = tr('summary.routeCorridorMonitorUnavailable');
+    }
+  }
+
+  function renderRouteCorridorPanel() {
+    var select = document.getElementById('route-corridor-route');
+    var widthInput = document.getElementById('route-corridor-width');
+    var activate = document.getElementById('route-corridor-activate');
+    var clear = document.getElementById('route-corridor-clear');
+    var status = document.getElementById('route-corridor-status');
+    var resultsContainer = document.getElementById('route-corridor-results');
+    if (!select || !widthInput || !activate || !clear || !status || !resultsContainer) return;
+    var candidates = routeCorridorFeatureCandidates();
+    var selectedKey = activeRouteCorridor && activeRouteCorridor.key;
+    if (selectedKey && !candidates.some(function (candidate) { return candidate.key === selectedKey; })) {
+      activeRouteCorridor = null;
+      selectedKey = null;
+    }
+    select.replaceChildren();
+    var empty = document.createElement('option');
+    empty.value = '';
+    empty.textContent = candidates.length ? tr('summary.routeCorridorChoose') : tr('summary.routeCorridorNoImported');
+    select.appendChild(empty);
+    candidates.forEach(function (candidate) {
+      var option = document.createElement('option');
+      option.value = candidate.key;
+      option.textContent = candidate.name;
+      select.appendChild(option);
+    });
+    if (selectedKey) select.value = selectedKey;
+    select.disabled = !candidates.length;
+    activate.disabled = !candidates.length;
+    clear.disabled = !activeRouteCorridor;
+    if (activeRouteCorridor) widthInput.value = String(activeRouteCorridor.widthKm);
+    resultsContainer.replaceChildren();
+    if (!candidates.length) {
+      status.textContent = tr('summary.routeCorridorNoImported');
+      return;
+    }
+    if (!activeRouteCorridor) {
+      status.textContent = tr('summary.routeCorridorNoSelection');
+      return;
+    }
+    var results = activeRouteCorridor.results;
+    status.textContent = tr('summary.routeCorridorStatus', {
+      name: activeRouteCorridor.name, width: routeCorridorWidthText(activeRouteCorridor.widthKm),
+      hazards: localNumber(results.hazards.length), cameras: localNumber(results.cameras.length)
+    });
+    if (cameraLoadMetrics.completeMs == null) {
+      var loading = document.createElement('p');
+      loading.textContent = tr('summary.routeCorridorLoading');
+      resultsContainer.appendChild(loading);
+    }
+    var hazardsGroup = routeCorridorAppendGroup(resultsContainer, tr('summary.routeCorridorHazards'));
+    if (!results.hazards.length) {
+      var noHazards = document.createElement('p');
+      noHazards.textContent = tr('summary.routeCorridorNoHazards');
+      hazardsGroup.appendChild(noHazards);
+    } else {
+      var hazardList = document.createElement('ul');
+      results.hazards.forEach(function (hazard) {
+        var item = document.createElement('li');
+        item.textContent = tr('summary.routeCorridorHazardLine', { kind: hazard.kind, name: hazard.name });
+        hazardList.appendChild(item);
+      });
+      hazardsGroup.appendChild(hazardList);
+    }
+    var camerasGroup = routeCorridorAppendGroup(resultsContainer, tr('summary.routeCorridorCameras'));
+    if (!results.cameras.length) {
+      var noCameras = document.createElement('p');
+      noCameras.textContent = tr('summary.routeCorridorNoCameras');
+      camerasGroup.appendChild(noCameras);
+    } else {
+      var cameraList = document.createElement('ul');
+      results.cameras.forEach(function (result) {
+        var item = document.createElement('li');
+        var label = document.createElement('span');
+        label.textContent = tr('summary.routeCorridorCameraLine', {
+          name: result.camera.name,
+          along: StormScopeWeather.distanceFromKm(result.routeDistanceKm, weatherUnits),
+          distance: StormScopeWeather.distanceFromKm(result.distanceKm, weatherUnits)
+        });
+        item.appendChild(label);
+        var actions = document.createElement('div');
+        actions.className = 'route-corridor-camera-actions';
+        actions.appendChild(incidentCameraButton(tr('incident.openCamera'), 'route-open-camera', function () {
+          selectCameraResult(result.camera);
+        }));
+        actions.appendChild(incidentCameraButton(tr(monitorSelection.has(result.camera) ? 'monitor.remove' : 'monitor.add', {
+          name: result.camera.name
+        }), 'route-monitor-camera', function () {
+          toggleMonitorCamera(result.camera);
+          renderRouteCorridorPanel();
+        }));
+        item.appendChild(actions);
+        cameraList.appendChild(item);
+      });
+      camerasGroup.appendChild(cameraList);
+      var monitorCandidates = StormScopeSpatialQuery.monitorCandidates(results.cameras, 2, 4);
+      var monitorButton = document.createElement('button');
+      monitorButton.type = 'button';
+      monitorButton.className = 'route-corridor-monitor';
+      monitorButton.disabled = monitorCandidates.length < 2;
+      monitorButton.textContent = monitorCandidates.length >= 2
+        ? tr('summary.routeCorridorOpenMonitor', { count: localNumber(monitorCandidates.length) })
+        : tr('summary.routeCorridorMonitorUnavailable');
+      monitorButton.addEventListener('click', openRouteCorridorMonitor);
+      camerasGroup.appendChild(monitorButton);
+    }
+  }
+
+  function activateRouteCorridor() {
+    var candidate = routeCorridorFeatureCandidates().find(function (item) {
+      return item.key === document.getElementById('route-corridor-route').value;
+    });
+    if (!candidate) {
+      activeRouteCorridor = null;
+      renderRouteCorridorPanel();
+      return;
+    }
+    var widthKm = Number(document.getElementById('route-corridor-width').value);
+    if (!Number.isFinite(widthKm) || widthKm < 1 || widthKm > 100) {
+      document.getElementById('route-corridor-status').textContent = tr('summary.routeCorridorInvalidWidth');
+      return;
+    }
+    activeRouteCorridor = {
+      key: candidate.key, name: candidate.name, line: candidate.line, widthKm: Math.round(widthKm),
+      results: routeCorridorBuildResults(candidate, Math.round(widthKm))
+    };
+    renderRouteCorridorPanel();
+    document.getElementById('route-corridor-status').textContent = tr('summary.routeCorridorApplied');
+  }
+
+  function clearRouteCorridor() {
+    activeRouteCorridor = null;
+    renderRouteCorridorPanel();
+    document.getElementById('route-corridor-status').textContent = tr('summary.routeCorridorCleared');
+  }
+
   function renderSituationSummary(announce) {
     var content = document.getElementById('situation-content');
     content.replaceChildren();
@@ -6557,6 +6823,7 @@
         cameras.appendChild(list);
       }
     }
+    renderRouteCorridorPanel();
     document.getElementById('situation-updated').textContent = tr('summary.updated', { time: localTime(Date.now()) });
     if (announce) document.getElementById('situation-announcer').textContent = tr('summary.announced');
     if (summaryWildfireStatus !== 'loading' && summaryWildfireStatus !== 'error') refreshSituationWildfires();
@@ -7286,6 +7553,14 @@
       if (summaryWildfireStatus === 'error') summaryWildfireStatus = 'idle';
       renderSituationSummary(true);
     });
+    document.getElementById('route-corridor-route').addEventListener('change', function () {
+      var selectedRoute = this.value;
+      activeRouteCorridor = null;
+      renderRouteCorridorPanel();
+      document.getElementById('route-corridor-route').value = selectedRoute;
+    });
+    document.getElementById('route-corridor-activate').addEventListener('click', activateRouteCorridor);
+    document.getElementById('route-corridor-clear').addEventListener('click', clearRouteCorridor);
     document.getElementById('copy-situation-snapshot').addEventListener('click', copySituationSnapshot);
     document.getElementById('download-situation-snapshot').addEventListener('click', downloadSituationSnapshot);
     document.getElementById('btn-search').addEventListener('click', function () {

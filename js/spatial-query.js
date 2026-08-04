@@ -192,6 +192,149 @@
     }).slice(0, limit);
   }
 
+  function lineLengthKm(line) {
+    if (!Array.isArray(line) || line.length < 2) return 0;
+    var length = 0;
+    for (var index = 1; index < line.length; index += 1) {
+      if (!validPoint(line[index - 1]) || !validPoint(line[index])) continue;
+      length += distanceKm({ lat: line[index - 1][1], lon: line[index - 1][0] }, {
+        lat: line[index][1], lon: line[index][0]
+      });
+    }
+    return Number(length.toFixed(3));
+  }
+
+  function projectRoute(line, point) {
+    if (!Array.isArray(line) || line.length < 2 || !point ||
+        !Number.isFinite(Number(point.lat)) || !Number.isFinite(Number(point.lon))) return null;
+    var best = null;
+    var cumulative = 0;
+    var totalLength = lineLengthKm(line);
+    for (var index = 0; index < line.length - 1; index += 1) {
+      if (!validPoint(line[index]) || !validPoint(line[index + 1])) continue;
+      var leftCoordinate = { lat: Number(line[index][1]), lon: Number(line[index][0]) };
+      var rightCoordinate = { lat: Number(line[index + 1][1]), lon: Number(line[index + 1][0]) };
+      var left = project(line[index], point);
+      var right = project(line[index + 1], point);
+      var candidate = nearestOnSegment(left, right);
+      var segmentLength = distanceKm(leftCoordinate, rightCoordinate);
+      var candidateGeo = unproject(candidate, point);
+      var candidateDistance = Math.sqrt(candidate.x * candidate.x + candidate.y * candidate.y);
+      var along = cumulative + distanceKm(leftCoordinate, candidateGeo);
+      if (!best || candidateDistance < best.distanceKm) {
+        best = {
+          point: candidateGeo,
+          distanceKm: candidateDistance,
+          routeDistanceKm: along,
+          segmentIndex: index,
+          bearing: bearingDegrees(leftCoordinate, rightCoordinate)
+        };
+      }
+      cumulative += segmentLength;
+    }
+    if (!best) return null;
+    best.distanceKm = Number(best.distanceKm.toFixed(3));
+    best.routeDistanceKm = Number(best.routeDistanceKm.toFixed(3));
+    best.progress = totalLength ? Math.max(0, Math.min(1, best.routeDistanceKm / totalLength)) : 0;
+    return best;
+  }
+
+  function orientation(left, right, point) {
+    var value = (right.y - left.y) * (point.x - right.x) - (right.x - left.x) * (point.y - right.y);
+    if (Math.abs(value) < 1e-9) return 0;
+    return value > 0 ? 1 : 2;
+  }
+
+  function onSegment(left, right, point) {
+    return point.x >= Math.min(left.x, right.x) - 1e-9 && point.x <= Math.max(left.x, right.x) + 1e-9 &&
+      point.y >= Math.min(left.y, right.y) - 1e-9 && point.y <= Math.max(left.y, right.y) + 1e-9;
+  }
+
+  function segmentsIntersect(left, right, otherLeft, otherRight) {
+    var first = orientation(left, right, otherLeft);
+    var second = orientation(left, right, otherRight);
+    var third = orientation(otherLeft, otherRight, left);
+    var fourth = orientation(otherLeft, otherRight, right);
+    if (first !== second && third !== fourth) return true;
+    return (first === 0 && onSegment(left, right, otherLeft)) ||
+      (second === 0 && onSegment(left, right, otherRight)) ||
+      (third === 0 && onSegment(otherLeft, otherRight, left)) ||
+      (fourth === 0 && onSegment(otherLeft, otherRight, right));
+  }
+
+  function routeSegmentsIntersect(line, sequence) {
+    if (!Array.isArray(sequence) || sequence.length < 2) return false;
+    var origin = { lat: Number(line[0][1]), lon: Number(line[0][0]) };
+    for (var index = 0; index < line.length - 1; index += 1) {
+      if (!validPoint(line[index]) || !validPoint(line[index + 1])) continue;
+      var left = project(line[index], origin);
+      var right = project(line[index + 1], origin);
+      for (var otherIndex = 0; otherIndex < sequence.length - 1; otherIndex += 1) {
+        if (!validPoint(sequence[otherIndex]) || !validPoint(sequence[otherIndex + 1])) continue;
+        var otherLeft = project(sequence[otherIndex], origin);
+        var otherRight = project(sequence[otherIndex + 1], origin);
+        if (segmentsIntersect(left, right, otherLeft, otherRight)) return true;
+      }
+    }
+    return false;
+  }
+
+  function intersectsRouteCorridor(line, geometry, maxDistanceKm) {
+    var width = Math.max(0, Math.min(500, Number(maxDistanceKm) || 0));
+    if (!Array.isArray(line) || line.length < 2 || !geometry) return false;
+    var routeGeometry = { type: 'LineString', coordinates: line };
+    var routePoint = function (coordinate) {
+      return { lat: Number(coordinate[1]), lon: Number(coordinate[0]) };
+    };
+    if (coordinateSequences(geometry).some(function (sequence) {
+      return sequence.some(function (coordinate) {
+        return validPoint(coordinate) && contains(geometry, routePoint(coordinate));
+      });
+    })) return true;
+    if (line.some(function (coordinate) {
+      return validPoint(coordinate) && contains(geometry, routePoint(coordinate));
+    })) return true;
+    if (coordinateSequences(geometry).some(function (sequence) {
+      return sequence.some(function (coordinate) {
+        if (!validPoint(coordinate)) return false;
+        var nearest = nearestGeometryPoint(routeGeometry, routePoint(coordinate));
+        return nearest && nearest.distanceKm <= width;
+      });
+    })) return true;
+    return coordinateSequences(geometry).some(function (sequence) { return routeSegmentsIntersect(line, sequence); });
+  }
+
+  function queryRouteCameras(cameras, line, options) {
+    options = options || {};
+    var maxDistanceKm = Math.max(0.1, Math.min(500, Number(options.maxDistanceKm) || 10));
+    var limit = Math.max(1, Math.min(20, Number(options.limit) || 12));
+    if (!Array.isArray(cameras) || !Array.isArray(line) || line.length < 2) return [];
+    var routeGeometry = { type: 'LineString', coordinates: line };
+    var bounds = geometryBounds(routeGeometry);
+    if (!bounds) return [];
+    var verifiedOnly = options.verifiedOnly !== false;
+    return cameras.map(function (camera) {
+      if (!camera || camera.health === 'offline' || (verifiedOnly && (camera.health !== 'healthy' || !camera.last_verified))) return null;
+      var point = { lat: Number(camera.lat), lon: Number(camera.lon) };
+      if (!Number.isFinite(point.lat) || !Number.isFinite(point.lon) || !withinExpandedBounds(point, bounds, maxDistanceKm)) return null;
+      var projection = projectRoute(line, point);
+      if (!projection || projection.distanceKm > maxDistanceKm) return null;
+      return {
+        camera: camera,
+        distanceKm: projection.distanceKm,
+        routeDistanceKm: projection.routeDistanceKm,
+        routeProgress: projection.progress,
+        routeBearing: projection.bearing,
+        verification: 'verified',
+        playable: PLAYABLE_TYPES.indexOf(String(camera.type || '').toLowerCase()) !== -1
+      };
+    }).filter(Boolean).sort(function (left, right) {
+      return left.routeDistanceKm - right.routeDistanceKm || left.distanceKm - right.distanceKm ||
+        String(left.camera.name || '').localeCompare(String(right.camera.name || ''), undefined, { sensitivity: 'base' }) ||
+        String(left.camera.id || '').localeCompare(String(right.camera.id || ''));
+    }).slice(0, limit);
+  }
+
   function monitorCandidates(results, minimum, maximum) {
     var min = Number.isInteger(minimum) ? minimum : 2;
     var max = Number.isInteger(maximum) ? maximum : 4;
@@ -206,8 +349,12 @@
     bearingDegrees: bearingDegrees,
     contains: contains,
     distanceKm: distanceKm,
+    intersectsRouteCorridor: intersectsRouteCorridor,
+    lineLengthKm: lineLengthKm,
     monitorCandidates: monitorCandidates,
     nearestGeometryPoint: nearestGeometryPoint,
-    queryCameras: queryCameras
+    projectRoute: projectRoute,
+    queryCameras: queryCameras,
+    queryRouteCameras: queryRouteCameras
   });
 });
