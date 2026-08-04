@@ -4422,6 +4422,23 @@
     return parts.join(' • ');
   }
 
+  function cameraStalenessDescription(freshness) {
+    return tr('camera.stalenessDescription', {
+      age: StormScopeI18n.formatAge(freshness.ageMs / 60000, appLocale),
+      time: localTime(freshness.timestampMs)
+    });
+  }
+
+  function createCameraStalenessBadge(freshness) {
+    if (!freshness || freshness.state !== 'stale') return null;
+    var badge = document.createElement('span');
+    badge.className = 'camera-staleness-badge';
+    badge.textContent = tr('camera.stalenessBadge');
+    badge.setAttribute('aria-label', cameraStalenessDescription(freshness));
+    badge.title = cameraStalenessDescription(freshness);
+    return badge;
+  }
+
   function selectCameraResult(camera) {
     map.setView([camera.lat, camera.lon], Math.max(14, map.getZoom()), { animate: false });
     openCameraModal(camera);
@@ -4532,8 +4549,10 @@
     }
     virtual.items.forEach(function (camera, localIndex) {
       var resultIndex = virtual.start + localIndex;
+      var freshness = StormScopeCameraRecord.captureFreshness(camera);
       var item = document.createElement('li');
       item.className = 'camera-result';
+      item.classList.toggle('camera-result-stale', freshness.state === 'stale');
       item.setAttribute('role', 'listitem');
       item.dataset.resultIndex = String(resultIndex);
       item.setAttribute('aria-posinset', String(resultIndex + 1));
@@ -4555,6 +4574,8 @@
         outageBadge.setAttribute('aria-label', tr('camera.outageDescription'));
         openButton.appendChild(outageBadge);
       }
+      var stalenessBadge = createCameraStalenessBadge(freshness);
+      if (stalenessBadge) openButton.appendChild(stalenessBadge);
       openButton.addEventListener('click', function () { selectCameraResult(camera); });
       openButton.addEventListener('focus', function () { cameraResultFocusIndex = resultIndex; });
       var favorite = document.createElement('button');
@@ -5226,6 +5247,8 @@
   function updateModalCameraHealth(cam) {
     var healthEl = document.getElementById('modal-cam-health');
     var outageEl = document.getElementById('modal-camera-outage');
+    var stalenessEl = document.getElementById('modal-camera-staleness');
+    var modalContent = document.querySelector('#camera-modal .modal-content');
     var health = cam.health || 'unknown';
     healthEl.className = 'health-badge health-' + health;
     healthEl.textContent = tr('camera.health.' + health);
@@ -5236,6 +5259,20 @@
       outageEl.textContent = likelyOutage ? tr('camera.outageBadge') : '';
       if (likelyOutage) outageEl.setAttribute('title', tr('camera.outageDescription'));
       else outageEl.removeAttribute('title');
+    }
+    var freshness = StormScopeCameraRecord.captureFreshness(cam);
+    var stale = freshness.state === 'stale';
+    if (modalContent) modalContent.classList.toggle('camera-modal-stale', stale);
+    if (stalenessEl) {
+      stalenessEl.classList.toggle('hidden', !stale);
+      stalenessEl.textContent = stale ? tr('camera.stalenessBadge') : '';
+      if (stale) {
+        stalenessEl.setAttribute('aria-label', cameraStalenessDescription(freshness));
+        stalenessEl.setAttribute('title', cameraStalenessDescription(freshness));
+      } else {
+        stalenessEl.removeAttribute('aria-label');
+        stalenessEl.removeAttribute('title');
+      }
     }
 
     var providerFrameTime = cam.provider_timestamp || cam.provider_image_timestamp || cam.provider_record_time || cam.provider_updated;

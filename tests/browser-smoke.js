@@ -275,7 +275,7 @@ async function exerciseLandscapeLayout(page, theme) {
   await assertSurfaceWithinViewport(page, '#search-panel', `${theme} search`);
   await assertControlsReachable(page, '#search-panel', [
     '#camera-query', '#camera-state', '#camera-source', '#camera-type', '#camera-sort',
-    '#camera-healthy', '#camera-favorites', '#camera-results-scroll'
+    '#camera-healthy', '#camera-favorites', '#camera-outage-check', '#camera-results-scroll'
   ]);
   assert.ok((await page.screenshot()).length > 1000);
 
@@ -2385,13 +2385,16 @@ async function main() {
     await page.locator('.camera-result-empty').waitFor({ state: 'visible' });
     assert.match(await page.locator('.camera-result-empty').textContent(), /No cameras match/);
     assert.equal(await page.locator('.camera-result').count(), 0);
-    await page.locator('#camera-query').fill('Alabama');
-    await page.locator('.camera-result').first().waitFor({ state: 'visible' });
+    await page.locator('#camera-query').fill('U.S.63 (Le Roy - MP 0.5) View 1');
+    await page.locator('#camera-state').fill('');
     await page.locator('#camera-type').selectOption('image');
     await page.waitForFunction(() => {
       const results = window._stormscope.getCameraResults();
-      return results.length > 0 && results.every(camera => camera.type === 'image');
+      return results.length === 1 && results[0].type === 'image' &&
+        Boolean(results[0].provider_timestamp || results[0].provider_image_timestamp ||
+          results[0].provider_record_time || results[0].provider_updated);
     });
+    await page.locator('.camera-result').first().waitFor({ state: 'visible' });
     const observedCamera = await page.evaluate(() => {
       const cameras = window._stormscope.getCameraResults();
       const observedIndex = 0;
@@ -2401,10 +2404,14 @@ async function main() {
         url: camera.url,
         type: camera.type,
         health: camera.health,
-        lastVerified: camera.last_verified
+        lastVerified: camera.last_verified,
+        captureTimestamp: camera.provider_timestamp || camera.provider_image_timestamp ||
+          camera.provider_record_time || camera.provider_updated
       };
     });
     assert.equal(observedCamera.type, 'image');
+    assert.equal(await visibleResults.first().locator('.camera-staleness-badge').count(), 1);
+    assert.match(await visibleResults.first().getAttribute('class'), /camera-result-stale/);
     const cameraImageFixture = route => route.fulfill({
       contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: pixel
     });
@@ -2413,6 +2420,9 @@ async function main() {
     await visibleResults.nth(observedCamera.observedIndex).locator('.camera-result-open').click();
     await page.locator('#camera-modal').waitFor({ state: 'visible' });
     assert.equal(await page.locator('#camera-modal').getAttribute('role'), 'dialog');
+    await page.locator('#modal-camera-staleness').waitFor({ state: 'visible' });
+    assert.match(await page.locator('#modal-camera-staleness').getAttribute('aria-label'), /captured/);
+    assert.match(await page.locator('#camera-modal .modal-content').getAttribute('class'), /camera-modal-stale/);
     await page.getByRole('heading', { name: 'Current observation' }).waitFor({ state: 'visible' });
     assert.equal(await page.getByRole('heading', { name: 'Hourly forecast' }).count(), 1);
     assert.match(await page.locator('#weather-data').textContent(), /68°F.*Mostly Clear.*10 mph N.*Observed Test Station \(KOBS\).*2 mi away.*NWS station observation/s);
@@ -2491,6 +2501,8 @@ async function main() {
     await page.unroute('https://api.weather.gov/fixture/stations?*', emptyStationsFixture);
     await page.unroute(cameraImageMatch, cameraImageFixture);
     await page.locator('#camera-type').selectOption('');
+    await page.locator('#camera-query').fill('Alabama');
+    await page.locator('.camera-result').nth(1).waitFor({ state: 'visible' });
 
     const firstFavorite = visibleResults.first().locator('.favorite-result');
     await firstFavorite.click();

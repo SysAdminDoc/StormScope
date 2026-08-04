@@ -20,6 +20,16 @@
   ]);
   var OFFLINE_FAILURE_CLASSES = Object.freeze(['confirmed_offline', 'unsupported', 'inactive']);
   var CAMERA_STATUSES = Object.freeze(['Active', 'Offline', 'Unknown']);
+  var CAPTURE_STALE_AFTER_MS = Object.freeze({
+    embed: 60 * 60 * 1000,
+    hls: 20 * 60 * 1000,
+    image: 45 * 60 * 1000,
+    mjpeg: 15 * 60 * 1000,
+    youtube: 60 * 60 * 1000
+  });
+  var CAPTURE_TIMESTAMP_FIELDS = Object.freeze([
+    'provider_timestamp', 'provider_image_timestamp', 'provider_record_time', 'provider_updated'
+  ]);
   var TRUSTED_EMBED_HOST_SUFFIXES = Object.freeze([
     'v.angelcam.com',
     'cdn.jwplayer.com',
@@ -73,6 +83,55 @@
   function invalid(camera, field) {
     var id = camera && Number.isInteger(camera.id) ? ' ' + camera.id : '';
     throw new Error('Camera record' + id + ' has invalid ' + field);
+  }
+
+  function parseCaptureTimestamp(value) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      var numeric = Math.abs(value) < 1e12 ? value * 1000 : value;
+      return Number.isFinite(numeric) ? numeric : null;
+    }
+    if (typeof value !== 'string' || !value.trim()) return null;
+    var text = value.trim();
+    if (/^\d{10,13}$/.test(text)) {
+      var parsedNumeric = Number(text);
+      return Number.isFinite(parsedNumeric) ? (text.length === 10 ? parsedNumeric * 1000 : parsedNumeric) : null;
+    }
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(text)) text = text.replace(' ', 'T') + 'Z';
+    var parsed = Date.parse(text);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  function captureTimestamp(camera) {
+    if (!camera || typeof camera !== 'object') return null;
+    for (var i = 0; i < CAPTURE_TIMESTAMP_FIELDS.length; i += 1) {
+      var parsed = parseCaptureTimestamp(camera[CAPTURE_TIMESTAMP_FIELDS[i]]);
+      if (parsed !== null) return parsed;
+    }
+    return null;
+  }
+
+  function captureStaleAfterMs(camera) {
+    var base = CAPTURE_STALE_AFTER_MS[camera && camera.type] || 60 * 60 * 1000;
+    var cadence = Number(camera && camera.refresh_cadence_seconds);
+    return Number.isFinite(cadence) && cadence > 0
+      ? Math.max(base, cadence * 1000 * 3) : base;
+  }
+
+  function captureFreshness(camera, now) {
+    var timestampMs = captureTimestamp(camera);
+    var staleAfterMs = captureStaleAfterMs(camera);
+    var reference = Number(now);
+    if (!Number.isFinite(reference)) reference = Date.now();
+    if (timestampMs === null) {
+      return { state: 'unknown', timestampMs: null, ageMs: null, staleAfterMs: staleAfterMs };
+    }
+    var ageMs = Math.max(0, reference - timestampMs);
+    return {
+      state: ageMs > staleAfterMs ? 'stale' : 'fresh',
+      timestampMs: timestampMs,
+      ageMs: ageMs,
+      staleAfterMs: staleAfterMs
+    };
   }
 
   function validateCameraRecord(camera, options) {
@@ -129,10 +188,14 @@
     CAMERA_TYPES: CAMERA_TYPES,
     CAMERA_SOURCES: CAMERA_SOURCES,
     CAMERA_HEALTH: CAMERA_HEALTH,
+    CAPTURE_STALE_AFTER_MS: CAPTURE_STALE_AFTER_MS,
     FAILURE_CLASSES: FAILURE_CLASSES,
     TRUSTED_EMBED_HOST_SUFFIXES: TRUSTED_EMBED_HOST_SUFFIXES,
     hostMatchesSuffix: hostMatchesSuffix,
     isAllowedEmbedUrl: isAllowedEmbedUrl,
+    captureTimestamp: captureTimestamp,
+    captureStaleAfterMs: captureStaleAfterMs,
+    captureFreshness: captureFreshness,
     validateCameraRecord: validateCameraRecord
   });
 });

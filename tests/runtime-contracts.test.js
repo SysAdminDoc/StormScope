@@ -129,16 +129,26 @@ test('still-frame outage detection is opt-in, bounded, visible, and local-only',
   assert.match(cameraFeedSource, /STALLED_FRAME_THRESHOLD = 3/);
   assert.match(cameraFeedSource, /function createFrameDetector/);
   assert.match(cameraFeedSource, /OUTAGE_OUTCOME = 'likely_outage'/);
+  assert.match(cameraRecordSource, /CAPTURE_STALE_AFTER_MS/);
+  assert.match(cameraRecordSource, /function captureFreshness/);
+  assert.match(cameraRecordSource, /provider_image_timestamp/);
   assert.match(html, /id="camera-outage-check"/);
   assert.match(html, /id="modal-camera-outage"[^>]*class="camera-outage-badge hidden"/);
+  assert.match(html, /id="modal-camera-staleness"[^>]*class="camera-staleness-badge hidden"/);
   assert.match(app, /stormscope-camera-outage-check-v1/);
   assert.match(app, /StormScopeCameraFeed\.analyzeImageFrame/);
   assert.match(app, /camera\.local_observation\.outcome === 'likely_outage'/);
+  assert.match(app, /StormScopeCameraRecord\.captureFreshness/);
+  assert.match(app, /camera-result-stale/);
+  assert.match(app, /camera-staleness-badge/);
   assert.match(app, /cam\.local_observation = observation/);
   assert.doesNotMatch(app, /cam\.health\s*=/);
   assert.match(css, /\.camera-outage-badge/);
+  assert.match(css, /\.camera-result\.camera-result-stale/);
+  assert.match(css, /\.camera-staleness-badge/);
   for (const locale of ['en', 'es']) {
     for (const key of ['camera.outageCheck', 'camera.outageBadge', 'camera.outageDescription',
+      'camera.stalenessBadge', 'camera.stalenessDescription',
       'camera.observation.outcome.likely_outage', 'camera.observation.reason.flat_frame',
       'camera.observation.reason.color_depth_collapse', 'camera.observation.reason.stalled_frame']) {
       assert.ok(i18n.catalogs[locale][key], `${locale} catalog should define ${key}`);
