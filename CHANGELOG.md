@@ -927,3 +927,34 @@
 - Layer toggle controls (radar, cameras)
 - Responsive design for desktop and mobile
 - Camera data sourced from OpenTrafficCamMap (MIT licensed)
+
+## Roadmap archive — 2026-08-10 — ROADMAP.md
+
+<details>
+<summary>Original roadmap snapshot</summary>
+
+```markdown
+# Roadmap
+
+## Remaining items
+
+## Research-Driven Additions
+
+### P2 — Later
+
+### P3 — Under Consideration
+
+## Research-Driven Additions
+
+### P2 — Later
+
+## Research-Driven Additions — 2026-07-15 pass (v0.122.0)
+
+Grounded in the 2026-07-15 audit of the shipped operations-shell/registry redesign plus fresh external research. Excludes items already listed above and anything already shipped (place search `js/geocode.js`, searchable layer picker v0.121.0, persisted radar playback speed v0.28.0, centralized registry v0.120.0). See `RESEARCH.md`.
+
+## Research-Driven Additions
+
+### P2 — Next
+```
+
+</details>
