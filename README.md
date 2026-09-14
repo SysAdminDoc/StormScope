@@ -5,6 +5,16 @@
 [![Cameras](https://img.shields.io/badge/cameras-36%2C592-cyan)]()
 [![Live Site](https://img.shields.io/badge/live_site-open_StormScope-7c3aed)](https://sysadmindoc.github.io/StormScope/)
 
+<p align="center">
+  <a href="https://ko-fi.com/X8K126YVER">
+    <img height="42" src="https://storage.ko-fi.com/cdn/kofi2.png?v=3" alt="Buy me a coffee on Ko-fi" />
+  </a>
+</p>
+
+<p align="center">
+  <sub><em>If this project helps you, a coffee helps me keep working on it.</em></sub>
+</p>
+
 # StormScope
 
 Live US weather radar with webcam overlays. See real-time radar and click traffic cameras to view current weather conditions through live feeds.
